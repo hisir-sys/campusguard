@@ -7,952 +7,686 @@ from PySide6.QtWidgets import (
     QLabel,
     QFrame,
     QPushButton,
+    QSizePolicy,
 )
 
 
-class DashboardPage(QWidget):
+class CameraPanel(QFrame):
+    def __init__(self, camera_number):
+        super().__init__()
 
+        self.camera_number = camera_number
+        self.setObjectName("CameraPanel")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(8)
+
+        header = QHBoxLayout()
+
+        self.name = QLabel(f"CAMERA {camera_number}")
+        self.name.setObjectName("CameraName")
+
+        self.status = QLabel("●  STANDBY")
+        self.status.setObjectName("CameraStatus")
+
+        header.addWidget(self.name)
+        header.addStretch()
+        header.addWidget(self.status)
+
+        layout.addLayout(header)
+
+        self.feed = QLabel("WAITING FOR FEED")
+        self.feed.setObjectName("CameraFeed")
+        self.feed.setAlignment(Qt.AlignCenter)
+        self.feed.setSizePolicy(
+            QSizePolicy.Expanding,
+            QSizePolicy.Expanding,
+        )
+
+        layout.addWidget(self.feed, 1)
+
+        footer = QHBoxLayout()
+
+        self.location = QLabel("CONNECTED SOURCE")
+        self.location.setObjectName("CameraFooter")
+
+        self.expand = QPushButton("↗")
+        self.expand.setObjectName("CameraExpand")
+        self.expand.setFixedSize(30, 30)
+
+        footer.addWidget(self.location)
+        footer.addStretch()
+        footer.addWidget(self.expand)
+
+        layout.addLayout(footer)
+
+    def set_frame(self, pixmap):
+        self.feed.setPixmap(
+            pixmap.scaled(
+                self.feed.size(),
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation,
+            )
+        )
+
+        self.feed.setText("")
+
+
+class DashboardPage(QWidget):
     def __init__(self, main):
         super().__init__()
 
         self.main = main
-        self.setObjectName("Dashboard")
+        self.dark_mode = True
+
+        self.camera_panels = []
 
         self.build_ui()
         self.set_theme(True)
         self.refresh()
 
-    # ========================================================
-    # BUILD
-    # ========================================================
+    # ---------------------------------------------------------
+    # UI
+    # ---------------------------------------------------------
 
     def build_ui(self):
+        self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(8, 4, 8, 8)
+        self.layout.setSpacing(18)
 
-        outer = QVBoxLayout(self)
-
-        # IMPORTANT:
-        # Bottom is now small because the dock is outside
-        # the stacked page and already has its own space.
-        outer.setContentsMargins(
-            34,
-            28,
-            34,
-            22
-        )
-
-        outer.setSpacing(18)
-
-        # ----------------------------------------------------
-        # HEADER
-        # ----------------------------------------------------
-
+        # Header
         header = QHBoxLayout()
 
-        title_box = QVBoxLayout()
-        title_box.setSpacing(4)
+        title_area = QVBoxLayout()
+        title_area.setSpacing(3)
 
-        eyebrow = QLabel("CAMPUS OPERATIONS")
-        eyebrow.setObjectName("Eyebrow")
+        self.eyebrow = QLabel("CAMPUS OPERATIONS")
+        self.eyebrow.setObjectName("Eyebrow")
 
-        title = QLabel("Campus Overview")
-        title.setObjectName("PageTitle")
+        self.title = QLabel("Campus Overview")
+        self.title.setObjectName("DashboardTitle")
 
-        subtitle = QLabel(
-            "Monitor connected cameras, AI detections, "
-            "incidents and notifications from one workspace."
+        self.subtitle = QLabel(
+            "Real-time monitoring, AI-assisted detection and incident awareness."
         )
+        self.subtitle.setObjectName("DashboardSubtitle")
 
-        subtitle.setObjectName("PageSubtitle")
-        subtitle.setWordWrap(True)
+        title_area.addWidget(self.eyebrow)
+        title_area.addWidget(self.title)
+        title_area.addWidget(self.subtitle)
 
-        title_box.addWidget(eyebrow)
-        title_box.addWidget(title)
-        title_box.addWidget(subtitle)
-
-        header.addLayout(title_box)
+        header.addLayout(title_area)
         header.addStretch()
 
-        self.system_status = QLabel(
-            "●  ALL SYSTEMS OPERATIONAL"
-        )
+        self.system_status = QLabel("● SYSTEM ONLINE")
+        self.system_status.setObjectName("SystemStatus")
 
-        self.system_status.setObjectName(
-            "SystemStatus"
-        )
+        header.addWidget(self.system_status, 0, Qt.AlignBottom)
 
-        header.addWidget(
-            self.system_status,
-            alignment=Qt.AlignTop
-        )
+        self.layout.addLayout(header)
 
-        outer.addLayout(header)
+        # Main split
+        main_area = QHBoxLayout()
+        main_area.setSpacing(16)
 
-        # ----------------------------------------------------
-        # WORKSPACE
-        # ----------------------------------------------------
-
-        workspace = QHBoxLayout()
-        workspace.setSpacing(18)
-
-        # ====================================================
+        # -----------------------------------------------------
         # LEFT
-        # ====================================================
+        # -----------------------------------------------------
 
         left = QVBoxLayout()
         left.setSpacing(14)
 
-        self.model_card = self.create_stat_card(
-            "AI ENGINE",
-            "MC3-18",
-            "READY",
-            True
-        )
+        # AI engine
+        self.ai_card = QFrame()
+        self.ai_card.setObjectName("DashboardCard")
 
-        self.incident_card = self.create_stat_card(
-            "INCIDENTS",
-            "0",
-            "DETECTED",
-            False
-        )
+        ai_layout = QVBoxLayout(self.ai_card)
+        ai_layout.setContentsMargins(18, 18, 18, 18)
+        ai_layout.setSpacing(10)
 
-        left.addWidget(self.model_card)
+        self.ai_label = QLabel("AI ENGINE")
+        self.ai_label.setObjectName("CardLabel")
+
+        self.ai_status = QLabel("READY")
+        self.ai_status.setObjectName("LargeValue")
+
+        self.ai_detail = QLabel(
+            "Detection engine initialized and ready for incoming frames."
+        )
+        self.ai_detail.setObjectName("CardDetail")
+        self.ai_detail.setWordWrap(True)
+
+        ai_layout.addWidget(self.ai_label)
+        ai_layout.addWidget(self.ai_status)
+        ai_layout.addWidget(self.ai_detail)
+
+        left.addWidget(self.ai_card)
+
+        # Incident card
+        self.incident_card = QFrame()
+        self.incident_card.setObjectName("DashboardCard")
+
+        incident_layout = QVBoxLayout(self.incident_card)
+        incident_layout.setContentsMargins(18, 18, 18, 18)
+        incident_layout.setSpacing(8)
+
+        self.incident_label = QLabel("INCIDENTS")
+        self.incident_label.setObjectName("CardLabel")
+
+        self.incident_count = QLabel("0")
+        self.incident_count.setObjectName("IncidentNumber")
+
+        self.incident_detail = QLabel("No incidents recorded.")
+        self.incident_detail.setObjectName("CardDetail")
+
+        incident_layout.addWidget(self.incident_label)
+        incident_layout.addWidget(self.incident_count)
+        incident_layout.addWidget(self.incident_detail)
+
         left.addWidget(self.incident_card)
 
         # Notifications
-        notification_panel = QFrame()
-        notification_panel.setObjectName(
-            "PremiumPanel"
-        )
+        self.notifications_card = QFrame()
+        self.notifications_card.setObjectName("DashboardCard")
 
-        notification_layout = QVBoxLayout(
-            notification_panel
-        )
+        notifications_layout = QVBoxLayout(self.notifications_card)
+        notifications_layout.setContentsMargins(18, 18, 18, 18)
+        notifications_layout.setSpacing(10)
 
-        notification_layout.setContentsMargins(
-            18,
-            17,
-            18,
-            17
-        )
+        self.notifications_title = QLabel("NOTIFICATIONS")
+        self.notifications_title.setObjectName("CardLabel")
 
-        notification_layout.setSpacing(12)
-
-        notification_header = QHBoxLayout()
+        notifications_layout.addWidget(self.notifications_title)
 
-        notification_title = QLabel(
-            "NOTIFICATIONS"
-        )
+        self.notifications_container = QVBoxLayout()
+        self.notifications_container.setSpacing(7)
 
-        notification_title.setObjectName(
-            "SectionTitle"
-        )
+        notifications_layout.addLayout(self.notifications_container)
+        notifications_layout.addStretch()
 
-        notification_header.addWidget(
-            notification_title
-        )
+        left.addWidget(self.notifications_card, 1)
 
-        notification_header.addStretch()
-
-        self.notification_count = QLabel("0")
-        self.notification_count.setObjectName(
-            "NotificationCount"
-        )
+        main_area.addLayout(left, 1)
 
-        notification_header.addWidget(
-            self.notification_count
-        )
+        # -----------------------------------------------------
+        # RIGHT - LIVE NETWORK
+        # -----------------------------------------------------
 
-        notification_layout.addLayout(
-            notification_header
-        )
+        right = QVBoxLayout()
+        right.setSpacing(10)
 
-        self.notification_content = QLabel(
-            "No new notifications.\n\n"
-            "Security events and important detections "
-            "will appear here."
-        )
+        network_header = QHBoxLayout()
 
-        self.notification_content.setWordWrap(True)
-        self.notification_content.setObjectName(
-            "NotificationContent"
-        )
+        network_title_area = QVBoxLayout()
+        network_title_area.setSpacing(2)
 
-        notification_layout.addWidget(
-            self.notification_content
-        )
+        self.network_label = QLabel("LIVE NETWORK")
+        self.network_label.setObjectName("NetworkTitle")
 
-        notification_layout.addStretch()
+        self.network_subtitle = QLabel("CONNECTED CAMERA SOURCES")
+        self.network_subtitle.setObjectName("NetworkSubtitle")
 
-        left.addWidget(
-            notification_panel,
-            1
-        )
+        network_title_area.addWidget(self.network_label)
+        network_title_area.addWidget(self.network_subtitle)
 
-        workspace.addLayout(left, 1)
+        network_header.addLayout(network_title_area)
+        network_header.addStretch()
 
-        # ====================================================
-        # RIGHT — LIVE NETWORK
-        # ====================================================
+        self.camera_count = QLabel("04 CAMERAS")
+        self.camera_count.setObjectName("CameraCount")
 
-        camera_panel = QFrame()
-        camera_panel.setObjectName(
-            "CameraPanel"
-        )
+        network_header.addWidget(self.camera_count, 0, Qt.AlignVCenter)
 
-        # No forced 500px minimum.
-        # It now uses the available page height.
-        camera_panel.setMinimumHeight(0)
+        right.addLayout(network_header)
 
-        camera_layout = QVBoxLayout(
-            camera_panel
-        )
+        # Camera grid
+        grid_frame = QFrame()
+        grid_frame.setObjectName("NetworkFrame")
 
-        camera_layout.setContentsMargins(
-            18,
-            18,
-            18,
-            18
-        )
+        grid = QGridLayout(grid_frame)
+        grid.setContentsMargins(12, 12, 12, 12)
+        grid.setSpacing(12)
 
-        camera_layout.setSpacing(13)
+        for i in range(4):
+            panel = CameraPanel(i + 1)
+            self.camera_panels.append(panel)
 
-        # ----------------------------------------------------
-        # Header
-        # ----------------------------------------------------
+            row = i // 2
+            column = i % 2
 
-        camera_header = QHBoxLayout()
+            grid.addWidget(panel, row, column)
 
-        camera_title_box = QVBoxLayout()
-        camera_title_box.setSpacing(3)
+        grid.setRowStretch(0, 1)
+        grid.setRowStretch(1, 1)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
 
-        network_title = QLabel(
-            "LIVE NETWORK"
-        )
+        right.addWidget(grid_frame, 1)
 
-        network_title.setObjectName(
-            "NetworkTitle"
-        )
+        main_area.addLayout(right, 2)
 
-        network_subtitle = QLabel(
-            "Connected camera monitoring"
-        )
+        self.layout.addLayout(main_area, 1)
 
-        network_subtitle.setObjectName(
-            "NetworkSubtitle"
-        )
+    # ---------------------------------------------------------
+    # THEME
+    # ---------------------------------------------------------
 
-        camera_title_box.addWidget(
-            network_title
-        )
+    def set_theme(self, dark):
+        self.dark_mode = dark
 
-        camera_title_box.addWidget(
-            network_subtitle
-        )
-
-        camera_header.addLayout(
-            camera_title_box
-        )
-
-        camera_header.addStretch()
-
-        camera_count = QLabel(
-            "04 CAMERAS"
-        )
-
-        camera_count.setObjectName(
-            "CameraCount"
-        )
-
-        camera_header.addWidget(
-            camera_count
-        )
-
-        camera_layout.addLayout(
-            camera_header
-        )
-
-        # ----------------------------------------------------
-        # Camera matrix
-        # ----------------------------------------------------
-
-        matrix = QGridLayout()
-
-        matrix.setContentsMargins(
-            0,
-            0,
-            0,
-            0
-        )
-
-        matrix.setHorizontalSpacing(10)
-        matrix.setVerticalSpacing(10)
-
-        # Equal stretch means the network stays nicely
-        # centered vertically instead of being pushed down.
-        matrix.setRowStretch(0, 1)
-        matrix.setRowStretch(1, 1)
-
-        matrix.setColumnStretch(0, 1)
-        matrix.setColumnStretch(1, 1)
-
-        for row in range(2):
-
-            for col in range(2):
-
-                camera = self.create_camera_tile(
-                    row * 2 + col + 1
-                )
-
-                matrix.addWidget(
-                    camera,
-                    row,
-                    col
-                )
-
-        camera_layout.addLayout(
-            matrix,
-            1
-        )
-
-        workspace.addWidget(
-            camera_panel,
-            2
-        )
-
-        outer.addLayout(
-            workspace,
-            1
-        )
-
-        self.apply_base_styles()
-
-    # ========================================================
-    # STAT CARD
-    # ========================================================
-
-    def create_stat_card(
-        self,
-        label,
-        value,
-        footer,
-        ready=False
-    ):
-
-        card = QFrame()
-        card.setObjectName(
-            "StatCard"
-        )
-
-        layout = QVBoxLayout(card)
-
-        layout.setContentsMargins(
-            18,
-            15,
-            18,
-            15
-        )
-
-        layout.setSpacing(7)
-
-        top = QHBoxLayout()
-
-        label_widget = QLabel(label)
-        label_widget.setObjectName(
-            "StatLabel"
-        )
-
-        top.addWidget(label_widget)
-        top.addStretch()
-
-        indicator = QLabel("●")
-
-        indicator.setObjectName(
-            "ReadyIndicator"
-            if ready
-            else
-            "NeutralIndicator"
-        )
-
-        top.addWidget(indicator)
-
-        layout.addLayout(top)
-
-        value_widget = QLabel(value)
-        value_widget.setObjectName(
-            "StatValue"
-        )
-
-        layout.addWidget(value_widget)
-
-        footer_widget = QLabel(footer)
-        footer_widget.setObjectName(
-            "StatFooter"
-        )
-
-        layout.addWidget(
-            footer_widget
-        )
-
-        if label == "AI ENGINE":
-            self.model_value = value_widget
-
-        if label == "INCIDENTS":
-            self.incident_value = value_widget
-
-        return card
-
-    # ========================================================
-    # CAMERA TILE
-    # ========================================================
-
-    def create_camera_tile(
-        self,
-        number
-    ):
-
-        tile = QFrame()
-        tile.setObjectName(
-            "CameraTile"
-        )
-
-        # Don't force a large height.
-        # Grid stretching determines the correct height.
-        tile.setMinimumHeight(0)
-
-        layout = QVBoxLayout(tile)
-
-        layout.setContentsMargins(
-            13,
-            12,
-            13,
-            12
-        )
-
-        layout.setSpacing(7)
-
-        top = QHBoxLayout()
-
-        camera_name = QLabel(
-            f"CAMERA {number:02d}"
-        )
-
-        camera_name.setObjectName(
-            "CameraName"
-        )
-
-        top.addWidget(
-            camera_name
-        )
-
-        top.addStretch()
-
-        live = QLabel("● LIVE")
-        live.setObjectName(
-            "LiveIndicator"
-        )
-
-        top.addWidget(live)
-
-        layout.addLayout(top)
-
-        # Feed takes all remaining space.
-        feed = QFrame()
-        feed.setObjectName(
-            "FeedArea"
-        )
-
-        feed_layout = QVBoxLayout(
-            feed
-        )
-
-        feed_status = QLabel(
-            "WAITING FOR FEED"
-        )
-
-        feed_status.setAlignment(
-            Qt.AlignCenter
-        )
-
-        feed_status.setObjectName(
-            "FeedStatus"
-        )
-
-        feed_layout.addWidget(
-            feed_status,
-            alignment=Qt.AlignCenter
-        )
-
-        layout.addWidget(
-            feed,
-            1
-        )
-
-        bottom = QHBoxLayout()
-
-        state = QLabel(
-            "MONITORING"
-        )
-
-        state.setObjectName(
-            "MonitoringLabel"
-        )
-
-        bottom.addWidget(state)
-        bottom.addStretch()
-
-        expand = QPushButton("↗")
-
-        expand.setObjectName(
-            "ExpandButton"
-        )
-
-        expand.setFixedSize(
-            27,
-            27
-        )
-
-        expand.setCursor(
-            Qt.PointingHandCursor
-        )
-
-        expand.setToolTip(
-            "Open camera"
-        )
-
-        bottom.addWidget(
-            expand
-        )
-
-        layout.addLayout(
-            bottom
-        )
-
-        return tile
-
-    # ========================================================
-    # REFRESH
-    # ========================================================
-
-    def refresh(self):
-
-        try:
-
-            count = len(
-                self.main.incidents.items
-            )
-
-            self.incident_value.setText(
-                str(count)
-            )
-
-            self.notification_count.setText(
-                str(count)
-            )
-
-            if count == 0:
-
-                self.notification_content.setText(
-                    "No new notifications.\n\n"
-                    "Security events and important "
-                    "detections will appear here."
-                )
-
-                return
-
-            recent = (
-                self.main.incidents.items[-4:]
-            )
-
-            lines = []
-
-            for item in reversed(recent):
-
-                camera = item.get(
-                    "camera",
-                    "Camera"
-                )
-
-                event = item.get(
-                    "event",
-                    "Activity detected"
-                )
-
-                severity = item.get(
-                    "severity",
-                    "INFO"
-                )
-
-                lines.append(
-                    f"●  {camera}\n"
-                    f"   {event}  ·  {severity}"
-                )
-
-            self.notification_content.setText(
-                "\n\n".join(lines)
-            )
-
-        except Exception:
-
-            self.incident_value.setText(
-                "0"
-            )
-
-            self.notification_count.setText(
-                "0"
-            )
-
-    # ========================================================
-    # BASE STYLES
-    # ========================================================
-
-    def apply_base_styles(self):
-
-        self.setStyleSheet("""
-            #Dashboard {
+        if dark:
+            self.setStyleSheet("""
+            DashboardPage {
                 background: transparent;
             }
 
-            #Eyebrow {
-                font-size: 10px;
+            QLabel#Eyebrow {
+                color: #6F8582;
+                font-size: 11px;
                 font-weight: 700;
                 letter-spacing: 2px;
             }
 
-            #PageTitle {
-                font-size: 30px;
-                font-weight: 600;
-            }
-
-            #PageSubtitle {
-                font-size: 12px;
-            }
-
-            #SystemStatus {
-                border-radius: 8px;
-                padding: 8px 12px;
-                font-size: 10px;
-                font-weight: 600;
-            }
-
-            #StatCard {
-                border-radius: 13px;
-            }
-
-            #StatLabel {
-                font-size: 9px;
-                font-weight: 700;
-                letter-spacing: 1.4px;
-            }
-
-            #StatValue {
+            QLabel#DashboardTitle {
+                color: #F0F5F3;
                 font-size: 29px;
-                font-weight: 500;
+                font-weight: 700;
             }
 
-            #StatFooter {
-                font-size: 9px;
+            QLabel#DashboardSubtitle {
+                color: #7F8C8B;
+                font-size: 13px;
             }
 
-            #ReadyIndicator,
-            #NeutralIndicator {
-                font-size: 10px;
-            }
-
-            #PremiumPanel {
-                border-radius: 13px;
-            }
-
-            #SectionTitle {
+            QLabel#SystemStatus {
+                color: #83AAA4;
                 font-size: 11px;
+                font-weight: 700;
+                padding: 8px 12px;
+                background: #111A19;
+                border: 1px solid #283B39;
+                border-radius: 12px;
+            }
+
+            QFrame#DashboardCard {
+                background: #111719;
+                border: 1px solid #263133;
+                border-radius: 19px;
+            }
+
+            QLabel#CardLabel {
+                color: #71807E;
+                font-size: 10px;
                 font-weight: 700;
                 letter-spacing: 1.5px;
             }
 
-            #NotificationCount {
-                border-radius: 6px;
-                padding: 3px 7px;
+            QLabel#LargeValue {
+                color: #E9EFED;
+                font-size: 25px;
+                font-weight: 700;
+            }
+
+            QLabel#IncidentNumber {
+                color: #E8EEEC;
+                font-size: 38px;
+                font-weight: 700;
+            }
+
+            QLabel#CardDetail {
+                color: #778583;
+                font-size: 12px;
+            }
+
+            QLabel#NetworkTitle {
+                color: #E8EFED;
+                font-size: 18px;
+                font-weight: 700;
+            }
+
+            QLabel#NetworkSubtitle {
+                color: #687674;
+                font-size: 9px;
+                font-weight: 700;
+                letter-spacing: 1.3px;
+            }
+
+            QLabel#CameraCount {
+                color: #7EA39E;
+                background: #111A19;
+                border: 1px solid #283B39;
+                border-radius: 11px;
+                padding: 7px 10px;
+                font-size: 10px;
+                font-weight: 700;
+            }
+
+            QFrame#NetworkFrame {
+                background: #0D1213;
+                border: 1px solid #222C2E;
+                border-radius: 21px;
+            }
+
+            QFrame#CameraPanel {
+                background: #151B1D;
+                border: 1px solid #293436;
+                border-radius: 17px;
+            }
+
+            QFrame#CameraPanel:hover {
+                border: 1px solid #3B514E;
+            }
+
+            QLabel#CameraName {
+                color: #DCE5E3;
+                font-size: 10px;
+                font-weight: 700;
+                letter-spacing: 1px;
+            }
+
+            QLabel#CameraStatus {
+                color: #6E9A93;
                 font-size: 9px;
                 font-weight: 700;
             }
 
-            #NotificationContent {
+            QLabel#CameraFeed {
+                background: #0A0D0E;
+                border: 1px solid #222B2D;
+                border-radius: 12px;
+                color: #52615F;
+                font-size: 10px;
+                letter-spacing: 1px;
+            }
+
+            QLabel#CameraFooter {
+                color: #657370;
+                font-size: 8px;
+                font-weight: 700;
+                letter-spacing: 1px;
+            }
+
+            QPushButton#CameraExpand {
+                background: #1D2729;
+                color: #A9B6B4;
+                border: 1px solid #334143;
+                border-radius: 9px;
+            }
+
+            QPushButton#CameraExpand:hover {
+                background: #293637;
+                color: #FFFFFF;
+            }
+            """)
+        else:
+            self.setStyleSheet("""
+            DashboardPage {
+                background: transparent;
+            }
+
+            QLabel#Eyebrow {
+                color: #66817C;
+                font-size: 11px;
+                font-weight: 700;
+                letter-spacing: 2px;
+            }
+
+            QLabel#DashboardTitle {
+                color: #18211F;
+                font-size: 29px;
+                font-weight: 700;
+            }
+
+            QLabel#DashboardSubtitle {
+                color: #6C7A77;
+                font-size: 13px;
+            }
+
+            QLabel#SystemStatus {
+                color: #527F79;
+                font-size: 11px;
+                font-weight: 700;
+                padding: 8px 12px;
+                background: #E7EFEC;
+                border: 1px solid #CBD9D5;
+                border-radius: 12px;
+            }
+
+            QFrame#DashboardCard {
+                background: #FFFFFF;
+                border: 1px solid #D4DEDA;
+                border-radius: 19px;
+            }
+
+            QLabel#CardLabel {
+                color: #71807D;
+                font-size: 10px;
+                font-weight: 700;
+                letter-spacing: 1.5px;
+            }
+
+            QLabel#LargeValue {
+                color: #1B2523;
+                font-size: 25px;
+                font-weight: 700;
+            }
+
+            QLabel#IncidentNumber {
+                color: #18211F;
+                font-size: 38px;
+                font-weight: 700;
+            }
+
+            QLabel#CardDetail {
+                color: #74817E;
+                font-size: 12px;
+            }
+
+            QLabel#NetworkTitle {
+                color: #1B2523;
+                font-size: 18px;
+                font-weight: 700;
+            }
+
+            QLabel#NetworkSubtitle {
+                color: #75827F;
+                font-size: 9px;
+                font-weight: 700;
+                letter-spacing: 1.3px;
+            }
+
+            QLabel#CameraCount {
+                color: #527F79;
+                background: #E7EFEC;
+                border: 1px solid #CBD9D5;
+                border-radius: 11px;
+                padding: 7px 10px;
+                font-size: 10px;
+                font-weight: 700;
+            }
+
+            QFrame#NetworkFrame {
+                background: #E7ECEA;
+                border: 1px solid #D1DBD7;
+                border-radius: 21px;
+            }
+
+            QFrame#CameraPanel {
+                background: #FFFFFF;
+                border: 1px solid #D1DAD7;
+                border-radius: 17px;
+            }
+
+            QFrame#CameraPanel:hover {
+                border: 1px solid #AEBFBA;
+            }
+
+            QLabel#CameraName {
+                color: #34413E;
+                font-size: 10px;
+                font-weight: 700;
+                letter-spacing: 1px;
+            }
+
+            QLabel#CameraStatus {
+                color: #527F79;
+                font-size: 9px;
+                font-weight: 700;
+            }
+
+            QLabel#CameraFeed {
+                background: #EEF2F0;
+                border: 1px solid #D4DEDA;
+                border-radius: 12px;
+                color: #7C8986;
+                font-size: 10px;
+                letter-spacing: 1px;
+            }
+
+            QLabel#CameraFooter {
+                color: #7A8784;
+                font-size: 8px;
+                font-weight: 700;
+                letter-spacing: 1px;
+            }
+
+            QPushButton#CameraExpand {
+                background: #EDF2F0;
+                color: #596966;
+                border: 1px solid #D0DAD7;
+                border-radius: 9px;
+            }
+
+            QPushButton#CameraExpand:hover {
+                background: #E1E9E6;
+                color: #17201F;
+            }
+            """)
+
+    # ---------------------------------------------------------
+    # REFRESH
+    # ---------------------------------------------------------
+
+    def refresh(self):
+        try:
+            count = len(self.main.incidents.items)
+        except Exception:
+            count = 0
+
+        self.incident_count.setText(str(count))
+
+        if count == 0:
+            self.incident_detail.setText("No incidents recorded.")
+        elif count == 1:
+            self.incident_detail.setText("1 incident requires review.")
+        else:
+            self.incident_detail.setText(
+                f"{count} incidents currently recorded."
+            )
+
+        # Clear notifications
+        while self.notifications_container.count():
+            item = self.notifications_container.takeAt(0)
+            widget = item.widget()
+
+            if widget is not None:
+                widget.deleteLater()
+
+        incidents = []
+
+        try:
+            incidents = list(self.main.incidents.items)[-4:]
+            incidents.reverse()
+        except Exception:
+            pass
+
+        if not incidents:
+            self.add_notification(
+                "SYSTEM",
+                "Monitoring network is ready.",
+            )
+        else:
+            for incident in incidents:
+                event = incident.get("event", "Incident detected")
+                camera = incident.get("camera", "Unknown camera")
+
+                self.add_notification(
+                    str(camera),
+                    str(event),
+                )
+
+    # ---------------------------------------------------------
+    # NOTIFICATION
+    # ---------------------------------------------------------
+
+    def add_notification(self, source, message):
+        card = QFrame()
+        card.setObjectName("NotificationItem")
+
+        if self.dark_mode:
+            card.setStyleSheet("""
+            QFrame#NotificationItem {
+                background: #151B1D;
+                border: 1px solid #263133;
+                border-radius: 13px;
+            }
+
+            QLabel#NotificationSource {
+                color: #7EA39E;
+                font-size: 9px;
+                font-weight: 700;
+            }
+
+            QLabel#NotificationMessage {
+                color: #C6D0CE;
                 font-size: 11px;
             }
-
-            #CameraPanel {
-                border-radius: 14px;
-            }
-
-            #NetworkTitle {
-                font-size: 14px;
-                font-weight: 600;
-            }
-
-            #NetworkSubtitle {
-                font-size: 10px;
-            }
-
-            #CameraCount {
-                font-size: 10px;
-                font-weight: 700;
-            }
-
-            #CameraTile {
-                border-radius: 11px;
-            }
-
-            #CameraName {
-                font-size: 10px;
-                font-weight: 700;
-                letter-spacing: 1px;
-            }
-
-            #LiveIndicator {
-                font-size: 9px;
-                font-weight: 700;
-            }
-
-            #FeedArea {
-                border-radius: 8px;
-            }
-
-            #FeedStatus {
-                font-size: 9px;
-                font-weight: 600;
-                letter-spacing: 1px;
-            }
-
-            #MonitoringLabel {
-                font-size: 8px;
-                font-weight: 600;
-                letter-spacing: 1px;
-            }
-
-            #ExpandButton {
-                border-radius: 7px;
-                font-size: 14px;
-            }
-        """)
-
-    # ========================================================
-    # THEME
-    # ========================================================
-
-    def set_theme(
-        self,
-        dark=True
-    ):
-
-        if dark:
-
-            self.setStyleSheet("""
-                #Dashboard {
-                    background: transparent;
-                }
-
-                #Eyebrow {
-                    color: #71807E;
-                }
-
-                #PageTitle {
-                    color: #EEF2F0;
-                }
-
-                #PageSubtitle {
-                    color: #7D8987;
-                }
-
-                #SystemStatus {
-                    color: #8FB3A9;
-                    background: #111A18;
-                    border: 1px solid #263D38;
-                }
-
-                #StatCard,
-                #PremiumPanel,
-                #CameraPanel {
-                    background: #101516;
-                    border: 1px solid #202829;
-                }
-
-                #StatCard:hover,
-                #PremiumPanel:hover,
-                #CameraPanel:hover {
-                    background: #141A1B;
-                    border: 1px solid #35413F;
-                }
-
-                #StatLabel,
-                #StatFooter,
-                #NotificationContent,
-                #NetworkSubtitle,
-                #MonitoringLabel {
-                    color: #71807E;
-                }
-
-                #StatValue,
-                #NetworkTitle,
-                #SectionTitle {
-                    color: #E9EEEC;
-                }
-
-                #ReadyIndicator,
-                #LiveIndicator {
-                    color: #86AFA5;
-                }
-
-                #NeutralIndicator {
-                    color: #697574;
-                }
-
-                #NotificationCount {
-                    color: #829F98;
-                    background: #17201F;
-                }
-
-                #CameraTile {
-                    background: #101516;
-                    border: 1px solid #222A2B;
-                }
-
-                #CameraTile:hover {
-                    background: #141A1B;
-                    border: 1px solid #3A4947;
-                }
-
-                #CameraName {
-                    color: #DCE4E1;
-                }
-
-                #FeedArea {
-                    background: #0B0F10;
-                    border: 1px solid #1C2324;
-                }
-
-                #FeedStatus {
-                    color: #4F5B5A;
-                }
-
-                #ExpandButton {
-                    color: #82908D;
-                    background: #151B1C;
-                    border: 1px solid #273031;
-                }
-
-                #ExpandButton:hover {
-                    color: #E9EEEC;
-                    background: #202829;
-                    border: 1px solid #42504E;
-                }
             """)
-
         else:
+            card.setStyleSheet("""
+            QFrame#NotificationItem {
+                background: #F5F8F7;
+                border: 1px solid #D7E0DD;
+                border-radius: 13px;
+            }
 
-            self.setStyleSheet("""
-                #Dashboard {
-                    background: transparent;
-                }
+            QLabel#NotificationSource {
+                color: #527F79;
+                font-size: 9px;
+                font-weight: 700;
+            }
 
-                #Eyebrow {
-                    color: #647A75;
-                }
-
-                #PageTitle {
-                    color: #18201F;
-                }
-
-                #PageSubtitle {
-                    color: #687572;
-                }
-
-                #SystemStatus {
-                    color: #496D64;
-                    background: #EDF4F1;
-                    border: 1px solid #C9DCD5;
-                }
-
-                #StatCard,
-                #PremiumPanel,
-                #CameraPanel {
-                    background: #FFFFFF;
-                    border: 1px solid #DCE3E0;
-                }
-
-                #StatCard:hover,
-                #PremiumPanel:hover,
-                #CameraPanel:hover {
-                    background: #F9FBFA;
-                    border: 1px solid #BBCBC6;
-                }
-
-                #StatLabel {
-                    color: #687572;
-                }
-
-                #StatValue {
-                    color: #1B2523;
-                }
-
-                #StatFooter,
-                #NotificationContent,
-                #NetworkSubtitle,
-                #MonitoringLabel {
-                    color: #74807D;
-                }
-
-                #SectionTitle,
-                #NetworkTitle {
-                    color: #1D2825;
-                }
-
-                #ReadyIndicator,
-                #LiveIndicator {
-                    color: #4C776D;
-                }
-
-                #NeutralIndicator {
-                    color: #899491;
-                }
-
-                #NotificationCount {
-                    color: #4F7068;
-                    background: #EDF4F1;
-                }
-
-                #CameraTile {
-                    background: #F8FAF9;
-                    border: 1px solid #DCE3E0;
-                }
-
-                #CameraTile:hover {
-                    background: #FFFFFF;
-                    border: 1px solid #B8C8C3;
-                }
-
-                #CameraName {
-                    color: #34413E;
-                }
-
-                #FeedArea {
-                    background: #EEF2F0;
-                    border: 1px solid #D8E0DD;
-                }
-
-                #FeedStatus {
-                    color: #899491;
-                }
-
-                #ExpandButton {
-                    color: #5D6A67;
-                    background: #EEF2F0;
-                    border: 1px solid #D6DEDB;
-                }
-
-                #ExpandButton:hover {
-                    color: #1C2724;
-                    background: #E3EAE7;
-                    border: 1px solid #B9C8C3;
-                }
+            QLabel#NotificationMessage {
+                color: #44514E;
+                font-size: 11px;
+            }
             """)
 
-        self.update()
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(12, 9, 12, 9)
+        layout.setSpacing(3)
+
+        source_label = QLabel(source.upper())
+        source_label.setObjectName("NotificationSource")
+
+        message_label = QLabel(message)
+        message_label.setObjectName("NotificationMessage")
+        message_label.setWordWrap(True)
+
+        layout.addWidget(source_label)
+        layout.addWidget(message_label)
+
+        self.notifications_container.addWidget(card)
+
+    # ---------------------------------------------------------
+    # CAMERA FRAME
+    # ---------------------------------------------------------
+
+    def update_camera(self, camera_index, pixmap):
+        if 0 <= camera_index < len(self.camera_panels):
+            self.camera_panels[camera_index].set_frame(pixmap)
+
+            self.camera_panels[camera_index].status.setText(
+                "● LIVE"
+            )
