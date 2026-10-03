@@ -1,0 +1,278 @@
+"""Colors and the app-wide stylesheet for CampusGuard (dark + light, glass look).
+
+Two things live here:
+
+* ``Palette`` objects (DARK / LIGHT). Custom-painted widgets (the glass bars,
+  nav buttons, backdrop) read colors from ``get_palette()`` every time they paint,
+  so switching theme only needs a repaint.
+* ``build_qss(theme)``. Everything that is a normal Qt widget (cards, buttons,
+  tables, inputs...) is styled by this one stylesheet.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from PySide6.QtGui import QColor
+
+
+@dataclass(frozen=True)
+class Palette:
+    name: str
+    # window backdrop
+    bg0: str
+    bg1: str
+    glow1: str
+    glow1_alpha: int
+    glow2: str
+    glow2_alpha: int
+    # text
+    text: str
+    text_dim: str
+    muted: str
+    # accent + status colors
+    accent: str
+    accent_hover: str
+    good: str
+    warn: str
+    bad: str
+    # translucent surfaces: a base color plus an alpha (0-255)
+    surface: str
+    surface_alpha: int
+    line: str
+    line_alpha: int
+    veil: str
+    veil_alpha: int
+    glass: str
+    glass_alpha: int
+    field: str
+    field_alpha: int
+    # misc
+    edge: str  # color of the bright streak on the top edge of the glass bars
+    sheen_alpha: int  # strength of the soft light on the upper half of the bars
+    popup: str  # opaque color for dropdown lists and dialogs
+
+
+DARK = Palette(
+    name="dark",
+    bg0="#05070a",
+    bg1="#0c1118",
+    glow1="#e5484d",
+    glow1_alpha=36,
+    glow2="#6b7c8f",
+    glow2_alpha=34,
+    text="#eef2f5",
+    text_dim="#a3afb8",
+    muted="#7f8c95",
+    accent="#e5484d",
+    accent_hover="#f0595e",
+    good="#5fcf8e",
+    warn="#e0b84f",
+    bad="#ef6b63",
+    surface="#121a21",
+    surface_alpha=140,
+    line="#ffffff",
+    line_alpha=26,
+    veil="#ffffff",
+    veil_alpha=10,
+    glass="#0f151b",
+    glass_alpha=170,
+    field="#05080b",
+    field_alpha=120,
+    edge="#ffffff",
+    sheen_alpha=16,
+    popup="#141c24",
+)
+
+LIGHT = Palette(
+    name="light",
+    bg0="#eef1f5",
+    bg1="#dfe5eb",
+    glow1="#f87171",
+    glow1_alpha=44,
+    glow2="#94a3b8",
+    glow2_alpha=70,
+    text="#18222b",
+    text_dim="#4b5a66",
+    muted="#6b7a86",
+    accent="#d9363e",
+    accent_hover="#c42d35",
+    good="#1f8f5b",
+    warn="#a87408",
+    bad="#cc3b34",
+    surface="#ffffff",
+    surface_alpha=175,
+    line="#0f1a22",
+    line_alpha=30,
+    veil="#0f1a22",
+    veil_alpha=10,
+    glass="#ffffff",
+    glass_alpha=185,
+    field="#ffffff",
+    field_alpha=200,
+    edge="#d9363e",
+    sheen_alpha=70,
+    popup="#ffffff",
+)
+
+_current: Palette = DARK
+
+
+def set_current(name: str) -> None:
+    """Remember which palette painted widgets should use."""
+    global _current
+    _current = LIGHT if name == "light" else DARK
+
+
+def get_palette() -> Palette:
+    return _current
+
+
+def qcolor(hex_color: str, alpha: int = 255) -> QColor:
+    color = QColor(hex_color)
+    color.setAlpha(max(0, min(255, int(alpha))))
+    return color
+
+
+def mix_colors(a: QColor, b: QColor, t: float) -> QColor:
+    """Blend from color a (t=0) to color b (t=1)."""
+    t = max(0.0, min(1.0, t))
+    return QColor(
+        int(a.red() + (b.red() - a.red()) * t),
+        int(a.green() + (b.green() - a.green()) * t),
+        int(a.blue() + (b.blue() - a.blue()) * t),
+        int(a.alpha() + (b.alpha() - a.alpha()) * t),
+    )
+
+
+def rgba(hex_color: str, alpha: int) -> str:
+    """A CSS-style rgba(...) string, alpha 0-255, for use inside stylesheets."""
+    color = QColor(hex_color)
+    alpha = max(0, min(255, int(alpha)))
+    return f"rgba({color.red()}, {color.green()}, {color.blue()}, {alpha})"
+
+
+# The stylesheet uses @name@ placeholders (filled in by build_qss) so the CSS
+# braces do not have to be escaped.
+_QSS = """
+QWidget { color: @text@; font-family: "Segoe UI", "Inter", sans-serif; font-size: 10pt; }
+QMainWindow { background: @bg1@; }
+QDialog { background: @popup@; }
+QStackedWidget { background: transparent; border: none; }
+QScrollArea { background: transparent; border: none; }
+QScrollArea > QWidget > QWidget { background: transparent; }
+QStatusBar { background: @bg1@; color: @muted@; }
+QStatusBar::item { border: none; }
+QToolTip {
+  background: @popup@; color: @text@; border: 1px solid @line_strong@;
+  padding: 4px 7px; border-radius: 6px;
+}
+
+QFrame[card="true"] { background: @surface@; border: 1px solid @line@; border-radius: 14px; }
+QFrame[tile="true"] { background: @veil@; border: 1px solid @line_soft@; border-radius: 12px; }
+
+QLabel { background: transparent; }
+QLabel[muted="true"] { color: @muted@; }
+QLabel[eyebrow="true"] { color: @muted@; font-size: 8pt; font-weight: 700; }
+QLabel[cardtitle="true"] { font-size: 11pt; font-weight: 700; }
+QLabel[kvlabel="true"] { color: @muted@; }
+QLabel[kvvalue="true"] { font-weight: 600; }
+QLabel[pill="true"] {
+  background: @veil@; border: 1px solid @line_soft@; border-radius: 10px;
+  padding: 2px 10px; color: @text_dim@; font-size: 8pt; font-weight: 600;
+}
+QLabel[tone="good"] { color: @good@; }
+QLabel[tone="warn"] { color: @warn@; }
+QLabel[tone="bad"] { color: @bad@; }
+
+QPushButton {
+  background: @veil@; color: @text@; border: 1px solid @line@;
+  border-radius: 9px; padding: 7px 14px;
+}
+QPushButton:hover { background: @veil_hover@; border-color: @line_strong@; }
+QPushButton:pressed { background: @veil_press@; }
+QPushButton:disabled { color: @muted@; }
+QPushButton[primary="true"] { background: @accent@; border-color: @accent@; color: #ffffff; }
+QPushButton[primary="true"]:hover { background: @accent_hover@; border-color: @accent_hover@; }
+QPushButton[danger="true"] { color: @bad@; border-color: @bad_line@; }
+QPushButton[link="true"] {
+  background: transparent; border: none; color: @accent@;
+  padding: 0 2px; font-weight: 600;
+}
+QPushButton[link="true"]:hover { background: transparent; color: @accent_hover@; }
+
+QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
+  background: @field@; border: 1px solid @line@; border-radius: 8px;
+  padding: 7px; selection-background-color: @accent@; selection-color: #ffffff;
+}
+QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {
+  border: 1px solid @accent_line@;
+}
+QComboBox QAbstractItemView {
+  background: @popup@; border: 1px solid @line@;
+  selection-background-color: @accent@; selection-color: #ffffff; outline: 0;
+}
+
+QTableWidget {
+  background: @table@; alternate-background-color: @table_alt@;
+  gridline-color: @line_soft@; border: 1px solid @line@; border-radius: 12px;
+}
+QTableWidget::item:selected { background: @select@; color: @text@; }
+QTableCornerButton::section { background: transparent; border: none; }
+QHeaderView::section {
+  background: @veil@; color: @text_dim@; border: 0;
+  border-bottom: 1px solid @line@; padding: 8px; font-weight: 700;
+}
+
+QCheckBox { spacing: 8px; }
+QCheckBox::indicator { width: 15px; height: 15px; }
+QCheckBox::indicator:checked { background: @accent@; border: 1px solid @accent@; border-radius: 4px; }
+QCheckBox::indicator:unchecked { background: @field@; border: 1px solid @line_strong@; border-radius: 4px; }
+
+QSlider::groove:horizontal { height: 4px; background: @line_strong@; border-radius: 2px; }
+QSlider::handle:horizontal { background: @accent@; width: 14px; margin: -5px 0; border-radius: 7px; }
+
+QScrollBar:vertical { background: transparent; width: 10px; margin: 2px; }
+QScrollBar::handle:vertical { background: @handle@; border-radius: 4px; min-height: 28px; }
+QScrollBar::handle:vertical:hover { background: @handle_hover@; }
+QScrollBar:horizontal { background: transparent; height: 10px; margin: 2px; }
+QScrollBar::handle:horizontal { background: @handle@; border-radius: 4px; min-width: 28px; }
+QScrollBar::handle:horizontal:hover { background: @handle_hover@; }
+QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
+QScrollBar::add-page, QScrollBar::sub-page { background: none; }
+"""
+
+
+def build_qss(theme: str) -> str:
+    p = LIGHT if theme == "light" else DARK
+    values = {
+        "text": p.text,
+        "text_dim": p.text_dim,
+        "muted": p.muted,
+        "accent": p.accent,
+        "accent_hover": p.accent_hover,
+        "good": p.good,
+        "warn": p.warn,
+        "bad": p.bad,
+        "bg1": p.bg1,
+        "popup": p.popup,
+        "surface": rgba(p.surface, p.surface_alpha),
+        "line": rgba(p.line, p.line_alpha),
+        "line_soft": rgba(p.line, int(p.line_alpha * 0.6)),
+        "line_strong": rgba(p.line, int(p.line_alpha * 2.4)),
+        "veil": rgba(p.veil, p.veil_alpha),
+        "veil_hover": rgba(p.veil, int(p.veil_alpha * 2.2)),
+        "veil_press": rgba(p.veil, int(p.veil_alpha * 3.2)),
+        "field": rgba(p.field, p.field_alpha),
+        "table": rgba(p.surface, max(0, p.surface_alpha - 30)),
+        "table_alt": rgba(p.veil, int(p.veil_alpha * 0.6)),
+        "select": rgba(p.accent, 70),
+        "handle": rgba(p.text, 70),
+        "handle_hover": rgba(p.text, 130),
+        "bad_line": rgba(p.bad, 110),
+        "accent_line": rgba(p.accent, 170),
+    }
+    qss = _QSS
+    for key, value in values.items():
+        qss = qss.replace(f"@{key}@", value)
+    return qss
