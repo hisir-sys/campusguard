@@ -154,69 +154,48 @@ class MainWindow(QMainWindow):
 
 
     # ------------------------------------------------------------------
-    # Premium long-form technical information pages
+    # Long-form technical information pages
     # ------------------------------------------------------------------
+    def _build_information_pages(self) -> dict[str, QWidget]:
+        return {
+            "services": self._make_services_page(),
+            "about": self._make_about_page(),
+            "tools": self._make_tools_page(),
+            "how-it-works": self._make_how_it_works_page(),
+        }
+
     @staticmethod
     def _info_scroll(content: QWidget) -> QWidget:
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         scroll.setWidget(content)
         return scroll
 
     @staticmethod
-    def _section_header(eyebrow: str, title: str, description: str) -> QWidget:
-        pal = get_palette()
+    def _section_header(title: str, description: str) -> QWidget:
         box = QWidget()
         layout = QVBoxLayout(box)
-        layout.setContentsMargins(2, 2, 2, 8)
-        layout.setSpacing(8)
-
-        eyebrow_label = QLabel(eyebrow.upper())
-        eyebrow_label.setStyleSheet(
-            f"font-size: 8pt; font-weight: 800; letter-spacing: 1.6px; color: {pal.accent};"
-        )
+        layout.setContentsMargins(0, 0, 0, 4)
+        layout.setSpacing(7)
         title_label = QLabel(title)
-        title_label.setStyleSheet("font-size: 24pt; font-weight: 800; letter-spacing: -0.4px;")
+        title_label.setStyleSheet("font-size: 18pt; font-weight: 700;")
         description_label = QLabel(description)
         description_label.setWordWrap(True)
-        description_label.setMaximumWidth(900)
-        description_label.setStyleSheet("font-size: 10.5pt; color: palette(mid); line-height: 1.35;")
-
-        rule = QFrame()
-        rule.setFixedHeight(2)
-        rule.setMaximumWidth(74)
-        rule.setStyleSheet(f"background: {pal.accent}; border: none; border-radius: 1px;")
-
-        layout.addWidget(eyebrow_label)
+        description_label.setStyleSheet("font-size: 10pt; color: palette(mid);")
         layout.addWidget(title_label)
         layout.addWidget(description_label)
-        layout.addSpacing(3)
-        layout.addWidget(rule)
         return box
 
     @staticmethod
     def _tech_card(title: str, subtitle: str, body: str, icon: str | None = None) -> QWidget:
-        pal = get_palette()
         card, body_layout = make_card(title, icon=icon)
-        card.setObjectName("premiumInfoCard")
-        card.setStyleSheet(
-            f"QFrame#premiumInfoCard {{ background: {pal.glass}; border: 1px solid {pal.line}; "
-            "border-radius: 16px; }"
-            f"QFrame#premiumInfoCard:hover {{ border: 1px solid {pal.accent}; }}"
-        )
-        body_layout.setContentsMargins(18, 16, 18, 18)
-        body_layout.setSpacing(7)
-        subtitle_label = QLabel(subtitle.upper())
-        subtitle_label.setStyleSheet(
-            f"font-size: 7.5pt; font-weight: 800; letter-spacing: 0.8px; color: {pal.accent};"
-        )
+        subtitle_label = QLabel(subtitle)
+        subtitle_label.setStyleSheet("font-size: 9pt; color: palette(mid); font-weight: 600;")
         subtitle_label.setWordWrap(True)
         body_label = QLabel(body)
         body_label.setWordWrap(True)
-        body_label.setStyleSheet("font-size: 9pt; line-height: 1.3; color: palette(text);")
         body_layout.addWidget(subtitle_label)
         body_layout.addWidget(body_label)
         return card
@@ -225,88 +204,102 @@ class MainWindow(QMainWindow):
     def _flow_node(number: str, title: str, detail: str) -> QWidget:
         pal = get_palette()
         node = QFrame()
-        node.setObjectName("premiumFlowNode")
+        node.setObjectName("technicalFlowNode")
+        # Keep the flowchart integrated with the glass UI: no bright white
+        # outlines and no hard panel edge that fights the surrounding theme.
         node.setStyleSheet(
-            f"QFrame#premiumFlowNode {{ background: {pal.glass}; border: 1px solid {pal.line}; "
-            "border-radius: 16px; }"
-            f"QFrame#premiumFlowNode:hover {{ border: 1px solid {pal.accent}; }}"
+            f"QFrame#technicalFlowNode {{ "
+            f"background: {pal.glass}; "
+            f"border: 1px solid rgba(255,255,255,0.07); "
+            f"border-radius: 16px; }}"
         )
         layout = QHBoxLayout(node)
         layout.setContentsMargins(16, 14, 18, 14)
         layout.setSpacing(14)
 
-        badge = QLabel(number)
-        badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        badge.setFixedSize(42, 42)
+        badge = QFrame()
+        badge.setFixedSize(38, 38)
+        badge.setObjectName("flowStepBadge")
         badge.setStyleSheet(
-            f"background: {pal.accent}; color: white; border-radius: 21px; "
-            "font-size: 8.5pt; font-weight: 800;"
+            f"QFrame#flowStepBadge {{ "
+            f"background: {pal.accent}; "
+            f"border: none; border-radius: 19px; }}"
         )
+        badge_layout = QVBoxLayout(badge)
+        badge_layout.setContentsMargins(0, 0, 0, 0)
+        badge_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        copy = QVBoxLayout()
-        copy.setSpacing(4)
+        step = QLabel(number)
+        step.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        step.setStyleSheet(
+            "font-size: 8pt; font-weight: 800; color: white; "
+            "background: transparent; border: none;"
+        )
+        badge_layout.addWidget(step)
+
+        text_column = QVBoxLayout()
+        text_column.setContentsMargins(0, 0, 0, 0)
+        text_column.setSpacing(4)
+
         heading = QLabel(title)
-        heading.setStyleSheet("font-size: 11.5pt; font-weight: 800;")
+        heading.setStyleSheet("font-size: 11pt; font-weight: 700; border: none;")
         text = QLabel(detail)
         text.setWordWrap(True)
-        text.setStyleSheet("font-size: 9pt; color: palette(mid); line-height: 1.3;")
-        copy.addWidget(heading)
-        copy.addWidget(text)
+        text.setStyleSheet(
+            "font-size: 9pt; color: palette(mid); border: none;"
+        )
+
+        text_column.addWidget(heading)
+        text_column.addWidget(text)
 
         layout.addWidget(badge, 0, Qt.AlignmentFlag.AlignTop)
-        layout.addLayout(copy, 1)
+        layout.addLayout(text_column, 1)
         return node
 
     @staticmethod
-    def _flow_arrow() -> QLabel:
-        pal = get_palette()
-        arrow = QLabel("│\n▼")
-        arrow.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        arrow.setFixedHeight(27)
-        arrow.setStyleSheet(
-            f"font-size: 9pt; font-weight: 800; color: {pal.accent}; line-height: 0.8;"
-        )
-        return arrow
+    def _flow_arrow() -> QWidget:
+        wrapper = QWidget()
+        wrapper.setFixedHeight(26)
+        layout = QHBoxLayout(wrapper)
+        layout.setContentsMargins(34, 0, 0, 0)
+        layout.setSpacing(0)
 
-    @staticmethod
-    def _premium_callout(title: str, body_text: str, icon: str = "activity") -> QWidget:
-        pal = get_palette()
-        card, body = make_card(title, icon=icon)
-        card.setObjectName("premiumCallout")
-        card.setStyleSheet(
-            f"QFrame#premiumCallout {{ background: {pal.glass}; border: 1px solid {pal.accent}; "
-            "border-radius: 16px; }"
+        line = QFrame()
+        line.setFixedWidth(1)
+        line.setStyleSheet("background: rgba(255,255,255,0.10); border: none;")
+
+        arrow = QLabel("↓")
+        arrow.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        arrow.setStyleSheet(
+            "font-size: 13pt; font-weight: 700; "
+            "color: palette(mid); background: transparent; border: none;"
         )
-        body.setContentsMargins(18, 15, 18, 16)
-        label = QLabel(body_text)
-        label.setWordWrap(True)
-        label.setStyleSheet("font-size: 9.5pt; line-height: 1.35;")
-        body.addWidget(label)
-        return card
+
+        layout.addWidget(line, 0, Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(arrow, 0, Qt.AlignmentFlag.AlignCenter)
+        layout.addStretch(1)
+        return wrapper
 
     def _make_about_page(self) -> QWidget:
         content = QWidget()
         layout = QVBoxLayout(content)
-        layout.setContentsMargins(34, 28, 34, 44)
-        layout.setSpacing(20)
+        layout.setContentsMargins(28, 24, 28, 36)
+        layout.setSpacing(18)
         layout.addWidget(self._section_header(
-            "Platform",
             "About CampusGuard",
-            "A local-first desktop security operations application built around configured camera sources, local processing, incident persistence, and operator review.",
+            "A local-first campus security operations application built around configured camera sources, local processing, incident review, and operator alerts.",
         ))
 
-        card, body = make_card("SYSTEM PURPOSE", icon="shield")
-        card.setObjectName("premiumInfoCard")
-        body.setContentsMargins(20, 17, 20, 19)
+        card, body = make_card("System purpose", icon="shield")
         points = (
             "CampusGuard connects external USB, RTSP, HTTP/MJPEG, and IP camera sources to one desktop operations interface.",
             "Camera acquisition, AI processing, incident persistence, alert review, and operator controls are separated into dedicated modules.",
             "It does not perform facial recognition or identify people. Detection results are represented as camera events and tracked objects.",
         )
         for text in points:
-            label = QLabel("●  " + text)
+            label = QLabel("•  " + text)
             label.setWordWrap(True)
-            label.setStyleSheet(f"font-size: 9.5pt; padding: 5px 0; color: palette(text);")
+            label.setStyleSheet("padding: 4px 0;")
             body.addWidget(label)
         layout.addWidget(card)
 
@@ -326,8 +319,7 @@ class MainWindow(QMainWindow):
         ), 1)
         layout.addLayout(row)
 
-        card, body = make_card("ARCHITECTURE BOUNDARIES", icon="activity")
-        body.setContentsMargins(20, 17, 20, 19)
+        card, body = make_card("Technical boundaries", icon="activity")
         boundaries = (
             ("Camera layer", "Reads frames and reports connection state, FPS, resolution, and runtime errors."),
             ("AI layer", "Loads configured local models and reports component-level model status."),
@@ -335,74 +327,85 @@ class MainWindow(QMainWindow):
             ("Operations layer", "Presents cameras, incidents, alerts, and settings without replacing the processing pipeline."),
         )
         for title, detail in boundaries:
-            label = QLabel(f"<b>{title}</b><br><span style='color: palette(mid);'>{detail}</span>")
+            label = QLabel(f"<b>{title}</b><br>{detail}")
             label.setWordWrap(True)
-            label.setStyleSheet("padding: 6px 0; font-size: 9pt;")
+            label.setStyleSheet("padding: 5px 0;")
             body.addWidget(label)
         layout.addWidget(card)
-        layout.addWidget(self._premium_callout(
-            "LOCAL-FIRST BY DESIGN",
-            "Camera processing and application state are organized around the desktop runtime. Model availability is surfaced explicitly instead of fabricating detection output when a configured model is unavailable.",
-            "server",
-        ))
         layout.addStretch(1)
         return self._info_scroll(content)
 
     def _make_services_page(self) -> QWidget:
         content = QWidget()
         layout = QVBoxLayout(content)
-        layout.setContentsMargins(34, 28, 34, 44)
-        layout.setSpacing(20)
+        layout.setContentsMargins(28, 24, 28, 36)
+        layout.setSpacing(18)
         layout.addWidget(self._section_header(
-            "Architecture",
             "Services",
-            "The service chain from external camera acquisition through AI analysis, incident persistence, and operator alerts.",
+            "The technical service chain from external camera acquisition through AI analysis, incident persistence, and operator alerts.",
         ))
 
         services = (
-            ("01", "External Camera Service", "USB / RTSP / HTTP / IP", "Accepts configured external camera sources and exposes a consistent runtime interface."),
-            ("02", "Frame Processing", "CameraRuntime", "Reads frames, maintains connection state, measures stream statistics, and forwards frames for optional AI processing."),
-            ("03", "Person Detection", "YOLO", "Finds people in individual frames and supplies bounding boxes and confidence values."),
-            ("04", "Object Tracking", "Persistent IDs", "Associates detections across consecutive frames so movement can be analyzed over time."),
-            ("05", "Pose Analysis", "Keypoints / skeleton", "Uses configured pose-model output to expose body keypoints and movement structure."),
-            ("06", "Temporal Classification", "MC3-18", "Evaluates a short frame sequence so motion-based events can be represented as temporal model results."),
-            ("07", "Incident Service", "SQLite repository", "Creates an incident from a stable event with camera, event, confidence, severity, and status."),
-            ("08", "Alert Service", "Operator review", "Surfaces active events, applies configured cooldown behavior, and provides acknowledgement controls."),
+            ("01", "External Camera Service", "USB / RTSP / HTTP / IP",
+             "Accepts configured external camera sources and exposes a consistent runtime interface."),
+            ("02", "Frame Processing", "CameraRuntime",
+             "Reads frames, maintains connection state, measures stream statistics, and forwards frames for optional AI processing."),
+            ("03", "Person Detection", "YOLO",
+             "Finds people in individual frames and supplies bounding boxes and confidence values."),
+            ("04", "Object Tracking", "Persistent IDs",
+             "Associates detections across consecutive frames so movement can be analyzed over time."),
+            ("05", "Pose Analysis", "Keypoints / skeleton",
+             "Uses configured pose-model output to expose body keypoints and movement structure."),
+            ("06", "Temporal Classification", "MC3-18",
+             "Evaluates a short frame sequence so motion-based events can be represented as temporal model results."),
+            ("07", "Incident Service", "SQLite repository",
+             "Creates an incident from a stable event with camera, event, confidence, severity, and status."),
+            ("08", "Alert Service", "Operator review",
+             "Surfaces active events, applies configured cooldown behavior, and provides acknowledgement controls."),
         )
         for i, (number, title, subtitle, detail) in enumerate(services):
-            layout.addWidget(self._flow_node(number, title, f"{subtitle}  •  {detail}"))
+            layout.addWidget(self._flow_node(number, title, f"{subtitle} — {detail}"))
             if i != len(services) - 1:
                 layout.addWidget(self._flow_arrow())
 
-        layout.addWidget(self._premium_callout(
-            "SERVICE CONTRACT",
-            "Capture produces frames → models produce analysis → the repository persists state → the UI presents that state to the operator. Each stage has a distinct responsibility, making the runtime easier to inspect and extend.",
-            "server",
+        card, body = make_card("Service contract", icon="server")
+        body.addWidget(QLabel(
+            "Capture produces frames, models produce analysis, the repository persists state, "
+            "and the UI presents that state to the operator."
         ))
+        layout.addWidget(card)
         layout.addStretch(1)
         return self._info_scroll(content)
 
     def _make_tools_page(self) -> QWidget:
         content = QWidget()
         layout = QVBoxLayout(content)
-        layout.setContentsMargins(34, 28, 34, 44)
-        layout.setSpacing(20)
+        layout.setContentsMargins(28, 24, 28, 36)
+        layout.setSpacing(18)
         layout.addWidget(self._section_header(
-            "Operator Toolkit",
             "Tools",
-            "A structured view of the tools used to configure cameras, inspect AI availability, monitor events, and operate the system.",
+            "Technical tools for camera operations, AI configuration, diagnostics, incident review, alerts, and administration.",
         ))
 
         tools = (
-            ("Camera Manager", "Connection and lifecycle", "Add, test, reconnect, remove, and monitor configured external camera sources."),
-            ("AI Model Configuration", "Model availability", "Review detector, pose, temporal classifier, model paths, and compute-device status."),
-            ("Person Detection", "Frame-level analysis", "Produces person bounding boxes and confidence information when the detector is available."),
-            ("Tracking", "Cross-frame association", "Associates detections across frames so movement can be analyzed as a continuous track."),
-            ("Pose / Skeleton", "Body keypoints", "Represents pose information as keypoints and skeleton data when configured."),
-            ("Temporal Action Analysis", "Sequence-level analysis", "Uses a frame clip to classify motion patterns with the configured temporal model."),
-            ("Incident History", "Evidence index", "Search and review stored incidents, severity, confidence, status, and camera source."),
-            ("Alert Console", "Active response", "Review active alerts and acknowledge them from the Alerts page."),
-            ("System Settings", "Runtime control", "Configure model locations, compute settings, thresholds, and alert cooldown behavior."),
+            ("Camera Manager", "Connection and lifecycle",
+             "Add, test, reconnect, remove, and monitor configured external camera sources."),
+            ("AI Model Configuration", "Model availability",
+             "Review detector, pose, temporal classifier, model paths, and compute-device status."),
+            ("Person Detection", "Frame-level analysis",
+             "Produces person bounding boxes and confidence information when the detector is available."),
+            ("Tracking", "Cross-frame association",
+             "Associates detections across frames so movement can be analyzed as a continuous track."),
+            ("Pose / Skeleton", "Body keypoints",
+             "Represents pose information as keypoints and skeleton data when configured."),
+            ("Temporal Action Analysis", "Sequence-level analysis",
+             "Uses a frame clip to classify motion patterns with the configured temporal model."),
+            ("Incident History", "Evidence index",
+             "Search and review stored incidents, severity, confidence, status, and camera source."),
+            ("Alert Console", "Active response",
+             "Review active alerts and acknowledge them from the Alerts page."),
+            ("System Settings", "Runtime control",
+             "Configure model locations, compute settings, thresholds, and alert cooldown behavior."),
         )
 
         for i in range(0, len(tools), 3):
@@ -412,68 +415,86 @@ class MainWindow(QMainWindow):
                 row.addWidget(self._tech_card(title, subtitle, detail), 1)
             while row.count() < 3:
                 spacer = QWidget()
-                spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+                spacer.setSizePolicy(
+                    QSizePolicy.Policy.Expanding,
+                    QSizePolicy.Policy.Preferred,
+                )
                 row.addWidget(spacer, 1)
             layout.addLayout(row)
 
-        layout.addWidget(self._premium_callout(
-            "RECOMMENDED OPERATOR FLOW",
-            "01  Configure an external camera  →  02  Test the connection  →  03  Confirm model availability  →  04  Enable AI  →  05  Monitor live state  →  06  Review incidents and alerts.",
-            "settings",
+        card, body = make_card("Operator workflow", icon="settings")
+        body.addWidget(QLabel(
+            "1. Configure an external camera → 2. Test the connection → "
+            "3. Confirm model availability → 4. Enable AI → 5. Monitor live state → "
+            "6. Review incidents and alerts."
         ))
+        layout.addWidget(card)
         layout.addStretch(1)
         return self._info_scroll(content)
 
     def _make_how_it_works_page(self) -> QWidget:
         content = QWidget()
         layout = QVBoxLayout(content)
-        layout.setContentsMargins(34, 28, 34, 44)
-        layout.setSpacing(20)
+        layout.setContentsMargins(28, 24, 28, 40)
+        layout.setSpacing(18)
         layout.addWidget(self._section_header(
-            "Processing Pipeline",
             "How It Works",
-            "A detailed frame-to-event view of the CampusGuard processing pipeline, including where camera, model, persistence, and operator layers connect.",
+            "A detailed view of the CampusGuard frame and sequence processing pipeline.",
         ))
 
         pipeline = (
-            ("01", "External Camera", "USB / RTSP / HTTP / IP", "A configured external camera becomes the source of frames."),
-            ("02", "Camera Runtime", "OpenCV capture", "The runtime opens the source, reads frames, reports LIVE/OFFLINE/ERROR, and measures FPS and resolution."),
-            ("03", "Frame Preparation", "Runtime handoff", "Frames enter the AI path only when AI processing is enabled and the relevant model configuration is available."),
-            ("04", "Person Detection", "YOLO bounding boxes", "The detector identifies people and provides bounding boxes and confidence values."),
-            ("05", "Tracking", "Persistent person IDs", "Detections are associated across frames so movement can be analyzed continuously."),
-            ("06", "Pose Estimation", "Keypoints / skeleton", "A configured pose model can produce body keypoints describing posture and movement structure."),
-            ("07", "Temporal Buffer", "Consecutive frames", "A short sequence is accumulated for temporal analysis; the current application describes the action classifier as using a 16-frame clip."),
-            ("08", "Temporal Classification", "MC3-18 action score", "The temporal model produces an action score from the clip rather than a single image."),
-            ("09", "Event Stability", "Confidence + cooldown", "The event result and configured cooldown behavior are applied before persistent incident creation."),
-            ("10", "Incident Persistence", "SQLite", "A created incident records camera, event, confidence, severity, and operational status."),
-            ("11", "Alert Surface", "Alerts + notifications", "The event is reflected in incident and alert views for operator inspection and acknowledgement."),
-            ("12", "Operations UI", "Dashboard / Cameras / Incidents / Alerts", "The desktop interface presents live state, model state, incidents, alerts, and configuration."),
+            ("01", "External Camera", "USB / RTSP / HTTP / IP",
+             "A configured external camera becomes the source of frames."),
+            ("02", "Camera Runtime", "OpenCV capture",
+             "The runtime opens the source, reads frames, reports LIVE/OFFLINE/ERROR, and measures FPS and resolution."),
+            ("03", "Frame Preparation", "Runtime handoff",
+             "Frames enter the AI path only when AI processing is enabled and the relevant model configuration is available."),
+            ("04", "Person Detection", "YOLO bounding boxes",
+             "The detector identifies people and provides bounding boxes and confidence values."),
+            ("05", "Tracking", "Persistent person IDs",
+             "Detections are associated across frames so movement can be analyzed continuously."),
+            ("06", "Pose Estimation", "Keypoints / skeleton",
+             "A configured pose model can produce body keypoints describing posture and movement structure."),
+            ("07", "Temporal Buffer", "Consecutive frames",
+             "A short sequence is accumulated for temporal analysis; the current application describes the action classifier as using a 16-frame clip."),
+            ("08", "Temporal Classification", "MC3-18 action score",
+             "The temporal model produces an action score from the clip rather than a single image."),
+            ("09", "Event Stability", "Confidence + cooldown",
+             "The event result and configured cooldown behavior are applied before persistent incident creation."),
+            ("10", "Incident Persistence", "SQLite",
+             "A created incident records camera, event, confidence, severity, and operational status."),
+            ("11", "Alert Surface", "Alerts + notifications",
+             "The event is reflected in incident and alert views for operator inspection and acknowledgement."),
+            ("12", "Operations UI", "Dashboard / Cameras / Incidents / Alerts",
+             "The desktop interface presents live state, model state, incidents, alerts, and configuration."),
         )
         for i, (number, title, subtitle, detail) in enumerate(pipeline):
-            layout.addWidget(self._flow_node(number, title, f"{subtitle}  •  {detail}"))
+            layout.addWidget(self._flow_node(number, title, f"{subtitle} — {detail}"))
             if i != len(pipeline) - 1:
                 layout.addWidget(self._flow_arrow())
 
-        layout.addWidget(self._premium_callout(
-            "END-TO-END DATA FLOW",
-            "CAMERA SOURCE  →  FRAME  →  PERSON DETECTION  →  TRACKING  →  POSE  →  TEMPORAL CLIP  →  ACTION SCORE  →  STABLE EVENT  →  INCIDENT  →  ALERT  →  OPERATOR",
-            "activity",
-        ))
-        layout.addWidget(self._premium_callout(
-            "MODEL BEHAVIOR",
-            "CampusGuard reports model availability component-by-component. If a model is missing, the application should report that status rather than inventing detections or confidence scores. AI behavior therefore depends on the model files configured in Settings.",
-            "cpu",
-        ))
+        card, body = make_card("End-to-end data flow", icon="activity")
+        flow = QLabel(
+            "CAMERA SOURCE  →  FRAME  →  PERSON DETECTION  →  TRACKING  →  "
+            "POSE  →  TEMPORAL CLIP  →  ACTION SCORE  →  STABLE EVENT  →  "
+            "INCIDENT  →  ALERT  →  OPERATOR"
+        )
+        flow.setWordWrap(True)
+        flow.setStyleSheet("font-size: 10pt; font-weight: 700; padding: 6px 0;")
+        body.addWidget(flow)
+        layout.addWidget(card)
+
+        card, body = make_card("Model behavior", icon="cpu")
+        note = QLabel(
+            "CampusGuard reports model availability component-by-component. If a model is missing, "
+            "the application should report that status rather than inventing detections or confidence "
+            "scores. AI behavior therefore depends on the model files configured in Settings."
+        )
+        note.setWordWrap(True)
+        body.addWidget(note)
+        layout.addWidget(card)
         layout.addStretch(1)
         return self._info_scroll(content)
-
-    def _build_information_pages(self) -> dict[str, QWidget]:
-        return {
-            "services": self._make_services_page(),
-            "about": self._make_about_page(),
-            "tools": self._make_tools_page(),
-            "how-it-works": self._make_how_it_works_page(),
-        }
 
     def _connect_pages(self) -> None:
         self.top_bar.page_requested.connect(self.navigate)
