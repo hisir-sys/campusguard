@@ -131,22 +131,13 @@ class VideoClassifier:
     def update(self, threshold: float, positive_class: int) -> None:
         self.threshold, self.positive_class = threshold, positive_class
 
-    def add_frame(self, frame: np.ndarray) -> tuple[str, float] | None:
-        if self.model is None:
-            return None
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        self.frames.append(cv2.resize(rgb, self.INPUT_SIZE, interpolation=cv2.INTER_AREA))
-        if len(self.frames) > self.CLIP_LENGTH:
-            self.frames.pop(0)
-        self.frame_count += 1
-        if len(self.frames) < self.CLIP_LENGTH or self.frame_count % self.INFERENCE_STRIDE:
-            return None
-
-        clip = np.stack(self.frames, axis=0)
-        tensor = torch.from_numpy(clip).permute(3, 0, 1, 2).unsqueeze(0).float().to(self.device) / 255.0
-        mean = torch.tensor((0.43216, 0.394666, 0.37645), device=self.device).view(1,3,1,1,1)
-        std = torch.tensor((0.22803, 0.22145, 0.216989), device=self.device).view(1,3,1,1,1)
+    def _classify_clip(self, clip: np.ndarray) -> tuple[str, float]:
+        tensor_clip = np.stack(clip, axis=0)
+        tensor = torch.from_numpy(tensor_clip).permute(3, 0, 1, 2).unsqueeze(0).float().to(self.device) / 255.0
+        mean = torch.tensor((0.43216, 0.394666, 0.37645), device=self.device).view(1, 3, 1, 1, 1)
+        std = torch.tensor((0.22803, 0.22145, 0.216989), device=self.device).view(1, 3, 1, 1, 1)
         tensor = (tensor - mean) / std
+
         with torch.inference_mode():
             logits = self.model(tensor)
             if isinstance(logits, (tuple, list)):
@@ -156,15 +147,40 @@ class VideoClassifier:
         if self.class_count == 3:
             index = int(np.argmax(probabilities))
             confidence = float(probabilities[index])
-            state = (("NORMAL", "POSSIBLE ALTERCATION", "FIGHT DETECTED")[index] if confidence >= self.threshold else "NORMAL")
+            state = (("NORMAL", "POSSIBLE ALTERCATION", "FIGHT DETECTED")[index]
+                     if confidence >= self.threshold else "NORMAL")
         else:
             index = min(max(self.positive_class, 0), 1)
             confidence = float(probabilities[index])
             state = "FIGHT DETECTED" if confidence >= self.threshold else "NORMAL"
             if self.threshold <= confidence < 0.85:
                 state = "POSSIBLE ALTERCATION"
+
         self.last_probability, self.last_state = confidence, state
         return state, confidence
+
+    def add_frame(self, frame: np.ndarray) -> tuple[str, float] | None:
+        """Keep a legacy/global stream for callers that still need one."""
+        if self.model is None:
+            return None
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        self.frames.append(cv2.resize(rgb, self.INPUT_SIZE, interpolation=cv2.INTER_AREA))
+        if len(self.frames) > self.CLIP_LENGTH:
+            self.frames.pop(0)
+        self.frame_count += 1
+        if len(self.frames) < self.CLIP_LENGTH or self.frame_count % self.INFERENCE_STRIDE:
+            return None
+        return self._classify_clip(np.asarray(self.frames))
+
+    def classify_clip(self, frames: list[np.ndarray]) -> tuple[str, float]:
+        """Classify one temporal ROI clip for person-specific attribution."""
+        if self.model is None or len(frames) < self.CLIP_LENGTH:
+            raise ValueError("A loaded classifier and 16-frame clip are required.")
+        prepared = []
+        for frame in frames[-self.CLIP_LENGTH:]:
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            prepared.append(cv2.resize(rgb, self.INPUT_SIZE, interpolation=cv2.INTER_AREA))
+        return self._classify_clip(np.asarray(prepared))
 
 class EnhancedEnsemble:
     """CampusGuard Enhanced combines every configured classifier that actually loads."""
