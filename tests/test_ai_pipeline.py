@@ -1,6 +1,7 @@
 import unittest
 
 from campusguard.ai_pipeline import FightDecision, InteractionEngine, TrackedPerson
+from campusguard.model_registry import MODEL_PROFILES
 from campusguard.settings import AppSettings
 
 
@@ -13,6 +14,18 @@ class SettingsTests(unittest.TestCase):
     def test_enhanced_is_not_operational(self):
         settings = AppSettings.from_dict({"violence_model": "enhanced"})
         self.assertEqual(settings.violence_model, "mc3")
+
+    def test_mc3_fight_class_is_verified_from_manifest(self):
+        profile = MODEL_PROFILES["mc3"]
+        self.assertEqual(profile.fight_class, 0)
+        self.assertEqual(profile.class_labels, ("fight", "noFight"))
+        self.assertTrue(profile.semantic_verified)
+
+    def test_unverified_models_cannot_guess_fight_class(self):
+        for key in ("fdsc_mc3", "r3d", "x3d"):
+            profile = MODEL_PROFILES[key]
+            self.assertIsNone(profile.fight_class)
+            self.assertFalse(profile.semantic_verified)
 
     def test_model_defaults_are_portable(self):
         settings = AppSettings()
