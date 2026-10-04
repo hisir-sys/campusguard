@@ -5,7 +5,6 @@ from time import perf_counter
 
 import cv2
 
-from campusguard.camera_runtime import CameraManager
 from campusguard.settings import AppSettings
 from campusguard.ai_pipeline import VisionPipeline
 
