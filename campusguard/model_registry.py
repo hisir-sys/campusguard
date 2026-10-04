@@ -10,6 +10,7 @@ import torch
 from torch import nn
 
 from campusguard.model_manifest import MODEL_MANIFESTS
+from campusguard.model_adapters import get_model_input_adapter
 
 Status = Callable[[str, str], None]
 
@@ -58,6 +59,7 @@ class VideoClassifier:
 
     def __init__(self, profile: ModelProfile, path: str, device: torch.device, threshold: float, status: Status) -> None:
         self.profile, self.path, self.device = profile, path, device
+        self.adapter = get_model_input_adapter(profile.key)
         self.threshold, self.status = threshold, status
         self.fight_class: int | None = profile.fight_class
         self.model: nn.Module | torch.jit.ScriptModule | None = None
@@ -226,11 +228,7 @@ class VideoClassifier:
         self.threshold = threshold
 
     def _classify_clip(self, clip: np.ndarray) -> tuple[str, float]:
-        tensor_clip = np.stack(clip, axis=0)
-        tensor = torch.from_numpy(tensor_clip).permute(3, 0, 1, 2).unsqueeze(0).float().to(self.device) / 255.0
-        mean = torch.tensor((0.43216, 0.394666, 0.37645), device=self.device).view(1, 3, 1, 1, 1)
-        std = torch.tensor((0.22803, 0.22145, 0.216989), device=self.device).view(1, 3, 1, 1, 1)
-        tensor = (tensor - mean) / std
+        tensor = self.adapter.prepare(clip, self.device)
 
         with torch.inference_mode():
             logits = self.model(tensor)
