@@ -1,6 +1,6 @@
 import unittest
 
-from campusguard.ai_pipeline import InteractionEngine, TrackedPerson
+from campusguard.ai_pipeline import FightDecision, InteractionEngine, TrackedPerson
 from campusguard.settings import AppSettings
 
 
@@ -31,6 +31,38 @@ class InteractionTests(unittest.TestCase):
         self.assertEqual(engine.update(people), [(1, 2)])
         self.assertIn(2, people[0].close_to)
         self.assertIn(1, people[1].close_to)
+
+
+class DecisionTests(unittest.TestCase):
+    def test_stable_predictions_trigger_event(self):
+        decision = FightDecision(0.65)
+        self.assertIsNone(decision.update("FIGHT DETECTED", 0.90))
+        self.assertIsNone(decision.update("FIGHT DETECTED", 0.90))
+        event = decision.update("FIGHT DETECTED", 0.90)
+        self.assertEqual(event, ("FIGHT DETECTED", 0.90, "HIGH"))
+
+    def test_normal_resets_event_latch(self):
+        decision = FightDecision(0.65)
+        decision.update("FIGHT DETECTED", 0.90)
+        decision.update("FIGHT DETECTED", 0.90)
+        decision.update("FIGHT DETECTED", 0.90)
+        self.assertTrue(decision.event_latched)
+        decision.update("NORMAL", 0.20)
+        self.assertFalse(decision.event_latched)
+
+
+class InteractionStateTests(unittest.TestCase):
+    def test_close_to_is_not_stale_after_people_separate(self):
+        engine = InteractionEngine()
+        people = [
+            TrackedPerson(1, 1, (10, 10, 110, 210), 0.95, center=(60, 110)),
+            TrackedPerson(2, 2, (80, 20, 180, 220), 0.94, center=(130, 120)),
+        ]
+        engine.update(people)
+        self.assertIn(2, people[0].close_to)
+        people[1].center = (600, 600)
+        engine.update(people)
+        self.assertNotIn(2, people[0].close_to)
 
 
 if __name__ == "__main__":
