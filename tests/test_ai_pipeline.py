@@ -6,9 +6,13 @@ from campusguard.settings import AppSettings
 
 class SettingsTests(unittest.TestCase):
     def test_all_violence_models_round_trip(self):
-        for key in ("mc3", "fdsc_mc3", "r3d", "x3d", "enhanced"):
+        for key in ("mc3", "fdsc_mc3", "r3d", "x3d"):
             settings = AppSettings.from_dict({"violence_model": key})
             self.assertEqual(settings.violence_model, key)
+
+    def test_enhanced_is_not_operational(self):
+        settings = AppSettings.from_dict({"violence_model": "enhanced"})
+        self.assertEqual(settings.violence_model, "mc3")
 
     def test_model_defaults_are_portable(self):
         settings = AppSettings()
