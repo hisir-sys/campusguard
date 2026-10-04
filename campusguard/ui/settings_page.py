@@ -150,12 +150,19 @@ class SettingsPage(QWidget):
         self.violence_model_input.addItem("FDSC MC3-18", "fdsc_mc3")
         self.violence_model_input.addItem("FDSC R3D-18", "r3d")
         self.violence_model_input.addItem("X3D-M", "x3d")
-        self.violence_model_input.addItem("CampusGuard Enhanced", "enhanced")
-        model_index = self.violence_model_input.findData(settings.violence_model)
+        self.violence_model_input.addItem("CampusGuard Enhanced — Coming Soon", "enhanced")
+        enhanced_index = self.violence_model_input.findData("enhanced")
+        enhanced_item = self.violence_model_input.model().item(enhanced_index)
+        if enhanced_item is not None:
+            enhanced_item.setEnabled(False)
+
+        selected_model = settings.violence_model if settings.violence_model != "enhanced" else "mc3"
+        model_index = self.violence_model_input.findData(selected_model)
         self.violence_model_input.setCurrentIndex(max(0, model_index))
 
         self.violence_model_note = QLabel(
-            "Enhanced combines every configured classifier that successfully loads; it is not a separate fake checkpoint."
+            "The selected violence model runs on each tracked person's temporal ROI. "
+            "CampusGuard Enhanced is reserved for a future multi-model ensemble and is currently non-operational."
         )
         self.violence_model_note.setWordWrap(True)
         self.violence_model_note.setProperty("muted", True)
