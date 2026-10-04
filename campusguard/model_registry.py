@@ -276,8 +276,10 @@ class VideoClassifier:
         """Keep a legacy/global stream for callers that still need one."""
         if self.model is None or self.fight_class is None:
             return None
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        self.frames.append(cv2.resize(rgb, self.INPUT_SIZE, interpolation=cv2.INTER_AREA))
+        # Keep frames in their original BGR form. The model adapter owns
+        # color conversion, resizing, and normalization so every model uses
+        # one consistent preprocessing path.
+        self.frames.append(frame.copy())
         if len(self.frames) > self.CLIP_LENGTH:
             self.frames.pop(0)
         self.frame_count += 1
