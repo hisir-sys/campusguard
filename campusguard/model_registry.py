@@ -9,6 +9,8 @@ import numpy as np
 import torch
 from torch import nn
 
+from campusguard.model_manifest import MODEL_MANIFESTS
+
 Status = Callable[[str, str], None]
 
 @dataclass(frozen=True)
@@ -17,13 +19,36 @@ class ModelProfile:
     name: str
     description: str
     architecture: str
-    path_setting: str | None
+    path_setting: str
+    class_labels: tuple[str, ...]
+    fight_class: int | None
+    preprocessing: str
+    semantic_status: str
+    source_note: str
+
+    @property
+    def class_count(self) -> int:
+        return len(self.class_labels)
+
+    @property
+    def semantic_verified(self) -> bool:
+        return self.fight_class is not None and self.semantic_status == "verified"
+
 
 MODEL_PROFILES: dict[str, ModelProfile] = {
-    "mc3": ModelProfile("mc3", "Current MC3-18", "CampusGuard's existing MC3-18 temporal fight classifier.", "mc3", "fight_model_path"),
-    "fdsc_mc3": ModelProfile("fdsc_mc3", "FDSC MC3-18", "FDSC fine-tuned MC3-18 surveillance classifier.", "mc3", "fdsc_mc3_model_path"),
-    "r3d": ModelProfile("r3d", "FDSC R3D-18", "FDSC R3D-18 3D ResNet surveillance classifier.", "r3d", "r3d_model_path"),
-    "x3d": ModelProfile("x3d", "X3D-M", "Realtime X3D-M violence classifier.", "x3d", "x3d_model_path"),
+    key: ModelProfile(
+        key=manifest.key,
+        name=manifest.name,
+        description=manifest.description,
+        architecture=manifest.architecture,
+        path_setting=manifest.path_setting,
+        class_labels=manifest.class_labels,
+        fight_class=manifest.fight_class,
+        preprocessing=manifest.preprocessing,
+        semantic_status=manifest.semantic_status,
+        source_note=manifest.source_note,
+    )
+    for key, manifest in MODEL_MANIFESTS.items()
 }
 
 class VideoClassifier:
@@ -31,9 +56,10 @@ class VideoClassifier:
     INFERENCE_STRIDE = 8
     INPUT_SIZE = (112, 112)
 
-    def __init__(self, profile: ModelProfile, path: str, device: torch.device, positive_class: int, threshold: float, status: Status) -> None:
+    def __init__(self, profile: ModelProfile, path: str, device: torch.device, threshold: float, status: Status) -> None:
         self.profile, self.path, self.device = profile, path, device
-        self.positive_class, self.threshold, self.status = positive_class, threshold, status
+        self.threshold, self.status = threshold, status
+        self.fight_class: int | None = profile.fight_class
         self.model: nn.Module | torch.jit.ScriptModule | None = None
         self.class_count = 0
         self.frames: list[np.ndarray] = []
@@ -78,6 +104,15 @@ class VideoClassifier:
             if self.class_count not in (2, 3):
                 raise ValueError(f"Checkpoint has {self.class_count} output classes; expected 2 or 3.")
 
+            if self.class_count != self.profile.class_count:
+                raise ValueError(
+                    f"Checkpoint has {self.class_count} classes, but the manifest expects {self.profile.class_count}."
+                )
+            if self.fight_class is not None and not (0 <= self.fight_class < self.class_count):
+                raise ValueError(
+                    f"Manifest fight class {self.fight_class} is outside the checkpoint's {self.class_count} classes."
+                )
+
             self._resize_classifier(model, self.class_count)
             missing, unexpected = model.load_state_dict(cleaned, strict=False)
             if missing or unexpected:
@@ -93,7 +128,10 @@ class VideoClassifier:
             model.eval()
             self.model = model
             self.last_state = "NORMAL"
-            self.status(self.profile.key, f"READY — {self.profile.name}, {self.class_count} classes ({path.name})")
+            semantic = f"fight class={self.fight_class}" if self.fight_class is not None else "fight class=UNVERIFIED"
+            self.status(self.profile.key, f"READY — {self.profile.name}, {self.class_count} classes ({path.name}); {semantic}")
+            if self.fight_class is None:
+                self.status(self.profile.key, "SEMANTIC MAPPING NOT VERIFIED — model will not produce violence decisions.")
         except Exception as error:
             self.model = None
             self.last_state = "MODEL NOT LOADED"
@@ -171,8 +209,8 @@ class VideoClassifier:
         self.last_probability = 0.0
         self.last_state = "NORMAL" if self.ready else "MODEL NOT LOADED"
 
-    def update(self, threshold: float, positive_class: int) -> None:
-        self.threshold, self.positive_class = threshold, positive_class
+    def update(self, threshold: float) -> None:
+        self.threshold = threshold
 
     def _classify_clip(self, clip: np.ndarray) -> tuple[str, float]:
         tensor_clip = np.stack(clip, axis=0)
@@ -187,32 +225,45 @@ class VideoClassifier:
                 logits = logits[0]
             probabilities = torch.softmax(logits, dim=1)[0].detach().cpu().numpy()
 
+        if self.fight_class is None:
+            raise RuntimeError(
+                f"{self.profile.name} has no verified fight-class mapping."
+            )
+
+        fight_probability = float(probabilities[self.fight_class])
+
         if self.class_count == 3:
-            # The classifier's confidence is exposed as a violence score:
-            # non-normal probability (possible + fight) is the positive signal,
-            # while the fight probability determines the stronger state.
-            possible_probability = float(probabilities[1])
-            fight_probability = float(probabilities[2])
-            confidence = min(1.0, possible_probability + fight_probability)
+            other_classes = [
+                index for index in range(self.class_count)
+                if index != self.fight_class
+            ]
+            non_fight_probability = float(probabilities[other_classes].sum())
+
             if fight_probability >= self.threshold:
                 state = "FIGHT DETECTED"
-            elif confidence >= self.threshold:
+            elif (
+                fight_probability >= self.threshold * 0.80
+                and non_fight_probability < fight_probability
+            ):
                 state = "POSSIBLE ALTERCATION"
             else:
                 state = "NORMAL"
         else:
-            index = min(max(self.positive_class, 0), 1)
-            confidence = float(probabilities[index])
-            state = "FIGHT DETECTED" if confidence >= self.threshold else "NORMAL"
-            if self.threshold <= confidence < 0.85:
+            if fight_probability >= self.threshold:
+                state = "FIGHT DETECTED"
+            elif fight_probability >= self.threshold * 0.80:
                 state = "POSSIBLE ALTERCATION"
+            else:
+                state = "NORMAL"
+
+        confidence = fight_probability
 
         self.last_probability, self.last_state = confidence, state
         return state, confidence
 
     def add_frame(self, frame: np.ndarray) -> tuple[str, float] | None:
         """Keep a legacy/global stream for callers that still need one."""
-        if self.model is None:
+        if self.model is None or self.fight_class is None:
             return None
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         self.frames.append(cv2.resize(rgb, self.INPUT_SIZE, interpolation=cv2.INTER_AREA))
@@ -225,7 +276,9 @@ class VideoClassifier:
 
     def classify_clip(self, frames: list[np.ndarray]) -> tuple[str, float]:
         """Classify one temporal ROI clip for person-specific attribution."""
-        if self.model is None or len(frames) < self.CLIP_LENGTH:
+        if self.model is None or self.fight_class is None:
+            raise ValueError("A loaded classifier with a verified fight-class mapping is required.")
+        if len(frames) < self.CLIP_LENGTH:
             raise ValueError("A loaded classifier and 16-frame clip are required.")
         prepared = []
         for frame in frames[-self.CLIP_LENGTH:]:
@@ -244,10 +297,10 @@ class EnhancedEnsemble:
     def ready(self) -> bool:
         return any(model.ready for model in self.classifiers)
 
-    def update(self, threshold: float, positive_class: int) -> None:
+    def update(self, threshold: float) -> None:
         self.threshold = threshold
         for model in self.classifiers:
-            model.update(threshold, positive_class)
+            model.update(threshold)
 
     def add_frame(self, frame: np.ndarray) -> tuple[str, float] | None:
         predictions = []
