@@ -145,6 +145,21 @@ class SettingsPage(QWidget):
         index = self.device_input.findData(settings.device)
         self.device_input.setCurrentIndex(max(0, index))
 
+        self.violence_model_input = QComboBox()
+        self.violence_model_input.addItem("Current MC3-18", "mc3")
+        self.violence_model_input.addItem("FDSC MC3-18", "fdsc_mc3")
+        self.violence_model_input.addItem("FDSC R3D-18", "r3d")
+        self.violence_model_input.addItem("X3D-M", "x3d")
+        self.violence_model_input.addItem("CampusGuard Enhanced", "enhanced")
+        model_index = self.violence_model_input.findData(settings.violence_model)
+        self.violence_model_input.setCurrentIndex(max(0, model_index))
+
+        self.violence_model_note = QLabel(
+            "Enhanced combines every configured classifier that successfully loads; it is not a separate fake checkpoint."
+        )
+        self.violence_model_note.setWordWrap(True)
+        self.violence_model_note.setProperty("muted", True)
+
         self.device_status = QLabel("CUDA availability will be reported by the AI worker.")
         self.device_status.setWordWrap(True)
         self.device_status.setProperty("muted", True)
@@ -156,6 +171,8 @@ class SettingsPage(QWidget):
         form.addRow("Alert cooldown", self.cooldown_input)
         form.addRow("Camera reconnect", self.reconnect_toggle)
         form.addRow("Compute device", self.device_input)
+        form.addRow("Violence model", self.violence_model_input)
+        form.addRow("", self.violence_model_note)
         form.addRow("", self.device_status)
 
         ai_section.body.addLayout(form)
@@ -193,6 +210,27 @@ class SettingsPage(QWidget):
             "fight_model_path",
             settings.fight_model_path,
             "*.pth",
+        )
+        self._add_model_path(
+            models_form,
+            "FDSC MC3-18",
+            "fdsc_mc3_model_path",
+            settings.fdsc_mc3_model_path,
+            "*.pth",
+        )
+        self._add_model_path(
+            models_form,
+            "FDSC R3D-18",
+            "r3d_model_path",
+            settings.r3d_model_path,
+            "*.pth",
+        )
+        self._add_model_path(
+            models_form,
+            "X3D-M",
+            "x3d_model_path",
+            settings.x3d_model_path,
+            "*.pt",
         )
 
         self.positive_class_input = QComboBox()
@@ -299,6 +337,7 @@ class SettingsPage(QWidget):
         self.cooldown_input.valueChanged.connect(self._emit_settings)
         self.reconnect_toggle.toggled.connect(self._emit_settings)
         self.device_input.currentIndexChanged.connect(self._emit_settings)
+        self.violence_model_input.currentIndexChanged.connect(self._emit_settings)
         self.positive_class_input.currentIndexChanged.connect(self._emit_settings)
         self.theme_input.currentIndexChanged.connect(self._emit_settings)
 
@@ -414,6 +453,10 @@ class SettingsPage(QWidget):
             detector_model_path=self._paths["detector_model_path"].text().strip(),
             pose_model_path=self._paths["pose_model_path"].text().strip(),
             fight_model_path=self._paths["fight_model_path"].text().strip(),
+            fdsc_mc3_model_path=self._paths["fdsc_mc3_model_path"].text().strip(),
+            r3d_model_path=self._paths["r3d_model_path"].text().strip(),
+            x3d_model_path=self._paths["x3d_model_path"].text().strip(),
+            violence_model=str(self.violence_model_input.currentData()),
             device=str(self.device_input.currentData()),
             fight_positive_class=int(self.positive_class_input.currentData()),
         )
