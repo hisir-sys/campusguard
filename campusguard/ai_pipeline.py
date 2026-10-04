@@ -230,6 +230,7 @@ class VisionPipeline:
         pose_enabled: bool,
     ) -> tuple[np.ndarray, str, float | None, Event | None]:
         self.configure(settings)
+        process_started = perf_counter()
         annotated = frame.copy()
         state = "AI DISABLED" if not ai_enabled else "MODEL NOT LOADED"
         confidence: float | None = None
@@ -277,10 +278,7 @@ class VisionPipeline:
 
         self._draw_people(annotated, people)
         self._draw_status(annotated, state, confidence, model_key)
-        return annotated, state, confidence, event
-
-        self._draw_people(annotated, people)
-        self._draw_status(annotated, state, confidence, settings.violence_model)
+        self.last_process_fps = 1.0 / max(perf_counter() - process_started, 1e-6)
         return annotated, state, confidence, event
 
     def _selected_model(self, key: str):
