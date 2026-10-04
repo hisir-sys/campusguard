@@ -832,6 +832,10 @@ class DashboardPage(QWidget):
                 "Fight classifier",
             ),
             (
+                "violence_model",
+                "Violence model",
+            ),
+            (
                 "status",
                 "Status",
             ),
@@ -1281,24 +1285,36 @@ class DashboardPage(QWidget):
             section_title
         )
 
+        selected_key = (
+            settings.violence_model
+            if settings and settings.violence_model != "enhanced"
+            else "mc3"
+        )
+        selected_paths = {
+            "mc3": settings.fight_model_path if settings else "",
+            "fdsc_mc3": settings.fdsc_mc3_model_path if settings else "",
+            "r3d": settings.r3d_model_path if settings else "",
+            "x3d": settings.x3d_model_path if settings else "",
+        }
+        selected_model_names = {
+            "mc3": "Current MC3-18",
+            "fdsc_mc3": "FDSC MC3-18",
+            "r3d": "FDSC R3D-18",
+            "x3d": "X3D-M",
+        }
+
         paths = {
             "detector": (
                 "Person detector",
-                settings.detector_model_path
-                if settings
-                else "",
+                settings.detector_model_path if settings else "",
             ),
             "pose": (
                 "Pose model",
-                settings.pose_model_path
-                if settings
-                else "",
+                settings.pose_model_path if settings else "",
             ),
             "fight": (
-                "Fight classifier",
-                settings.fight_model_path
-                if settings
-                else "",
+                f"Violence model — {selected_model_names.get(selected_key, 'Current MC3-18')}",
+                selected_paths.get(selected_key, ""),
             ),
         }
 
@@ -1411,6 +1427,19 @@ class DashboardPage(QWidget):
             section
         )
 
+        selected_name = selected_model_names.get(selected_key, "Current MC3-18")
+        selected_row = QFrame()
+        selected_row.setObjectName("popupSection")
+        selected_layout = QHBoxLayout(selected_row)
+        selected_layout.setContentsMargins(18, 12, 18, 12)
+        selected_layout.addWidget(QLabel("Active violence model"))
+        selected_layout.addStretch(1)
+        selected_value = QLabel(selected_name)
+        selected_value.setObjectName("popupValue")
+        set_tone(selected_value, "good")
+        selected_layout.addWidget(selected_value)
+        self._popup.body.addWidget(selected_row)
+
         # --------------------------------------------------------------
         # Configuration
         # --------------------------------------------------------------
@@ -1480,6 +1509,12 @@ class DashboardPage(QWidget):
             config_layout,
             "Detection",
             detection,
+        )
+
+        self._popup_key_value(
+            config_layout,
+            "Violence model",
+            selected_name,
         )
 
         self._popup_key_value(
@@ -2268,13 +2303,23 @@ class DashboardPage(QWidget):
         if settings is None:
             return
 
+        selected_key = settings.violence_model if settings.violence_model != "enhanced" else "mc3"
+        selected_paths = {
+            "mc3": settings.fight_model_path,
+            "fdsc_mc3": settings.fdsc_mc3_model_path,
+            "r3d": settings.r3d_model_path,
+            "x3d": settings.x3d_model_path,
+        }
+        selected_names = {
+            "mc3": "Current MC3-18",
+            "fdsc_mc3": "FDSC MC3-18",
+            "r3d": "FDSC R3D-18",
+            "x3d": "X3D-M",
+        }
         paths = {
-            "detector":
-                settings.detector_model_path,
-            "pose":
-                settings.pose_model_path,
-            "fight":
-                settings.fight_model_path,
+            "detector": settings.detector_model_path,
+            "pose": settings.pose_model_path,
+            "fight": selected_paths.get(selected_key, settings.fight_model_path),
         }
 
         loaded = 0
@@ -2401,6 +2446,12 @@ class DashboardPage(QWidget):
             "device",
             self._device_text
             or settings.device.upper(),
+        )
+        self._set_value(
+            "violence_model",
+            selected_names.get(selected_key, "Current MC3-18"),
+            "good",
+            "Selected in System Settings → AI Engine → Violence model",
         )
 
     def _set_value(
