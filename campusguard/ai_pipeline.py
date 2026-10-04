@@ -166,9 +166,9 @@ class VisionPipeline:
             self._load_models(normalized)
 
         for classifier in self.classifiers.values():
-            classifier.update(normalized.confidence_threshold, normalized.fight_positive_class)
+            classifier.update(normalized.confidence_threshold)
         if self.ensemble:
-            self.ensemble.update(normalized.confidence_threshold, normalized.fight_positive_class)
+            self.ensemble.update(normalized.confidence_threshold)
 
     @staticmethod
     def model_display_name(key: str) -> str:
@@ -212,7 +212,6 @@ class VisionPipeline:
             profile,
             paths[selected_key],
             self.device,
-            settings.fight_positive_class,
             settings.confidence_threshold,
             self.status,
         )
