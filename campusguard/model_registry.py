@@ -145,10 +145,18 @@ class VideoClassifier:
             probabilities = torch.softmax(logits, dim=1)[0].detach().cpu().numpy()
 
         if self.class_count == 3:
-            index = int(np.argmax(probabilities))
-            confidence = float(probabilities[index])
-            state = (("NORMAL", "POSSIBLE ALTERCATION", "FIGHT DETECTED")[index]
-                     if confidence >= self.threshold else "NORMAL")
+            # The classifier's confidence is exposed as a violence score:
+            # possible-altercation probability contributes half, while fight
+            # probability is the primary positive signal.
+            possible_probability = float(probabilities[1])
+            fight_probability = float(probabilities[2])
+            confidence = min(1.0, possible_probability + fight_probability)
+            if fight_probability >= self.threshold:
+                state = "FIGHT DETECTED"
+            elif confidence >= self.threshold:
+                state = "POSSIBLE ALTERCATION"
+            else:
+                state = "NORMAL"
         else:
             index = min(max(self.positive_class, 0), 1)
             confidence = float(probabilities[index])
