@@ -118,6 +118,9 @@ class VisionPipeline:
         self.interactions = InteractionEngine()
         self.display_ids: dict[int, int] = {}
         self.next_display_id = 1
+        self.last_state = "MODEL NOT LOADED"
+        self.last_confidence: float | None = None
+        self.last_involved_ids: set[int] = set()
         self._load_models(settings)
 
     def configure(self, settings: AppSettings) -> None:
@@ -242,11 +245,16 @@ class VisionPipeline:
                 result = model.add_frame(frame)
                 if result is not None:
                     state, confidence = result
+                    self.last_state, self.last_confidence = state, confidence
                     event = self.decision.update(state, confidence)
+                    self._apply_involvement(people, pair_ids, state, confidence)
+                else:
+                    state, confidence = self.last_state, self.last_confidence
                     self._apply_involvement(people, pair_ids, state, confidence)
             except Exception as error:
                 self.status("fight", f"MODEL ERROR — {error}")
                 state, confidence = "MODEL ERROR", None
+                self.last_state, self.last_confidence = state, confidence
         else:
             state, confidence = "MODEL NOT LOADED", None
 
@@ -332,6 +340,7 @@ class VisionPipeline:
         if state in {"FIGHT DETECTED", "POSSIBLE ALTERCATION"}:
             for left, right in pair_ids:
                 involved_ids.update((left, right))
+        self.last_involved_ids = involved_ids
         for person in people:
             person.involved = person.track_id in involved_ids
             person.violence_confidence = confidence if person.involved else None
