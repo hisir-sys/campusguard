@@ -16,6 +16,11 @@ from campusguard.settings import AppSettings
 ModelStatusCallback = Callable[[str, str], None]
 Event = tuple[str, float, str]
 
+# Detection confidence is deliberately independent from the 65% violence
+# decision threshold so lower-confidence people can still be tracked.
+PERSON_DETECTION_CONFIDENCE = 0.35
+POSE_DETECTION_CONFIDENCE = 0.25
+
 SKELETON_EDGES = (
     (5, 6), (5, 7), (7, 9), (6, 8), (8, 10),
     (5, 11), (6, 12), (11, 12), (11, 13), (13, 15),
@@ -379,7 +384,7 @@ class VisionPipeline:
                 persist=True,
                 tracker="bytetrack.yaml",
                 classes=[0],
-                conf=settings.confidence_threshold,
+                conf=PERSON_DETECTION_CONFIDENCE,
                 device=str(self.device),
                 verbose=False,
             )
@@ -387,7 +392,7 @@ class VisionPipeline:
             results = self.detector.predict(
                 annotated,
                 classes=[0],
-                conf=settings.confidence_threshold,
+                conf=PERSON_DETECTION_CONFIDENCE,
                 device=str(self.device),
                 verbose=False,
             )
@@ -459,7 +464,7 @@ class VisionPipeline:
 
 
     def _attach_pose(self, frame: np.ndarray, people: list[TrackedPerson], annotated: np.ndarray, settings: AppSettings) -> None:
-        pose_confidence = min(0.50, max(0.20, settings.confidence_threshold * 0.70))
+        pose_confidence = POSE_DETECTION_CONFIDENCE
         results = self.pose_model.predict(
             frame,
             conf=pose_confidence,
