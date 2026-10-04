@@ -146,8 +146,8 @@ class VideoClassifier:
 
         if self.class_count == 3:
             # The classifier's confidence is exposed as a violence score:
-            # possible-altercation probability contributes half, while fight
-            # probability is the primary positive signal.
+            # non-normal probability (possible + fight) is the positive signal,
+            # while the fight probability determines the stronger state.
             possible_probability = float(probabilities[1])
             fight_probability = float(probabilities[2])
             confidence = min(1.0, possible_probability + fight_probability)
