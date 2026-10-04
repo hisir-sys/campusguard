@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
+from time import perf_counter
 from typing import Callable
 
 import cv2
@@ -86,7 +87,6 @@ class FightDecision:
         self.event_latched = False
 
     def update(self, state: str, confidence: float | None) -> Event | None:
-        self.threshold = self.threshold
         self.states.append(state)
         if state == "NORMAL":
             self.event_latched = False
@@ -121,6 +121,11 @@ class VisionPipeline:
         self.last_state = "MODEL NOT LOADED"
         self.last_confidence: float | None = None
         self.last_involved_ids: set[int] = set()
+        self.person_buffers: dict[int, deque[np.ndarray]] = {}
+        self.person_frame_counts: dict[int, int] = {}
+        self.person_scores: dict[int, tuple[str, float]] = {}
+        self.last_process_fps = 0.0
+        self.last_inference_ms = 0.0
         self._load_models(settings)
 
     def configure(self, settings: AppSettings) -> None:
@@ -136,12 +141,13 @@ class VisionPipeline:
         selection_changed = settings.violence_model != self.settings.violence_model
         self.settings = settings
         self.decision.threshold = settings.confidence_threshold
-        if reload_models:
+        if settings.violence_model == "enhanced":
+            self.status("fight", "CampusGuard Enhanced — COMING SOON (not operational)")
+            self.settings = AppSettings.from_dict({**settings.to_dict(), "violence_model": "mc3"})
+            selection_changed = True
+        if reload_models or selection_changed:
             self.device = self._select_device(settings.device)
             self._load_models(settings)
-        elif selection_changed:
-            self.status("fight", f"VIOLENCE MODEL — {self.model_display_name(settings.violence_model)}")
-
         for classifier in self.classifiers.values():
             classifier.update(settings.confidence_threshold, settings.fight_positive_class)
         if self.ensemble:
@@ -170,25 +176,35 @@ class VisionPipeline:
         self.detector = self._load_yolo("detector", settings.detector_model_path, "detect")
         self.pose_model = self._load_yolo("pose", settings.pose_model_path, "pose")
 
+        self.classifiers.clear()
+        self.ensemble = None
+
+        selected_key = settings.violence_model
+        if selected_key == "enhanced":
+            self.status("fight", "CampusGuard Enhanced — COMING SOON (not operational)")
+            selected_key = "mc3"
+
+        profile = MODEL_PROFILES.get(selected_key, MODEL_PROFILES["mc3"])
         paths = {
             "mc3": settings.fight_model_path,
             "fdsc_mc3": settings.fdsc_mc3_model_path,
             "r3d": settings.r3d_model_path,
             "x3d": settings.x3d_model_path,
         }
-        self.classifiers.clear()
-        for key, profile in MODEL_PROFILES.items():
-            self.classifiers[key] = VideoClassifier(
-                profile,
-                paths[key],
-                self.device,
-                settings.fight_positive_class,
-                settings.confidence_threshold,
-                self.status,
-            )
+        self.classifiers[selected_key] = VideoClassifier(
+            profile,
+            paths[selected_key],
+            self.device,
+            settings.fight_positive_class,
+            settings.confidence_threshold,
+            self.status,
+        )
+        self.status("fight", f"VIOLENCE MODEL — {self.model_display_name(selected_key)}")
 
-        self.ensemble = EnhancedEnsemble(list(self.classifiers.values()), settings.confidence_threshold)
-        self.status("fight", f"VIOLENCE MODEL — {self.model_display_name(settings.violence_model)}")
+        self.person_buffers.clear()
+        self.person_frame_counts.clear()
+        self.person_scores.clear()
+
 
     def _load_yolo(self, component: str, model_path: str, task: str):
         path = Path(model_path).expanduser()
@@ -239,24 +255,29 @@ class VisionPipeline:
                 self.status("pose", f"MODEL ERROR — {error}")
 
         pair_ids = self.interactions.update(people)
-        model = self._selected_model(settings.violence_model)
+        model_key = settings.violence_model if settings.violence_model != "enhanced" else "mc3"
+        model = self._selected_model(model_key)
         if model is not None and model.ready:
             try:
-                result = model.add_frame(frame)
-                if result is not None:
-                    state, confidence = result
-                    self.last_state, self.last_confidence = state, confidence
+                inference_started = perf_counter()
+                self._update_person_clips(frame, people, model)
+                state, confidence = self._aggregate_person_predictions(people)
+                if state != self.last_state or confidence != self.last_confidence:
                     event = self.decision.update(state, confidence)
-                    self._apply_involvement(people, pair_ids, state, confidence)
-                else:
-                    state, confidence = self.last_state, self.last_confidence
-                    self._apply_involvement(people, pair_ids, state, confidence)
+                self.last_state, self.last_confidence = state, confidence
+                self._apply_involvement(people, pair_ids, state, confidence)
+                self.last_inference_ms = (perf_counter() - inference_started) * 1000.0
             except Exception as error:
                 self.status("fight", f"MODEL ERROR — {error}")
                 state, confidence = "MODEL ERROR", None
                 self.last_state, self.last_confidence = state, confidence
         else:
             state, confidence = "MODEL NOT LOADED", None
+            self._clear_involvement(people)
+
+        self._draw_people(annotated, people)
+        self._draw_status(annotated, state, confidence, model_key)
+        return annotated, state, confidence, event
 
         self._draw_people(annotated, people)
         self._draw_status(annotated, state, confidence, settings.violence_model)
@@ -264,8 +285,68 @@ class VisionPipeline:
 
     def _selected_model(self, key: str):
         if key == "enhanced":
-            return self.ensemble
+            return None
         return self.classifiers.get(key)
+
+    def _update_person_clips(
+        self,
+        frame: np.ndarray,
+        people: list[TrackedPerson],
+        model: VideoClassifier,
+    ) -> None:
+        active_ids = {person.track_id for person in people}
+        for track_id in list(self.person_buffers):
+            if track_id not in active_ids:
+                self.person_buffers.pop(track_id, None)
+                self.person_frame_counts.pop(track_id, None)
+                self.person_scores.pop(track_id, None)
+
+        for person in people:
+            roi = self._person_roi(frame, person.bbox)
+            if roi is None:
+                continue
+            buffer = self.person_buffers.setdefault(person.track_id, deque(maxlen=model.CLIP_LENGTH))
+            buffer.append(roi)
+            count = self.person_frame_counts.get(person.track_id, 0) + 1
+            self.person_frame_counts[person.track_id] = count
+
+            if len(buffer) == model.CLIP_LENGTH and count % model.INFERENCE_STRIDE == 0:
+                self.person_scores[person.track_id] = model.classify_clip(list(buffer))
+
+            if person.track_id in self.person_scores:
+                person_state, person_confidence = self.person_scores[person.track_id]
+                person.violence_confidence = person_confidence
+                person.involved = person_state in {"FIGHT DETECTED", "POSSIBLE ALTERCATION"} and person_confidence >= self.settings.confidence_threshold
+
+    @staticmethod
+    def _person_roi(frame: np.ndarray, bbox: tuple[int, int, int, int]) -> np.ndarray | None:
+        height, width = frame.shape[:2]
+        x1, y1, x2, y2 = bbox
+        bw, bh = max(1, x2 - x1), max(1, y2 - y1)
+        expand_x, expand_y = int(bw * 0.35), int(bh * 0.30)
+        left, top = max(0, x1 - expand_x), max(0, y1 - expand_y)
+        right, bottom = min(width, x2 + expand_x), min(height, y2 + expand_y)
+        if right <= left or bottom <= top:
+            return None
+        return frame[top:bottom, left:right].copy()
+
+    def _aggregate_person_predictions(self, people: list[TrackedPerson]) -> tuple[str, float | None]:
+        predictions = [
+            self.person_scores[person.track_id]
+            for person in people
+            if person.track_id in self.person_scores
+        ]
+        if not predictions:
+            return self.last_state if self.last_state != "MODEL NOT LOADED" else "NORMAL", self.last_confidence
+
+        fight = [confidence for state, confidence in predictions if state == "FIGHT DETECTED"]
+        possible = [confidence for state, confidence in predictions if state == "POSSIBLE ALTERCATION"]
+        if fight:
+            return "FIGHT DETECTED", max(fight)
+        if possible:
+            return "POSSIBLE ALTERCATION", max(possible)
+        return "NORMAL", max(confidence for _, confidence in predictions)
+
 
     def _detect_people(self, annotated: np.ndarray, tracking_enabled: bool, settings: AppSettings) -> list[TrackedPerson]:
         if tracking_enabled:
@@ -313,37 +394,79 @@ class VisionPipeline:
 
     def _attach_pose(self, frame: np.ndarray, people: list[TrackedPerson], annotated: np.ndarray, settings: AppSettings) -> None:
         results = self.pose_model.predict(frame, conf=settings.confidence_threshold, device=str(self.device), verbose=False)
-        if not results or results[0].keypoints is None:
+        if not results or results[0].keypoints is None or not people:
             return
         keypoints = results[0].keypoints
         points = keypoints.xy.detach().cpu().numpy()
         confidences = keypoints.conf.detach().cpu().numpy() if keypoints.conf is not None else np.ones(points.shape[:2], dtype=np.float32)
 
-        for index, person_points in enumerate(points):
-            valid = confidences[index] >= 0.5
+        candidates: list[tuple[float, int, int, float]] = []
+        for pose_index, person_points in enumerate(points):
+            valid = confidences[pose_index] >= 0.5
             if not np.any(valid):
                 continue
             pose_center = np.mean(person_points[valid], axis=0)
-            best = min(people, key=lambda p: float(np.hypot(p.center[0] - pose_center[0], p.center[1] - pose_center[1])), default=None)
-            if best is None:
-                continue
-            distance = float(np.hypot(best.center[0] - pose_center[0], best.center[1] - pose_center[1]))
-            box_scale = max(30, max(best.bbox[2] - best.bbox[0], best.bbox[3] - best.bbox[1]))
-            if distance <= box_scale * 0.9:
-                best.keypoints = person_points
-                best.pose_confidence = float(np.mean(confidences[index][valid]))
+            for person_index, person in enumerate(people):
+                distance = float(np.hypot(person.center[0] - pose_center[0], person.center[1] - pose_center[1]))
+                box_scale = max(30, max(person.bbox[2] - person.bbox[0], person.bbox[3] - person.bbox[1]))
+                if distance <= box_scale * 0.9:
+                    candidates.append((distance, pose_index, person_index, float(np.mean(confidences[pose_index][valid]))))
 
-    def _apply_involvement(self, people: list[TrackedPerson], pair_ids: list[tuple[int, int]], state: str, confidence: float | None) -> None:
+        assigned_people: set[int] = set()
+        assigned_poses: set[int] = set()
+        for _, pose_index, person_index, pose_confidence in sorted(candidates):
+            if pose_index in assigned_poses or person_index in assigned_people:
+                continue
+            people[person_index].keypoints = points[pose_index]
+            people[person_index].pose_confidence = pose_confidence
+            assigned_people.add(person_index)
+            assigned_poses.add(pose_index)
+
+    def _clear_involvement(self, people: list[TrackedPerson]) -> None:
+        self.last_involved_ids.clear()
+        for person in people:
+            person.involved = False
+            person.violence_confidence = None
+
+
+    def _apply_involvement(
+        self,
+        people: list[TrackedPerson],
+        pair_ids: list[tuple[int, int]],
+        state: str,
+        confidence: float | None,
+    ) -> None:
+        self._clear_involvement(people)
         if confidence is None or confidence < self.settings.confidence_threshold:
             return
-        involved_ids: set[int] = set()
+
+        # Person-specific ROI scores are the primary attribution signal.
+        involved_ids = {
+            person.track_id
+            for person in people
+            if person.involved
+        }
+
+        # Interaction history is used as contextual reinforcement, never as
+        # proof by itself. If a high violence score occurs in an interaction,
+        # mark the involved members of that pair.
         if state in {"FIGHT DETECTED", "POSSIBLE ALTERCATION"}:
             for left, right in pair_ids:
-                involved_ids.update((left, right))
+                if any(
+                    person.track_id in (left, right) and person.involved
+                    for person in people
+                ):
+                    involved_ids.update((left, right))
+
         self.last_involved_ids = involved_ids
         for person in people:
             person.involved = person.track_id in involved_ids
-            person.violence_confidence = confidence if person.involved else None
+            if person.involved:
+                score = self.person_scores.get(person.track_id)
+                person.violence_confidence = score[1] if score else confidence
+            else:
+                person.violence_confidence = None
+
 
     def _draw_people(self, annotated: np.ndarray, people: list[TrackedPerson]) -> None:
         for person in people:
