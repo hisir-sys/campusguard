@@ -72,6 +72,19 @@ class VideoClassifier:
     def ready(self) -> bool:
         return self.model is not None
 
+    @property
+    def semantic_ready(self) -> bool:
+        """True only when the checkpoint is loaded and its fight class is verified."""
+        return self.ready and self.fight_class is not None
+
+    @property
+    def semantic_label(self) -> str:
+        if self.fight_class is None:
+            return "UNVERIFIED"
+        if 0 <= self.fight_class < len(self.profile.class_labels):
+            return self.profile.class_labels[self.fight_class]
+        return f"class_{self.fight_class}"
+
     def _load(self) -> None:
         path = Path(self.path).expanduser()
         if not self.path.strip() or not path.is_file():
