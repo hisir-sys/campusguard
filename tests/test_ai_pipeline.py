@@ -1,6 +1,9 @@
 import unittest
 
+import numpy as np
+
 from campusguard.ai_pipeline import FightDecision, InteractionEngine, TrackedPerson
+from campusguard.model_adapters import MODEL_INPUT_ADAPTERS
 from campusguard.model_registry import MODEL_PROFILES
 from campusguard.settings import AppSettings
 
@@ -26,6 +29,26 @@ class SettingsTests(unittest.TestCase):
             profile = MODEL_PROFILES[key]
             self.assertIsNone(profile.fight_class)
             self.assertFalse(profile.semantic_verified)
+
+    def test_every_operational_checkpoint_family_has_an_input_adapter(self):
+        self.assertEqual(
+            set(MODEL_INPUT_ADAPTERS),
+            {"mc3", "fdsc_mc3", "r3d", "x3d"},
+        )
+        for key, adapter in MODEL_INPUT_ADAPTERS.items():
+            self.assertEqual(adapter.clip_length, 16)
+            self.assertEqual(adapter.input_size, (112, 112))
+            self.assertEqual(len(adapter.mean), 3)
+            self.assertEqual(len(adapter.std), 3)
+
+    def test_input_adapter_produces_mc3_tensor_layout(self):
+        adapter = MODEL_INPUT_ADAPTERS["mc3"]
+        frames = [
+            np.zeros((80, 120, 3), dtype=np.uint8)
+            for _ in range(adapter.clip_length)
+        ]
+        tensor = adapter.prepare(frames, __import__("torch").device("cpu"))
+        self.assertEqual(tuple(tensor.shape), (1, 3, 16, 112, 112))
 
     def test_model_defaults_are_portable(self):
         settings = AppSettings()
