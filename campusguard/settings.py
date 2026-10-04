@@ -40,7 +40,13 @@ class AppSettings:
             fdsc_mc3_model_path=str(candidate.fdsc_mc3_model_path),
             r3d_model_path=str(candidate.r3d_model_path),
             x3d_model_path=str(candidate.x3d_model_path),
-            violence_model=candidate.violence_model if candidate.violence_model in models else "mc3",
+            # CampusGuard Enhanced is intentionally reserved for a future
+            # ensemble release; never activate it from persisted settings.
+            violence_model=(
+                candidate.violence_model
+                if candidate.violence_model in models and candidate.violence_model != "enhanced"
+                else "mc3"
+            ),
             device=candidate.device if candidate.device in {"auto", "cpu", "cuda"} else "auto",
             fight_positive_class=0 if int(candidate.fight_positive_class) == 0 else 1,
         )
