@@ -444,18 +444,22 @@ class VisionPipeline:
         involved_ids = {
             person.track_id
             for person in people
-            if person.involved
+            if (
+                person.track_id in self.person_scores
+                and self.person_scores[person.track_id][0]
+                in {"FIGHT DETECTED", "POSSIBLE ALTERCATION"}
+                and self.person_scores[person.track_id][1]
+                >= self.settings.confidence_threshold
+            )
         }
 
-        # Interaction history is used as contextual reinforcement, never as
-        # proof by itself. If a high violence score occurs in an interaction,
-        # mark the involved members of that pair.
+        # Interaction history is contextual reinforcement, never proof by itself.
+        # If one member of a stable interaction is independently flagged, the
+        # other member is shown as involved because the ROI contains shared
+        # interaction context.
         if state in {"FIGHT DETECTED", "POSSIBLE ALTERCATION"}:
             for left, right in pair_ids:
-                if any(
-                    person.track_id in (left, right) and person.involved
-                    for person in people
-                ):
+                if left in involved_ids or right in involved_ids:
                     involved_ids.update((left, right))
 
         self.last_involved_ids = involved_ids
