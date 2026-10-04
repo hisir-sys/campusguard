@@ -55,6 +55,8 @@ class InteractionEngine:
 
     def update(self, people: list[TrackedPerson]) -> list[tuple[int, int]]:
         pairs: list[tuple[int, int]] = []
+        for person in people:
+            person.close_to.clear()
         for index, left in enumerate(people):
             for right in people[index + 1:]:
                 key = tuple(sorted((left.track_id, right.track_id)))
@@ -118,6 +120,8 @@ class VisionPipeline:
         self.interactions = InteractionEngine()
         self.display_ids: dict[int, int] = {}
         self.next_display_id = 1
+        self.fallback_tracks: dict[int, tuple[float, float, float]] = {}
+        self.next_fallback_track_id = -1
         self.last_state = "MODEL NOT LOADED"
         self.last_confidence: float | None = None
         self.last_involved_ids: set[int] = set()
@@ -129,29 +133,37 @@ class VisionPipeline:
         self._load_models(settings)
 
     def configure(self, settings: AppSettings) -> None:
-        reload_models = (
-            settings.detector_model_path != self.settings.detector_model_path
-            or settings.pose_model_path != self.settings.pose_model_path
-            or settings.fight_model_path != self.settings.fight_model_path
-            or settings.fdsc_mc3_model_path != self.settings.fdsc_mc3_model_path
-            or settings.r3d_model_path != self.settings.r3d_model_path
-            or settings.x3d_model_path != self.settings.x3d_model_path
-            or settings.device != self.settings.device
+        # Normalize input first. Enhanced is intentionally non-operational.
+        normalized = (
+            AppSettings.from_dict({**settings.to_dict(), "violence_model": "mc3"})
+            if settings.violence_model == "enhanced"
+            else settings
         )
-        selection_changed = settings.violence_model != self.settings.violence_model
-        self.settings = settings
-        self.decision.threshold = settings.confidence_threshold
         if settings.violence_model == "enhanced":
             self.status("fight", "CampusGuard Enhanced — COMING SOON (not operational)")
-            self.settings = AppSettings.from_dict({**settings.to_dict(), "violence_model": "mc3"})
-            selection_changed = True
+
+        reload_models = (
+            normalized.detector_model_path != self.settings.detector_model_path
+            or normalized.pose_model_path != self.settings.pose_model_path
+            or normalized.fight_model_path != self.settings.fight_model_path
+            or normalized.fdsc_mc3_model_path != self.settings.fdsc_mc3_model_path
+            or normalized.r3d_model_path != self.settings.r3d_model_path
+            or normalized.x3d_model_path != self.settings.x3d_model_path
+            or normalized.device != self.settings.device
+        )
+        selection_changed = normalized.violence_model != self.settings.violence_model
+
+        self.settings = normalized
+        self.decision.threshold = normalized.confidence_threshold
+
         if reload_models or selection_changed:
-            self.device = self._select_device(settings.device)
-            self._load_models(settings)
+            self.device = self._select_device(normalized.device)
+            self._load_models(normalized)
+
         for classifier in self.classifiers.values():
-            classifier.update(settings.confidence_threshold, settings.fight_positive_class)
+            classifier.update(normalized.confidence_threshold, normalized.fight_positive_class)
         if self.ensemble:
-            self.ensemble.update(settings.confidence_threshold, settings.fight_positive_class)
+            self.ensemble.update(normalized.confidence_threshold, normalized.fight_positive_class)
 
     @staticmethod
     def model_display_name(key: str) -> str:
@@ -204,6 +216,12 @@ class VisionPipeline:
         self.person_buffers.clear()
         self.person_frame_counts.clear()
         self.person_scores.clear()
+        self.fallback_tracks.clear()
+        self.decision.states.clear()
+        self.decision.event_latched = False
+        self.last_state = "MODEL NOT LOADED"
+        self.last_confidence = None
+        self.last_involved_ids.clear()
 
 
     def _load_yolo(self, component: str, model_path: str, task: str):
@@ -237,6 +255,11 @@ class VisionPipeline:
         event: Event | None = None
 
         if not ai_enabled:
+            self._clear_involvement([])
+            self.decision.states.clear()
+            self.decision.event_latched = False
+            self.last_state, self.last_confidence = "AI DISABLED", None
+            self.last_process_fps = 1.0 / max(perf_counter() - process_started, 1e-6)
             cv2.putText(annotated, "AI OFF", (18, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (180, 180, 180), 2, cv2.LINE_AA)
             return annotated, state, confidence, event
 
@@ -263,8 +286,10 @@ class VisionPipeline:
                 inference_started = perf_counter()
                 self._update_person_clips(frame, people, model)
                 state, confidence = self._aggregate_person_predictions(people)
-                if state != self.last_state or confidence != self.last_confidence:
-                    event = self.decision.update(state, confidence)
+                # Consume every temporal prediction. The previous implementation
+                # only updated the stability gate when values changed, so three
+                # identical predictions could never fill the gate.
+                event = self.decision.update(state, confidence)
                 self.last_state, self.last_confidence = state, confidence
                 self._apply_involvement(people, pair_ids, state, confidence)
                 self.last_inference_ms = (perf_counter() - inference_started) * 1000.0
@@ -335,7 +360,8 @@ class VisionPipeline:
             if person.track_id in self.person_scores
         ]
         if not predictions:
-            return self.last_state if self.last_state != "MODEL NOT LOADED" else "NORMAL", self.last_confidence
+            # No visible people means there is no current person-level evidence.
+            return "NORMAL", None
 
         fight = [confidence for state, confidence in predictions if state == "FIGHT DETECTED"]
         possible = [confidence for state, confidence in predictions if state == "POSSIBLE ALTERCATION"]
@@ -371,7 +397,13 @@ class VisionPipeline:
         boxes = results[0].boxes
         xyxy = boxes.xyxy.detach().cpu().numpy()
         confs = boxes.conf.detach().cpu().numpy() if boxes.conf is not None else np.ones(len(xyxy))
-        ids = boxes.id.detach().cpu().numpy().astype(int) if boxes.id is not None else np.arange(1, len(xyxy) + 1)
+
+        has_tracker_ids = boxes.id is not None and tracking_enabled
+        if has_tracker_ids:
+            ids = boxes.id.detach().cpu().numpy().astype(int).tolist()
+            self.fallback_tracks.clear()
+        else:
+            ids = self._assign_fallback_track_ids(xyxy)
 
         people = []
         for raw_box, raw_conf, raw_id in zip(xyxy, confs, ids):
@@ -390,8 +422,51 @@ class VisionPipeline:
             people.append(person)
         return people
 
+    def _assign_fallback_track_ids(self, boxes: np.ndarray) -> list[int]:
+        """Keep temporal ROI IDs stable when ByteTrack is disabled/unavailable."""
+        current: list[tuple[int, float, float, float]] = []
+        used_previous: set[int] = set()
+
+        for raw_box in boxes:
+            x1, y1, x2, y2 = (float(v) for v in raw_box)
+            center_x = (x1 + x2) / 2.0
+            center_y = (y1 + y2) / 2.0
+            height = max(1.0, y2 - y1)
+
+            best_id: int | None = None
+            best_distance = float("inf")
+            for track_id, (px, py, previous_height) in self.fallback_tracks.items():
+                if track_id in used_previous:
+                    continue
+                distance = float(np.hypot(center_x - px, center_y - py))
+                limit = max(45.0, max(height, previous_height) * 1.25)
+                if distance <= limit and distance < best_distance:
+                    best_id = track_id
+                    best_distance = distance
+
+            if best_id is None:
+                best_id = self.next_fallback_track_id
+                self.next_fallback_track_id -= 1
+
+            used_previous.add(best_id)
+            current.append((best_id, center_x, center_y, height))
+
+        self.fallback_tracks = {
+            track_id: (center_x, center_y, height)
+            for track_id, center_x, center_y, height in current
+        }
+        return [track_id for track_id, *_ in current]
+
+
     def _attach_pose(self, frame: np.ndarray, people: list[TrackedPerson], annotated: np.ndarray, settings: AppSettings) -> None:
-        results = self.pose_model.predict(frame, conf=settings.confidence_threshold, device=str(self.device), verbose=False)
+        pose_confidence = min(0.50, max(0.20, settings.confidence_threshold * 0.70))
+        results = self.pose_model.predict(
+            frame,
+            conf=pose_confidence,
+            classes=[0],
+            device=str(self.device),
+            verbose=False,
+        )
         if not results or results[0].keypoints is None or not people:
             return
         keypoints = results[0].keypoints
