@@ -64,27 +64,31 @@ class VideoClassifier:
                 raise ValueError(f"Unsupported architecture: {self.profile.architecture}")
 
             checkpoint = torch.load(path, map_location="cpu", weights_only=True)
-            state = checkpoint.get("state_dict", checkpoint.get("model_state_dict", checkpoint)) if isinstance(checkpoint, dict) else checkpoint
-            if not isinstance(state, dict):
-                raise ValueError("Checkpoint does not contain a state dictionary.")
-
-            cleaned: dict[str, torch.Tensor] = {}
-            for key, value in state.items():
-                key = str(key)
-                for prefix in ("module.", "model."):
-                    if key.startswith(prefix):
-                        key = key[len(prefix):]
-                cleaned[key] = value
+            state = self._extract_state_dict(checkpoint)
+            cleaned = self._clean_state_dict(state)
 
             classifier_key = self._find_classifier_key(cleaned)
             if classifier_key is None:
                 raise ValueError("Could not locate a classifier weight in checkpoint.")
-            self.class_count = int(cleaned[classifier_key].shape[0])
+            classifier_weight = cleaned[classifier_key]
+            if getattr(classifier_weight, "ndim", 0) != 2:
+                raise ValueError(f"Classifier weight '{classifier_key}' is not a 2D tensor.")
+
+            self.class_count = int(classifier_weight.shape[0])
             if self.class_count not in (2, 3):
                 raise ValueError(f"Checkpoint has {self.class_count} output classes; expected 2 or 3.")
 
             self._resize_classifier(model, self.class_count)
-            model.load_state_dict(cleaned, strict=False)
+            missing, unexpected = model.load_state_dict(cleaned, strict=False)
+            if missing or unexpected:
+                missing_text = ", ".join(missing[:8])
+                unexpected_text = ", ".join(unexpected[:8])
+                details = []
+                if missing_text:
+                    details.append(f"missing={missing_text}")
+                if unexpected_text:
+                    details.append(f"unexpected={unexpected_text}")
+                raise ValueError("Checkpoint architecture mismatch (" + "; ".join(details) + ").")
             model.to(self.device)
             model.eval()
             self.model = model
@@ -94,6 +98,45 @@ class VideoClassifier:
             self.model = None
             self.last_state = "MODEL NOT LOADED"
             self.status(self.profile.key, f"MODEL NOT LOADED — {error}")
+
+    @staticmethod
+    def _extract_state_dict(checkpoint) -> dict:
+        if not isinstance(checkpoint, dict):
+            if isinstance(checkpoint, dict):
+                return checkpoint
+            raise ValueError("Checkpoint does not contain a state dictionary.")
+
+        for key in ("state_dict", "model_state_dict", "model"):
+            candidate = checkpoint.get(key)
+            if isinstance(candidate, dict):
+                return candidate
+
+        # A plain state_dict is itself a mapping of parameter names to tensors.
+        if checkpoint and all(isinstance(value, torch.Tensor) for value in checkpoint.values()):
+            return checkpoint
+
+        raise ValueError("Checkpoint does not contain a usable state dictionary.")
+
+    @staticmethod
+    def _clean_state_dict(state: dict) -> dict[str, torch.Tensor]:
+        cleaned: dict[str, torch.Tensor] = {}
+        for raw_key, value in state.items():
+            if not isinstance(value, torch.Tensor):
+                continue
+            key = str(raw_key)
+            # Some exporters stack wrappers such as model.module.model.
+            changed = True
+            while changed:
+                changed = False
+                for prefix in ("module.", "model.", "state_dict."):
+                    if key.startswith(prefix):
+                        key = key[len(prefix):]
+                        changed = True
+            cleaned[key] = value
+
+        if not cleaned:
+            raise ValueError("Checkpoint state dictionary contains no tensor parameters.")
+        return cleaned
 
     def _create_x3d(self):
         try:
