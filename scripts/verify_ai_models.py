@@ -38,6 +38,7 @@ def main() -> int:
     failed_count = 0
     missing_count = 0
     blocked_count = 0
+    technical_count = 0
     ready_count = 0
     verified_count = 0
 
@@ -65,6 +66,16 @@ def main() -> int:
             )
         )
         print(f"  Semantic status: {profile.semantic_status}")
+
+        if profile.semantic_status == "technical_unavailable":
+            print("  Checkpoint: UNAVAILABLE")
+            print(
+                "  RESULT: TECHNICAL ISSUE — original checkpoint is not currently "
+                "available from the documented source"
+            )
+            technical_count += 1
+            print()
+            continue
 
         if not path.is_file():
             print("  Checkpoint: MISSING")
@@ -116,15 +127,16 @@ def main() -> int:
     print("  RESULT: NOT LOADED BY DESIGN")
     print()
     print("=" * 72)
-    print(f"Verified operational models: {verified_count}/{len(MODEL_PROFILES)}")
+    print(f"Verified operational models: {verified_count}/{verified_count + technical_count + blocked_count}")
     print(f"Loaded but not semantically verified: {blocked_count}")
+    print(f"Technical availability issues: {technical_count}")
     print(f"Missing optional model packs: {missing_count}")
     print(f"Installed models with load failures: {failed_count}")
     print("=" * 72)
 
     if failed_count:
         return 1
-    if args.strict and (missing_count or blocked_count):
+    if args.strict and (missing_count or blocked_count or technical_count):
         return 1
     return 0
 
