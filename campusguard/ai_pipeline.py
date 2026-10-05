@@ -55,6 +55,10 @@ class FightActionModel:
 
     def _load(self, model_path: str) -> None:
         path = Path(model_path).expanduser()
+        if not path.is_absolute():
+            project_root = Path(__file__).resolve().parents[1]
+            path = project_root / path
+
         if not model_path.strip() or not path.is_file():
             self.status("fight", f"MODEL NOT LOADED — file not found: {path}")
             return
@@ -62,7 +66,15 @@ class FightActionModel:
         try:
             from torchvision.models.video import mc3_18
 
-            checkpoint = torch.load(path, map_location="cpu", weights_only=True)
+            try:
+                checkpoint = torch.load(path, map_location="cpu", weights_only=True)
+            except TypeError:
+                checkpoint = torch.load(path, map_location="cpu")
+            except Exception as first_error:
+                try:
+                    checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+                except Exception:
+                    raise first_error
             if isinstance(checkpoint, dict):
                 state = checkpoint.get(
                     "state_dict",
