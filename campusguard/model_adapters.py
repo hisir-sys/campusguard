@@ -54,7 +54,6 @@ class ModelInputAdapter:
 KINETICS_MEAN = (0.43216, 0.394666, 0.37645)
 KINETICS_STD = (0.22803, 0.22145, 0.216989)
 
-
 MODEL_INPUT_ADAPTERS: dict[str, ModelInputAdapter] = {
     "mc3": ModelInputAdapter(
         key="mc3",
@@ -70,7 +69,7 @@ MODEL_INPUT_ADAPTERS: dict[str, ModelInputAdapter] = {
         input_size=(112, 112),
         mean=KINETICS_MEAN,
         std=KINETICS_STD,
-        notes="FDSC documented sequence length is 16; exact training transform remains checkpoint-dependent.",
+        notes="FDSC MC3-18: published inference uses 16 frames; input transform is isolated here.",
     ),
     "r3d": ModelInputAdapter(
         key="r3d",
@@ -83,10 +82,10 @@ MODEL_INPUT_ADAPTERS: dict[str, ModelInputAdapter] = {
     "x3d": ModelInputAdapter(
         key="x3d",
         clip_length=16,
-        input_size=(112, 112),
-        mean=KINETICS_MEAN,
-        std=KINETICS_STD,
-        notes="X3D adapter is isolated so its checkpoint-specific transform can be changed without touching the pipeline.",
+        input_size=(224, 224),
+        mean=(0.45, 0.45, 0.45),
+        std=(0.225, 0.225, 0.225),
+        notes="Verified X3D-M contract: 16 RGB frames, 224x224, mean=0.45, std=0.225.",
     ),
 }
 
