@@ -1299,7 +1299,7 @@ class DashboardPage(QWidget):
         selected_model_names = {
             "mc3": "Current MC3-18",
             "fdsc_mc3": "FDSC MC3-18",
-            "r3d": "FDSC R3D-18",
+            "r3d": "FDSC R3D-18 — Technical Issue",
             "x3d": "X3D-M",
         }
 
