@@ -13,10 +13,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Verify CampusGuard violence-model checkpoints and class mappings."
     )
+    parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
     parser.add_argument(
-        "--device",
-        choices=("cpu", "cuda"),
-        default="cpu",
+        "--strict",
+        action="store_true",
+        help="Return non-zero unless every configured model is verified and ready.",
     )
     args = parser.parse_args()
 
@@ -34,7 +35,9 @@ def main() -> int:
     else:
         device = torch.device("cpu")
 
-    failures = 0
+    failed_count = 0
+    missing_count = 0
+    blocked_count = 0
     ready_count = 0
     verified_count = 0
 
@@ -42,6 +45,7 @@ def main() -> int:
     print("CampusGuard AI model verification")
     print("=" * 72)
     print(f"Device: {device}")
+    print(f"Mode: {'STRICT' if args.strict else 'INSTALLED-MODEL'}")
     print()
 
     for key, profile in MODEL_PROFILES.items():
@@ -64,8 +68,8 @@ def main() -> int:
 
         if not path.is_file():
             print("  Checkpoint: MISSING")
-            print("  RESULT: MISSING")
-            failures += 1
+            print("  RESULT: MISSING — optional model pack is not installed")
+            missing_count += 1
             print()
             continue
 
@@ -83,7 +87,7 @@ def main() -> int:
 
         if not classifier.ready:
             print("  RESULT: FAILED — checkpoint/architecture could not be loaded")
-            failures += 1
+            failed_count += 1
             print()
             continue
 
@@ -94,7 +98,7 @@ def main() -> int:
                 "  RESULT: BLOCKED — checkpoint loaded, but fight-class "
                 "semantics are not verified."
             )
-            failures += 1
+            blocked_count += 1
             print()
             continue
 
@@ -112,17 +116,17 @@ def main() -> int:
     print("  RESULT: NOT LOADED BY DESIGN")
     print()
     print("=" * 72)
-    print(
-        f"Verified operational models: {verified_count}/{len(MODEL_PROFILES)}"
-    )
-    print(f"Loaded but not semantically verified: {ready_count - verified_count}")
-    print(
-        f"Missing/failed/blocked: "
-        f"{len(MODEL_PROFILES) - verified_count}"
-    )
+    print(f"Verified operational models: {verified_count}/{len(MODEL_PROFILES)}")
+    print(f"Loaded but not semantically verified: {blocked_count}")
+    print(f"Missing optional model packs: {missing_count}")
+    print(f"Installed models with load failures: {failed_count}")
     print("=" * 72)
 
-    return 1 if failures else 0
+    if failed_count:
+        return 1
+    if args.strict and (missing_count or blocked_count):
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
