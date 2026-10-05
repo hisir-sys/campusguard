@@ -70,7 +70,25 @@ def build_capture_source(
 
 def _open_capture(source: int | str) -> cv2.VideoCapture:
     if isinstance(source, int):
-        capture = cv2.VideoCapture(source)
+        # DroidCam and other Windows virtual webcams are generally more
+        # reliable through DirectShow than the OpenCV default backend.
+        backends = [
+            getattr(cv2, "CAP_DSHOW", None),
+            getattr(cv2, "CAP_MSMF", None),
+            None,
+        ]
+        capture = None
+        for backend in backends:
+            if backend is None:
+                candidate = cv2.VideoCapture(source)
+            else:
+                candidate = cv2.VideoCapture(source, backend)
+            if candidate.isOpened():
+                capture = candidate
+                break
+            candidate.release()
+        if capture is None:
+            capture = cv2.VideoCapture(source)
     else:
         capture = cv2.VideoCapture()
         timeout_parameters = [
@@ -208,11 +226,22 @@ class CameraCaptureThread(QThread):
                 previously_connected = True
                 frame_count = 0
                 stats_started = time.monotonic()
+                consecutive_read_failures = 0
+                max_read_failures = 8
                 self.status_changed.emit("LIVE", "")
 
                 while not self.isInterruptionRequested():
                     ok, frame = capture.read()
                     if not ok or frame is None or frame.size == 0:
+                        consecutive_read_failures += 1
+
+                        # Virtual USB cameras can occasionally miss a frame
+                        # without actually disconnecting. Do not tear down
+                        # the capture on the first transient read failure.
+                        if consecutive_read_failures < max_read_failures:
+                            self.msleep(60)
+                            continue
+
                         self.status_changed.emit(
                             "OFFLINE",
                             "Camera stopped returning frames.",
@@ -220,6 +249,10 @@ class CameraCaptureThread(QThread):
                         capture.release()
                         capture = None
                         break
+
+                    if consecutive_read_failures:
+                        consecutive_read_failures = 0
+                        self.status_changed.emit("LIVE", "")
 
                     height, width = frame.shape[:2]
                     self.mailbox.publish(frame)
