@@ -4,3 +4,6 @@ __pycache__/
 .env
 .vscode/
 .idea/
+data/
+temp_fdsc/
+models/*.pt
