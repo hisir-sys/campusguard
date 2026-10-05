@@ -48,6 +48,8 @@ class FightActionModel:
         self.last_state = "MODEL NOT LOADED"
         self.last_confidence: float | None = None
         self.event_latched = False
+        self.normal_release_count = 0
+        self.NORMAL_RELEASE_PREDICTIONS = 6
 
         self._load(model_path)
 
@@ -175,11 +177,24 @@ class FightActionModel:
 
     def _stable_event(self, state: str, confidence: float) -> Event | None:
         self.recent_states.append(state)
-        if len(self.recent_states) < self.recent_states.maxlen:
+
+        # Once an incident has been raised, do not re-arm on a single
+        # noisy NORMAL prediction. The classifier must remain NORMAL for
+        # several consecutive temporal predictions before the same fight
+        # is considered finished. This guarantees one incident/alert for
+        # one continuous fight sequence.
+        if state == "NORMAL":
+            self.normal_release_count += 1
+        else:
+            self.normal_release_count = 0
+
+        if self.normal_release_count >= self.NORMAL_RELEASE_PREDICTIONS:
+            self.event_latched = False
+            self.normal_release_count = 0
+            self.recent_states.clear()
             return None
 
-        if all(item == "NORMAL" for item in self.recent_states):
-            self.event_latched = False
+        if len(self.recent_states) < self.recent_states.maxlen:
             return None
 
         stable_state = self.recent_states[-1]
