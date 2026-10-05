@@ -57,11 +57,23 @@ class VideoClassifier:
     INFERENCE_STRIDE = 8
     INPUT_SIZE = (112, 112)
 
-    def __init__(self, profile: ModelProfile, path: str, device: torch.device, threshold: float, status: Status) -> None:
+    def __init__(
+        self,
+        profile: ModelProfile,
+        path: str,
+        device: torch.device,
+        threshold: float,
+        status: Status,
+        fight_class_override: int | None = None,
+    ) -> None:
         self.profile, self.path, self.device = profile, path, device
         self.adapter = get_model_input_adapter(profile.key)
         self.threshold, self.status = threshold, status
-        self.fight_class: int | None = profile.fight_class
+        self.fight_class: int | None = (
+            fight_class_override
+            if fight_class_override is not None
+            else profile.fight_class
+        )
         self.model: nn.Module | torch.jit.ScriptModule | None = None
         self.class_count = 0
         self.frames: list[np.ndarray] = []
@@ -155,8 +167,6 @@ class VideoClassifier:
     @staticmethod
     def _extract_state_dict(checkpoint) -> dict:
         if not isinstance(checkpoint, dict):
-            if isinstance(checkpoint, dict):
-                return checkpoint
             raise ValueError("Checkpoint does not contain a state dictionary.")
 
         for key in ("state_dict", "model_state_dict", "model"):
