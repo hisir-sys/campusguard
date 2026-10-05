@@ -54,14 +54,25 @@ class FightActionModel:
         self._load(model_path)
 
     def _load(self, model_path: str) -> None:
-        path = Path(model_path).expanduser()
-        if not path.is_absolute():
-            project_root = Path(__file__).resolve().parents[1]
-            path = project_root / path
+        project_root = Path(__file__).resolve().parents[1]
+        configured_path = Path(model_path).expanduser() if model_path.strip() else Path()
 
-        if not model_path.strip() or not path.is_file():
-            self.status("fight", f"MODEL NOT LOADED — file not found: {path}")
-            return
+        # Settings are persisted in the user's AppData database. If an older
+        # absolute path points to a previous CampusGuard checkout, recover the
+        # bundled MC3 filename from the current project automatically.
+        if configured_path.is_absolute():
+            path = configured_path
+        else:
+            path = project_root / configured_path
+
+        if not path.is_file():
+            fallback = project_root / "models" / "fight_mc3_18.pth"
+            if fallback.is_file():
+                path = fallback
+                self.status("fight", f"Using project MC3 checkpoint — {path}")
+            else:
+                self.status("fight", f"MODEL NOT LOADED — file not found: {path}")
+                return
 
         try:
             from torchvision.models.video import mc3_18
