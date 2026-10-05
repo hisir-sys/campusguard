@@ -149,15 +149,24 @@ class SettingsPage(QWidget):
         self.violence_model_input = QComboBox()
         self.violence_model_input.addItem("Current MC3-18", "mc3")
         self.violence_model_input.addItem("FDSC MC3-18", "fdsc_mc3")
-        self.violence_model_input.addItem("FDSC R3D-18", "r3d")
+        self.violence_model_input.addItem("FDSC R3D-18 — Technical Issue", "r3d")
         self.violence_model_input.addItem("X3D-M", "x3d")
         self.violence_model_input.addItem("CampusGuard Enhanced — Coming Soon", "enhanced")
+
+        # R3D remains documented in the model registry, but its original FDSC
+        # checkpoint is currently unavailable. Keep the entry visible for
+        # transparency while preventing operators from selecting it.
+        r3d_index = self.violence_model_input.findData("r3d")
+        r3d_item = self.violence_model_input.model().item(r3d_index)
+        if r3d_item is not None:
+            r3d_item.setEnabled(False)
+
         enhanced_index = self.violence_model_input.findData("enhanced")
         enhanced_item = self.violence_model_input.model().item(enhanced_index)
         if enhanced_item is not None:
             enhanced_item.setEnabled(False)
 
-        selected_model = settings.violence_model if settings.violence_model != "enhanced" else "mc3"
+        selected_model = settings.violence_model if settings.violence_model not in {"enhanced", "r3d"} else "mc3"
         model_index = self.violence_model_input.findData(selected_model)
         self.violence_model_input.setCurrentIndex(max(0, model_index))
 
