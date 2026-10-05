@@ -261,7 +261,7 @@ class VideoClassifier:
                     # wrapper before the final Linear layer, producing keys such
                     # as blocks.5.proj.1.weight. Match that structure so the
                     # checkpoint can load without dropping or renaming weights.
-                    if classifier_key.endsWith(".proj.1.weight"):
+                    if classifier_key.endswith(".proj.1.weight"):
                         block.proj = nn.Sequential(
                             nn.Identity(),
                             nn.Linear(block.proj.in_features, class_count),
