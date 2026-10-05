@@ -208,12 +208,19 @@ class VisionPipeline:
             "r3d": settings.r3d_model_path,
             "x3d": settings.x3d_model_path,
         }
+        fight_class_override = (
+            settings.fight_positive_class
+            if selected_key == "mc3"
+            else None
+        )
+
         self.classifiers[selected_key] = VideoClassifier(
             profile,
             paths[selected_key],
             self.device,
             settings.confidence_threshold,
             self.status,
+            fight_class_override=fight_class_override,
         )
         self.status("fight", f"VIOLENCE MODEL — {self.model_display_name(selected_key)}")
 
