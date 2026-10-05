@@ -135,6 +135,8 @@ class VisionPipeline:
         self.person_scores: dict[int, tuple[str, float]] = {}
         self.last_process_fps = 0.0
         self.last_inference_ms = 0.0
+        self.frame_index = 0
+        self.last_diagnostics: list[dict[str, object]] = []
         self._load_models(settings)
 
     def configure(self, settings: AppSettings) -> None:
@@ -259,6 +261,8 @@ class VisionPipeline:
         pose_enabled: bool,
     ) -> tuple[np.ndarray, str, float | None, Event | None]:
         self.configure(settings)
+        self.frame_index += 1
+        self.last_diagnostics.clear()
         process_started = perf_counter()
         annotated = frame.copy()
         state = "AI DISABLED" if not ai_enabled else "MODEL NOT LOADED"
@@ -345,7 +349,20 @@ class VisionPipeline:
             self.person_frame_counts[person.track_id] = count
 
             if len(buffer) == model.CLIP_LENGTH and count % model.INFERENCE_STRIDE == 0:
-                self.person_scores[person.track_id] = model.classify_clip(list(buffer))
+                state, confidence = model.classify_clip(list(buffer))
+                self.person_scores[person.track_id] = (state, confidence)
+                self.last_diagnostics.append(
+                    {
+                        "frame": self.frame_index,
+                        "person_id": person.display_id,
+                        "track_id": person.track_id,
+                        "state": state,
+                        "fight_probability": confidence,
+                        "roi_width": int(roi.shape[1]),
+                        "roi_height": int(roi.shape[0]),
+                        "buffer_length": len(buffer),
+                    }
+                )
 
             if person.track_id in self.person_scores:
                 person_state, person_confidence = self.person_scores[person.track_id]
