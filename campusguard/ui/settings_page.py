@@ -239,7 +239,7 @@ class SettingsPage(QWidget):
         )
         self._add_model_path(
             models_form,
-            "FDSC R3D-18",
+            "FDSC R3D-18 (unavailable)",
             "r3d_model_path",
             settings.r3d_model_path,
             "*.pth",
