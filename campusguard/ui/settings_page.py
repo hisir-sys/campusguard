@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from campusguard.model_manifest import get_model_manifest
 from campusguard.settings import AppSettings
 from campusguard.ui.common import make_card, make_page_title
 
