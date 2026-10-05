@@ -216,10 +216,13 @@ class VideoClassifier:
                 continue
             key = str(raw_key)
             # Some exporters stack wrappers such as model.module.model.
+            # The verified X3D checkpoint stores the network below a
+            # `backbone.` wrapper, while pytorchvideo's create_x3d()
+            # exposes those blocks directly.
             changed = True
             while changed:
                 changed = False
-                for prefix in ("module.", "model.", "state_dict."):
+                for prefix in ("module.", "model.", "state_dict.", "backbone."):
                     if key.startswith(prefix):
                         key = key[len(prefix):]
                         changed = True
