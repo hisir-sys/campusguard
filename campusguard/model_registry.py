@@ -116,7 +116,7 @@ class VideoClassifier:
             else:
                 raise ValueError(f"Unsupported architecture: {self.profile.architecture}")
 
-            checkpoint = torch.load(path, map_location="cpu", weights_only=True)
+            checkpoint = self._load_checkpoint(path)
             state = self._extract_state_dict(checkpoint)
             cleaned = self._clean_state_dict(state)
 
@@ -163,6 +163,24 @@ class VideoClassifier:
             self.model = None
             self.last_state = "MODEL NOT LOADED"
             self.status(self.profile.key, f"MODEL NOT LOADED — {error}")
+
+
+    @staticmethod
+    def _load_checkpoint(path: Path):
+        """Load trusted CampusGuard checkpoints with PyTorch's safe unpickler."""
+        if torch.__version__ >= "2.6" and path.suffix.lower() == ".pt":
+            try:
+                from numpy._core.multiarray import scalar
+            except ImportError:
+                from numpy.core.multiarray import scalar
+
+            # The verified X3D checkpoint contains NumPy scalar metadata.
+            # Allowlist only that specific type instead of disabling PyTorch's
+            # weights-only safety mechanism for arbitrary checkpoint objects.
+            with torch.serialization.safe_globals([scalar]):
+                return torch.load(path, map_location="cpu", weights_only=True)
+
+        return torch.load(path, map_location="cpu", weights_only=True)
 
     @staticmethod
     def _extract_state_dict(checkpoint) -> dict:
