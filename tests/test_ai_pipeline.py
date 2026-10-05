@@ -51,9 +51,13 @@ class SettingsTests(unittest.TestCase):
         )
         for key, adapter in MODEL_INPUT_ADAPTERS.items():
             self.assertEqual(adapter.clip_length, 16)
-            self.assertEqual(adapter.input_size, (112, 112))
             self.assertEqual(len(adapter.mean), 3)
             self.assertEqual(len(adapter.std), 3)
+
+        self.assertEqual(MODEL_INPUT_ADAPTERS["mc3"].input_size, (112, 112))
+        self.assertEqual(MODEL_INPUT_ADAPTERS["fdsc_mc3"].input_size, (112, 112))
+        self.assertEqual(MODEL_INPUT_ADAPTERS["r3d"].input_size, (112, 112))
+        self.assertEqual(MODEL_INPUT_ADAPTERS["x3d"].input_size, (224, 224))
 
     def test_input_adapter_produces_mc3_tensor_layout(self):
         adapter = MODEL_INPUT_ADAPTERS["mc3"]
