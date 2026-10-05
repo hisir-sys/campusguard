@@ -38,6 +38,8 @@ Model weights are intentionally not committed to this repository.
 
 ### CampusGuard Enhanced
 - Ensemble mode
-- Status: coming soon
+- Status: technical issue — checkpoint unavailable
+- The architecture and preprocessing contract are documented, but the original trained checkpoint is not currently available from the official FDSC repository/package.
+- CampusGuard therefore does not treat this model as operational and does not allow it to be selected in Settings.
 
-Missing optional model files are reported as **MISSING**, not as installation failures. A checkpoint that loads but has unverified class semantics is **BLOCKED** and cannot produce violence decisions.
+Missing optional model files are reported as **MISSING**, while documented-but-unavailable checkpoints are reported as **TECHNICAL ISSUE**. A checkpoint that loads but has unverified class semantics is **BLOCKED** and cannot produce violence decisions.
