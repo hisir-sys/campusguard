@@ -68,12 +68,12 @@ MODEL_MANIFESTS: dict[str, ModelManifest] = {
         class_labels=("class_0", "class_1"),
         fight_class=None,
         preprocessing="RGB, resize to 171x128, center-crop 112x112, /255, Kinetics-style normalization",
-        semantic_status="unverified",
+        semantic_status="technical_unavailable",
         source_note=(
-            "FDSC publishes the R3D-18 model as a 16-frame surveillance classifier "
-            "and uses the same published resize/center-crop and Kinetics normalization "
-            "transform. The fight class index remains unverified until the exact "
-            "trained checkpoint and its output ordering are inspected."
+            "The FDSC R3D-18 architecture and preprocessing contract are documented, "
+            "but the original trained checkpoint is not currently available from the "
+            "official FDSC repository/package. The model is therefore treated as a "
+            "technical availability issue, not as a verified operational model."
         ),
     ),
     "x3d": ModelManifest(
