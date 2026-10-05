@@ -67,9 +67,14 @@ MODEL_MANIFESTS: dict[str, ModelManifest] = {
         path_setting="r3d_model_path",
         class_labels=("class_0", "class_1"),
         fight_class=None,
-        preprocessing="Checkpoint-specific preprocessing must be verified",
+        preprocessing="RGB, resize to 171x128, center-crop 112x112, /255, Kinetics-style normalization",
         semantic_status="unverified",
-        source_note="Class-index semantics are not safely derivable from raw weights alone.",
+        source_note=(
+            "FDSC publishes the R3D-18 model as a 16-frame surveillance classifier "
+            "and uses the same published resize/center-crop and Kinetics normalization "
+            "transform. The fight class index remains unverified until the exact "
+            "trained checkpoint and its output ordering are inspected."
+        ),
     ),
     "x3d": ModelManifest(
         key="x3d",
