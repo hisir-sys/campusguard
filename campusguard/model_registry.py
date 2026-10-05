@@ -183,9 +183,10 @@ class VideoClassifier:
             # instead of disabling PyTorch's weights-only safety mechanism.
             numpy_dtype = np.dtype
             numpy_dtype_instance_type = type(np.dtype(np.float32))
+            numpy_float64_dtype = type(np.dtype(np.float64))
 
             with torch.serialization.safe_globals(
-                [scalar, numpy_dtype, numpy_dtype_instance_type]
+                [scalar, numpy_dtype, numpy_dtype_instance_type, numpy_float64_dtype]
             ):
                 return torch.load(path, map_location="cpu", weights_only=True)
 
