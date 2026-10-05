@@ -19,7 +19,7 @@ class AppSettings:
     x3d_model_path: str = "models/final_x3d_realtime.pt"
     violence_model: str = "mc3"
     device: str = "auto"
-    fight_positive_class: int = 1
+    fight_positive_class: int = 0
 
     @classmethod
     def from_dict(cls, values: dict[str, Any]) -> "AppSettings":
