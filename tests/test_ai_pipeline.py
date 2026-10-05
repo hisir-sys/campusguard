@@ -25,10 +25,24 @@ class SettingsTests(unittest.TestCase):
         self.assertTrue(profile.semantic_verified)
 
     def test_unverified_models_cannot_guess_fight_class(self):
-        for key in ("fdsc_mc3", "r3d", "x3d"):
+        for key in ("r3d",):
             profile = MODEL_PROFILES[key]
             self.assertIsNone(profile.fight_class)
             self.assertFalse(profile.semantic_verified)
+
+    def test_verified_external_model_contracts(self):
+        fdsc = MODEL_PROFILES["fdsc_mc3"]
+        self.assertEqual(fdsc.fight_class, 0)
+        self.assertEqual(fdsc.class_labels, ("fight", "noFight"))
+        self.assertTrue(fdsc.semantic_verified)
+
+        x3d = MODEL_PROFILES["x3d"]
+        self.assertEqual(x3d.fight_class, 1)
+        self.assertEqual(x3d.class_labels, ("non-violent", "violent"))
+        self.assertTrue(x3d.semantic_verified)
+        self.assertEqual(MODEL_INPUT_ADAPTERS["x3d"].input_size, (224, 224))
+        self.assertEqual(MODEL_INPUT_ADAPTERS["x3d"].mean, (0.45, 0.45, 0.45))
+        self.assertEqual(MODEL_INPUT_ADAPTERS["x3d"].std, (0.225, 0.225, 0.225))
 
     def test_every_operational_checkpoint_family_has_an_input_adapter(self):
         self.assertEqual(
