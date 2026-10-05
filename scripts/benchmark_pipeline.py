@@ -50,6 +50,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Disable ByteTrack and use the pipeline's fallback track IDs.",
     )
+    parser.add_argument(
+        "--diagnostics",
+        action="store_true",
+        help="Print raw temporal predictions, person IDs, and ROI sizes for model debugging.",
+    )
     return parser
 
 
@@ -132,6 +137,18 @@ def main() -> int:
             )
 
             state_counts[state] += 1
+
+            if args.diagnostics:
+                for diagnostic in pipeline.last_diagnostics:
+                    print(
+                        f"[clip] frame={diagnostic['frame']} "
+                        f"person={diagnostic['person_id']} "
+                        f"track={diagnostic['track_id']} "
+                        f"fight={float(diagnostic['fight_probability']):.3f} "
+                        f"state={diagnostic['state']} "
+                        f"roi={diagnostic['roi_width']}x{diagnostic['roi_height']} "
+                        f"clip={diagnostic['buffer_length']}"
+                    )
 
             if writer is not None:
                 writer.write(annotated)
