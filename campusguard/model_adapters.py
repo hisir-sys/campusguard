@@ -17,6 +17,34 @@ class ModelInputAdapter:
     mean: tuple[float, float, float]
     std: tuple[float, float, float]
     notes: str
+    resize_size: tuple[int, int] | None = None
+
+    def _prepare_frame(self, frame: np.ndarray) -> np.ndarray:
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+        if self.resize_size is None:
+            return cv2.resize(
+                rgb,
+                self.input_size,
+                interpolation=cv2.INTER_AREA,
+            )
+
+        resized = cv2.resize(
+            rgb,
+            self.resize_size,
+            interpolation=cv2.INTER_AREA,
+        )
+        target_width, target_height = self.input_size
+        height, width = resized.shape[:2]
+        if width < target_width or height < target_height:
+            raise ValueError(
+                f"{self.key} preprocessing produced {width}x{height}, "
+                f"smaller than required {target_width}x{target_height}."
+            )
+
+        left = (width - target_width) // 2
+        top = (height - target_height) // 2
+        return resized[top:top + target_height, left:left + target_width]
 
     def prepare(self, frames: list[np.ndarray] | np.ndarray, device: torch.device) -> torch.Tensor:
         if len(frames) < self.clip_length:
@@ -28,14 +56,7 @@ class ModelInputAdapter:
         for frame in list(frames)[-self.clip_length:]:
             if frame is None or frame.size == 0:
                 raise ValueError(f"{self.key} received an empty video frame.")
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            prepared.append(
-                cv2.resize(
-                    rgb,
-                    self.input_size,
-                    interpolation=cv2.INTER_AREA,
-                )
-            )
+            prepared.append(self._prepare_frame(frame))
 
         tensor = (
             torch.from_numpy(np.stack(prepared, axis=0))
@@ -69,7 +90,11 @@ MODEL_INPUT_ADAPTERS: dict[str, ModelInputAdapter] = {
         input_size=(112, 112),
         mean=KINETICS_MEAN,
         std=KINETICS_STD,
-        notes="FDSC MC3-18: published inference uses 16 frames; input transform is isolated here.",
+        resize_size=(171, 128),
+        notes=(
+            "FDSC MC3-18 published transform: RGB, resize to 171x128, "
+            "center-crop 112x112, /255, Kinetics-style normalization."
+        ),
     ),
     "r3d": ModelInputAdapter(
         key="r3d",
@@ -77,7 +102,11 @@ MODEL_INPUT_ADAPTERS: dict[str, ModelInputAdapter] = {
         input_size=(112, 112),
         mean=KINETICS_MEAN,
         std=KINETICS_STD,
-        notes="FDSC reports R3D-18 with 16-frame inputs; exact training transform remains checkpoint-dependent.",
+        resize_size=(171, 128),
+        notes=(
+            "FDSC R3D-18 published transform: RGB, resize to 171x128, "
+            "center-crop 112x112, /255, Kinetics-style normalization."
+        ),
     ),
     "x3d": ModelInputAdapter(
         key="x3d",
