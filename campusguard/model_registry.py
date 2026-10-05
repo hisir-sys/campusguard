@@ -168,16 +168,25 @@ class VideoClassifier:
     @staticmethod
     def _load_checkpoint(path: Path):
         """Load trusted CampusGuard checkpoints with PyTorch's safe unpickler."""
-        if torch.__version__ >= "2.6" and path.suffix.lower() == ".pt":
+        version_parts = torch.__version__.split("+")[0].split(".")
+        torch_major = int(version_parts[0])
+        torch_minor = int(version_parts[1]) if len(version_parts) > 1 else 0
+
+        if (torch_major, torch_minor) >= (2, 6) and path.suffix.lower() == ".pt":
             try:
                 from numpy._core.multiarray import scalar
             except ImportError:
                 from numpy.core.multiarray import scalar
 
-            # The verified X3D checkpoint contains NumPy scalar metadata.
-            # Allowlist only that specific type instead of disabling PyTorch's
-            # weights-only safety mechanism for arbitrary checkpoint objects.
-            with torch.serialization.safe_globals([scalar]):
+            # The verified X3D checkpoint contains NumPy scalar/dtype metadata.
+            # Allowlist only the NumPy types required by this trusted checkpoint
+            # instead of disabling PyTorch's weights-only safety mechanism.
+            numpy_dtype = np.dtype
+            numpy_dtype_instance_type = type(np.dtype(np.float32))
+
+            with torch.serialization.safe_globals(
+                [scalar, numpy_dtype, numpy_dtype_instance_type]
+            ):
                 return torch.load(path, map_location="cpu", weights_only=True)
 
         return torch.load(path, map_location="cpu", weights_only=True)
