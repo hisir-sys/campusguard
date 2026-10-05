@@ -285,7 +285,7 @@ class VideoClassifier:
     def update(self, threshold: float) -> None:
         self.threshold = threshold
 
-    def _classify_clip(self, clip: np.ndarray) -> tuple[str, float]:
+    def _classify_clip(self, clip: list[np.ndarray] | np.ndarray) -> tuple[str, float]:
         tensor = self.adapter.prepare(clip, self.device)
 
         with torch.inference_mode():
@@ -343,7 +343,7 @@ class VideoClassifier:
         self.frame_count += 1
         if len(self.frames) < self.CLIP_LENGTH or self.frame_count % self.INFERENCE_STRIDE:
             return None
-        return self._classify_clip(np.asarray(self.frames))
+        return self._classify_clip(self.frames)
 
     def classify_clip(self, frames: list[np.ndarray]) -> tuple[str, float]:
         """Classify one temporal ROI clip for person-specific attribution."""
@@ -352,7 +352,7 @@ class VideoClassifier:
         if len(frames) < self.CLIP_LENGTH:
             raise ValueError("A loaded classifier and 16-frame clip are required.")
         # The model adapter owns color conversion, resizing, and normalization.
-        return self._classify_clip(np.asarray(frames[-self.CLIP_LENGTH:]))
+        return self._classify_clip(frames[-self.CLIP_LENGTH:])
 
 class EnhancedEnsemble:
     """CampusGuard Enhanced combines every configured classifier that actually loads."""
