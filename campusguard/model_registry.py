@@ -140,7 +140,7 @@ class VideoClassifier:
                     f"Manifest fight class {self.fight_class} is outside the checkpoint's {self.class_count} classes."
                 )
 
-            self._resize_classifier(model, self.class_count)
+            self._resize_classifier(model, self.class_count, classifier_key)
             missing, unexpected = model.load_state_dict(cleaned, strict=False)
             if missing or unexpected:
                 missing_text = ", ".join(missing[:8])
@@ -248,15 +248,32 @@ class VideoClassifier:
         return candidates[-1] if candidates else None
 
     @staticmethod
-    def _resize_classifier(model: nn.Module, class_count: int) -> None:
+    def _resize_classifier(model: nn.Module, class_count: int, classifier_key: str) -> None:
         if hasattr(model, "fc") and isinstance(model.fc, nn.Linear):
             model.fc = nn.Linear(model.fc.in_features, class_count)
             return
         if hasattr(model, "blocks"):
             for block in reversed(model.blocks):
-                if hasattr(block, "proj") and isinstance(block.proj, nn.Linear):
-                    block.proj = nn.Linear(block.proj.in_features, class_count)
+                if not hasattr(block, "proj"):
+                    continue
+                if isinstance(block.proj, nn.Linear):
+                    # Some verified X3D exports keep an otherwise parameter-free
+                    # wrapper before the final Linear layer, producing keys such
+                    # as blocks.5.proj.1.weight. Match that structure so the
+                    # checkpoint can load without dropping or renaming weights.
+                    if classifier_key.endsWith(".proj.1.weight"):
+                        block.proj = nn.Sequential(
+                            nn.Identity(),
+                            nn.Linear(block.proj.in_features, class_count),
+                        )
+                    else:
+                        block.proj = nn.Linear(block.proj.in_features, class_count)
                     return
+                if isinstance(block.proj, nn.Sequential):
+                    for layer in reversed(block.proj):
+                        if isinstance(layer, nn.Linear):
+                            block.proj[-1] = nn.Linear(layer.in_features, class_count)
+                            return
         raise ValueError("Unsupported classifier head for this checkpoint architecture.")
 
     def reset(self) -> None:
