@@ -299,13 +299,35 @@ class VisionPipeline:
         if model is not None and model.ready:
             try:
                 inference_started = perf_counter()
-                self._update_person_clips(frame, people, model)
-                state, confidence = self._aggregate_person_predictions(people)
-                # Consume every temporal prediction. The previous implementation
-                # only updated the stability gate when values changed, so three
-                # identical predictions could never fill the gate.
-                event = self.decision.update(state, confidence)
-                self.last_state, self.last_confidence = state, confidence
+                if model_key == "mc3":
+                    # MC3 was trained and validated on full-scene temporal clips.
+                    # Do not crop the scene to individual people: that removes the
+                    # interaction context that the verified checkpoint relies on.
+                    prediction = model.add_frame(frame)
+                    if prediction is None:
+                        state, confidence = self.last_state, self.last_confidence
+                    else:
+                        state, confidence = prediction
+                        self.last_diagnostics.append(
+                            {
+                                "frame": self.frame_index,
+                                "scope": "scene",
+                                "state": state,
+                                "fight_probability": confidence,
+                                "clip_length": model.CLIP_LENGTH,
+                                "inference_stride": model.INFERENCE_STRIDE,
+                            }
+                        )
+                        event = self.decision.update(state, confidence)
+                        self.last_state, self.last_confidence = state, confidence
+                else:
+                    self._update_person_clips(frame, people, model)
+                    state, confidence = self._aggregate_person_predictions(people)
+                    # Consume every temporal prediction. The previous implementation
+                    # only updated the stability gate when values changed, so three
+                    # identical predictions could never fill the gate.
+                    event = self.decision.update(state, confidence)
+                    self.last_state, self.last_confidence = state, confidence
                 self._apply_involvement(people, pair_ids, state, confidence)
                 self.last_inference_ms = (perf_counter() - inference_started) * 1000.0
             except Exception as error:
@@ -541,7 +563,9 @@ class VisionPipeline:
         if confidence is None or confidence < self.settings.confidence_threshold:
             return
 
-        # Person-specific ROI scores are the primary attribution signal.
+        # Person-specific ROI scores are used for models that operate on person
+        # crops. MC3 is scene-level, so attribution is deliberately conservative:
+        # only people participating in a tracked interaction are highlighted.
         involved_ids = {
             person.track_id
             for person in people
@@ -554,14 +578,16 @@ class VisionPipeline:
             )
         }
 
-        # Interaction history is contextual reinforcement, never proof by itself.
-        # If one member of a stable interaction is independently flagged, the
-        # other member is shown as involved because the ROI contains shared
-        # interaction context.
+        # For scene-level MC3, the classifier decides whether the scene is violent;
+        # tracking/interaction only supplies optional visual attribution. Proximity
+        # is never treated as proof of violence on its own.
         if state in {"FIGHT DETECTED", "POSSIBLE ALTERCATION"}:
-            for left, right in pair_ids:
-                if left in involved_ids or right in involved_ids:
-                    involved_ids.update((left, right))
+            if not involved_ids and pair_ids:
+                involved_ids.update(track_id for pair in pair_ids for track_id in pair)
+            else:
+                for left, right in pair_ids:
+                    if left in involved_ids or right in involved_ids:
+                        involved_ids.update((left, right))
 
         self.last_involved_ids = involved_ids
         for person in people:
