@@ -172,7 +172,9 @@ class SettingsPage(QWidget):
 
         self.violence_model_note = QLabel(
             "The selected violence model runs on each tracked person's temporal ROI. "
-            "CampusGuard Enhanced is reserved for a future multi-model ensemble and is currently non-operational."
+            "Three models are currently verified and operational: Current MC3-18, FDSC MC3-18, and X3D-M. "
+            "FDSC R3D-18 is temporarily unavailable because the original checkpoint could not be obtained; "
+            "CampusGuard Enhanced is reserved for a future multi-model ensemble."
         )
         self.violence_model_note.setWordWrap(True)
         self.violence_model_note.setProperty("muted", True)
