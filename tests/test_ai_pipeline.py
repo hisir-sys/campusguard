@@ -59,14 +59,33 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(MODEL_INPUT_ADAPTERS["r3d"].input_size, (112, 112))
         self.assertEqual(MODEL_INPUT_ADAPTERS["x3d"].input_size, (224, 224))
 
+    def test_fdsc_adapters_use_published_resize_and_center_crop(self):
+        for key in ("fdsc_mc3", "r3d"):
+            adapter = MODEL_INPUT_ADAPTERS[key]
+            self.assertEqual(adapter.resize_size, (171, 128))
+            self.assertEqual(adapter.input_size, (112, 112))
+            self.assertEqual(adapter.mean, (0.43216, 0.394666, 0.37645))
+            self.assertEqual(adapter.std, (0.22803, 0.22145, 0.216989))
+
     def test_input_adapter_produces_mc3_tensor_layout(self):
         adapter = MODEL_INPUT_ADAPTERS["mc3"]
         frames = [
             np.zeros((80, 120, 3), dtype=np.uint8)
             for _ in range(adapter.clip_length)
         ]
-        tensor = adapter.prepare(frames, __import__("torch").device("cpu"))
-        self.assertEqual(tuple(tensor.shape), (1, 3, 16, 112, 112))
+        tensor = __import__("torch").zeros((1, 3, 16, 112, 112))
+        prepared = adapter.prepare(frames, __import__("torch").device("cpu"))
+        self.assertEqual(tuple(prepared.shape), tuple(tensor.shape))
+
+    def test_fdsc_adapters_produce_expected_tensor_layout(self):
+        for key in ("fdsc_mc3", "r3d"):
+            adapter = MODEL_INPUT_ADAPTERS[key]
+            frames = [
+                np.zeros((80, 120, 3), dtype=np.uint8)
+                for _ in range(adapter.clip_length)
+            ]
+            prepared = adapter.prepare(frames, __import__("torch").device("cpu"))
+            self.assertEqual(tuple(prepared.shape), (1, 3, 16, 112, 112))
 
     def test_model_defaults_are_portable(self):
         settings = AppSettings()
