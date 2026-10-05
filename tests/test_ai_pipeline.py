@@ -30,6 +30,12 @@ class SettingsTests(unittest.TestCase):
             self.assertIsNone(profile.fight_class)
             self.assertFalse(profile.semantic_verified)
 
+    def test_r3d_is_explicitly_marked_as_technical_issue(self):
+        r3d = MODEL_PROFILES["r3d"]
+        self.assertEqual(r3d.semantic_status, "technical_unavailable")
+        self.assertFalse(r3d.semantic_verified)
+        self.assertIsNone(r3d.fight_class)
+
     def test_verified_external_model_contracts(self):
         fdsc = MODEL_PROFILES["fdsc_mc3"]
         self.assertEqual(fdsc.fight_class, 0)
