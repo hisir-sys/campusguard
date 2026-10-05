@@ -206,7 +206,7 @@ class VideoClassifier:
             from pytorchvideo.models.x3d import create_x3d
         except ImportError as exc:
             raise RuntimeError("X3D requires pytorchvideo. Install dependencies from requirements.txt.") from exc
-        return create_x3d(input_channel=3, input_clip_length=16, input_crop_size=112, model_num_class=2, width_factor=2.0)
+        return create_x3d(input_channel=3, input_clip_length=16, input_crop_size=224, model_num_class=2, width_factor=2.0)
 
     @staticmethod
     def _find_classifier_key(state: dict[str, torch.Tensor]) -> str | None:
@@ -303,11 +303,8 @@ class VideoClassifier:
             raise ValueError("A loaded classifier with a verified fight-class mapping is required.")
         if len(frames) < self.CLIP_LENGTH:
             raise ValueError("A loaded classifier and 16-frame clip are required.")
-        prepared = []
-        for frame in frames[-self.CLIP_LENGTH:]:
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            prepared.append(cv2.resize(rgb, self.INPUT_SIZE, interpolation=cv2.INTER_AREA))
-        return self._classify_clip(np.asarray(prepared))
+        # The model adapter owns color conversion, resizing, and normalization.
+        return self._classify_clip(np.asarray(frames[-self.CLIP_LENGTH:]))
 
 class EnhancedEnsemble:
     """CampusGuard Enhanced combines every configured classifier that actually loads."""
