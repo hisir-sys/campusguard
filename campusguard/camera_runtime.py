@@ -146,6 +146,7 @@ class RuntimeOptions:
         self._lock = threading.RLock()
         self._settings = settings
         self._ai_enabled = ai_enabled
+        self._source_fps = 30.0
 
     def snapshot(self) -> tuple[AppSettings, bool]:
         with self._lock:
@@ -158,6 +159,16 @@ class RuntimeOptions:
     def update_ai_enabled(self, enabled: bool) -> None:
         with self._lock:
             self._ai_enabled = enabled
+
+    def set_source_fps(self, fps: float) -> None:
+        with self._lock:
+            if fps > 0:
+                self._source_fps = float(fps)
+
+    @property
+    def source_fps(self) -> float:
+        with self._lock:
+            return self._source_fps
 
 
 class CameraCaptureThread(QThread):
@@ -248,8 +259,10 @@ class CameraCaptureThread(QThread):
                     frame_count += 1
                     elapsed = time.monotonic() - stats_started
                     if elapsed >= 1.0:
+                        measured_fps = frame_count / elapsed
+                        self.options.set_source_fps(measured_fps)
                         self.stats_updated.emit(
-                            frame_count / elapsed,
+                            measured_fps,
                             f"{width}x{height}",
                         )
                         frame_count = 0
