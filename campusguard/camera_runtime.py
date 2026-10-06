@@ -69,21 +69,30 @@ def build_capture_source(
 
 
 def _open_capture(source: int | str) -> cv2.VideoCapture:
+    """Open a camera with Windows-friendly backends and a tiny capture buffer."""
     if isinstance(source, int):
-        capture = cv2.VideoCapture(source)
-    else:
-        capture = cv2.VideoCapture()
-        timeout_parameters = [
-            cv2.CAP_PROP_OPEN_TIMEOUT_MSEC,
-            5000,
-            cv2.CAP_PROP_READ_TIMEOUT_MSEC,
-            3000,
-        ]
-        try:
-            capture.open(source, cv2.CAP_FFMPEG, timeout_parameters)
-        except (TypeError, cv2.error):
+        # Virtual USB cameras such as DroidCam can expose themselves through
+        # different Windows capture APIs depending on driver/version.
+        for backend in (cv2.CAP_DSHOW, cv2.CAP_MSMF, cv2.CAP_ANY):
+            capture = cv2.VideoCapture(source, backend)
+            if capture.isOpened():
+                capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                return capture
             capture.release()
-            capture = cv2.VideoCapture(source)
+        return cv2.VideoCapture(source)
+
+    capture = cv2.VideoCapture()
+    timeout_parameters = [
+        cv2.CAP_PROP_OPEN_TIMEOUT_MSEC,
+        5000,
+        cv2.CAP_PROP_READ_TIMEOUT_MSEC,
+        3000,
+    ]
+    try:
+        capture.open(source, cv2.CAP_FFMPEG, timeout_parameters)
+    except (TypeError, cv2.error):
+        capture.release()
+        capture = cv2.VideoCapture(source)
 
     if capture.isOpened():
         capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
@@ -210,9 +219,19 @@ class CameraCaptureThread(QThread):
                 stats_started = time.monotonic()
                 self.status_changed.emit("LIVE", "")
 
+                consecutive_read_failures = 0
+                max_read_failures = 8
+
                 while not self.isInterruptionRequested():
                     ok, frame = capture.read()
                     if not ok or frame is None or frame.size == 0:
+                        consecutive_read_failures += 1
+                        if consecutive_read_failures < max_read_failures:
+                            # Virtual cameras can briefly return an empty frame
+                            # while the driver renegotiates without actually
+                            # losing the stream.
+                            self.msleep(60)
+                            continue
                         self.status_changed.emit(
                             "OFFLINE",
                             "Camera stopped returning frames.",
@@ -221,6 +240,7 @@ class CameraCaptureThread(QThread):
                         capture = None
                         break
 
+                    consecutive_read_failures = 0
                     height, width = frame.shape[:2]
                     self.mailbox.publish(frame)
                     frame_count += 1
