@@ -144,6 +144,153 @@ class CameraRow(QFrame):
 
 
 
+class LocalVideoTestDialog(QDialog):
+    """One-shot local video tester that never adds the file to the camera network."""
+
+    def __init__(
+        self,
+        video_path: str,
+        settings: AppSettings,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Local File Test")
+        self.setMinimumSize(900, 620)
+        self.resize(1050, 700)
+        self._video_path = video_path
+        self._settings = settings
+        self._thread: LocalVideoTestThread | None = None
+        self._last_pixmap: QPixmap | None = None
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(22, 20, 22, 20)
+        root.setSpacing(12)
+
+        title = QLabel("Local File Test")
+        title.setStyleSheet("font-size: 17px; font-weight: 750;")
+        root.addWidget(title)
+
+        file_label = QLabel(video_path)
+        file_label.setProperty("muted", True)
+        file_label.setWordWrap(True)
+        root.addWidget(file_label)
+
+        self.video = QLabel("Ready to test")
+        self.video.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.video.setMinimumHeight(430)
+        self.video.setProperty("videoSurface", True)
+        self.video.setStyleSheet("border-radius: 14px; font-size: 10pt;")
+        root.addWidget(self.video, 1)
+
+        self.status = QLabel(
+            "Test file loaded. Press Play once to run the production model."
+        )
+        self.status.setProperty("muted", True)
+        root.addWidget(self.status)
+
+        controls = QHBoxLayout()
+        controls.setSpacing(8)
+
+        self.play_button = QPushButton("Play Once")
+        self.play_button.setProperty("primary", True)
+        self.stop_button = QPushButton("Stop")
+        self.stop_button.setEnabled(False)
+        self.choose_button = QPushButton("Choose File")
+        self.close_button = QPushButton("Close")
+
+        controls.addWidget(self.play_button)
+        controls.addWidget(self.stop_button)
+        controls.addWidget(self.choose_button)
+        controls.addStretch(1)
+        controls.addWidget(self.close_button)
+        root.addLayout(controls)
+
+        self.play_button.clicked.connect(self._play)
+        self.stop_button.clicked.connect(self._stop)
+        self.choose_button.clicked.connect(self._choose_file)
+        self.close_button.clicked.connect(self.close)
+
+    def _choose_file(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select test video",
+            "",
+            "Video files (*.mp4 *.avi *.mov *.mkv *.wmv *.m4v);;All files (*.*)",
+        )
+        if not path:
+            return
+        self._video_path = path
+        self.video.clear()
+        self.video.setText("Ready to test")
+        self.status.setText(
+            "Test file loaded. Press Play once to run the production model."
+        )
+
+    def _play(self) -> None:
+        if self._thread is not None and self._thread.isRunning():
+            return
+
+        self._last_pixmap = None
+        self.video.clear()
+        self.status.setText(
+            "Loading Spontim 1.0 and the production detection pipeline..."
+        )
+        self.play_button.setEnabled(False)
+        self.stop_button.setEnabled(True)
+        self.choose_button.setEnabled(False)
+
+        self._thread = LocalVideoTestThread(self._video_path, self._settings)
+        self._thread.frame_ready.connect(self._on_frame)
+        self._thread.status_changed.connect(self._on_status)
+        self._thread.model_status.connect(self._on_model_status)
+        self._thread.finished.connect(self._on_finished)
+        self._thread.start()
+
+    def _stop(self) -> None:
+        if self._thread is not None and self._thread.isRunning():
+            self._thread.requestInterruption()
+            self.status.setText("Stopping test...")
+
+    def _on_frame(self, image, state: str, confidence) -> None:
+        self._last_pixmap = QPixmap.fromImage(image)
+        self._scale_frame()
+        suffix = f"  ·  {confidence:.0%}" if confidence is not None else ""
+        self.status.setText(f"{state}{suffix}")
+
+    def _on_status(self, message: str) -> None:
+        self.status.setText(message)
+
+    def _on_model_status(self, component: str, message: str) -> None:
+        if component == "fight":
+            self.status.setText(message)
+
+    def _on_finished(self) -> None:
+        self.play_button.setEnabled(True)
+        self.stop_button.setEnabled(False)
+        self.choose_button.setEnabled(True)
+
+    def _scale_frame(self) -> None:
+        if self._last_pixmap is None:
+            return
+        self.video.setPixmap(
+            self._last_pixmap.scaled(
+                self.video.size(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        )
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._scale_frame()
+
+    def closeEvent(self, event) -> None:
+        if self._thread is not None and self._thread.isRunning():
+            self._thread.requestInterruption()
+            self._thread.wait(5000)
+        event.accept()
+
+
 class CamerasPage(QWidget):
     add_requested = Signal(dict)
     local_test_requested = Signal()
