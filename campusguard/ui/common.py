@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
 from campusguard.camera_runtime import CameraTestThread, build_capture_source
 from campusguard.settings import CameraConfig, CameraCredentials, CameraStats
 from campusguard.ui.icons import IconLabel, set_icon_theme
-from campusguard.ui.theme import build_qss
+from campusguard.ui.theme import build_qss, get_palette
 
 
 def apply_theme(application, theme: str) -> None:
@@ -107,13 +107,14 @@ def make_card(
 
 def set_status_label(label: QLabel, status: str) -> None:
     status = status.upper()
+    palette = get_palette()
     colors = {
-        "LIVE": "#62bf8d",
-        "CONNECTING": "#d8b258",
-        "OFFLINE": "#9ba7ae",
-        "ERROR": "#e0736b",
+        "LIVE": palette.good,
+        "CONNECTING": palette.warn,
+        "OFFLINE": palette.muted,
+        "ERROR": palette.bad,
     }
-    color = colors.get(status, "#9ba7ae")
+    color = colors.get(status, palette.muted)
     label.setText(f"●  {status}")
     label.setStyleSheet(f"color: {color}; font-size: 8pt; font-weight: 700;")
 
@@ -151,9 +152,8 @@ class CameraPreview(QFrame):
         self.video_label = QLabel("Waiting for camera frames")
         self.video_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.video_label.setMinimumHeight(130)
-        self.video_label.setStyleSheet(
-            "background: #080d11; color: #7f8b92; border: 1px solid #1c252c; border-radius: 10px; font-size: 9pt;"
-        )
+        self.video_label.setProperty("videoSurface", True)
+        self.video_label.setStyleSheet("border-radius: 10px; font-size: 9pt;")
         self.video_label.setScaledContents(False)
         outer.addWidget(self.video_label, 1)
 
