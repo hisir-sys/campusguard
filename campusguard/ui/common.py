@@ -21,11 +21,12 @@ from PySide6.QtWidgets import (
 from campusguard.camera_runtime import CameraTestThread, build_capture_source
 from campusguard.settings import CameraConfig, CameraCredentials, CameraStats
 from campusguard.ui.icons import IconLabel, set_icon_theme
-from campusguard.ui.theme import build_qss, get_palette
+from campusguard.ui.theme import build_qss, get_palette, set_current
 
 
 def apply_theme(application, theme: str) -> None:
-    """Apply the dark/light stylesheet and re-color every SVG icon to match."""
+    """Apply the dark/light stylesheet and re-color every custom widget."""
+    set_current(theme)
     set_icon_theme(theme)
     application.setStyleSheet(build_qss(theme))
     # QScrollArea paints its inner widget with Qt's default light color, which shows
@@ -36,7 +37,7 @@ def apply_theme(application, theme: str) -> None:
         if inner is not None:
             inner.setAutoFillBackground(False)
     for widget in application.findChildren(QWidget):
-        retint = getattr(widget, "retint", None)  # IconLabel / IconButton / TabButton
+        retint = getattr(widget, "retint", None)  # custom-painted widgets and glass popups
         if callable(retint):
             retint()
 
