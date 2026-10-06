@@ -22,7 +22,7 @@ def main() -> int:
     parser.add_argument(
         "--model",
         choices=("mc3", "fdsc_mc3", "r3d", "x3d"),
-        default="mc3",
+        default="fdsc_mc3",
     )
 
     parser.add_argument(
