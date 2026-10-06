@@ -11,6 +11,7 @@ from PySide6.QtGui import QImage
 
 from campusguard.ai_pipeline import VisionPipeline
 from campusguard.footage import FightFootageRecorder
+from campusguard.storage import application_data_dir
 from campusguard.credentials import CredentialVault
 from campusguard.settings import AppSettings, CameraConfig, CameraCredentials
 
@@ -301,7 +302,9 @@ class FrameAnalysisThread(QThread):
         super().__init__()
         self.mailbox = mailbox
         self.options = options
-        self.footage_recorder = FightFootageRecorder(footage_dir)
+        self.footage_recorder = FightFootageRecorder(
+            footage_dir or (application_data_dir() / "footage")
+        )
 
     def run(self) -> None:
         latest_sequence = 0
