@@ -509,6 +509,7 @@ class MainWindow(QMainWindow):
         self.camera_page.remove_requested.connect(self._remove_camera)
         self.camera_page.reconnect_requested.connect(self._reconnect_camera)
         self.camera_page.ai_changed.connect(self._set_camera_ai)
+        self.dashboard.clear_notifications_requested.connect(self._clear_dashboard_notifications)
         self.incidents_page.status_change_requested.connect(self._set_incident_status)
         self.incidents_page.clear_all_requested.connect(self._clear_all_history)
         self.alerts_page.acknowledge_requested.connect(self._acknowledge_alert)
@@ -797,6 +798,26 @@ class MainWindow(QMainWindow):
     def _set_incident_status(self, public_id: str, status: str) -> None:
         self.repository.update_incident_status(public_id, status)
         self.incidents_page.refresh()
+
+    def _clear_dashboard_notifications(self) -> None:
+        answer = QMessageBox.question(
+            self,
+            "Clear dashboard notifications?",
+            "This will clear the notification list shown on the Dashboard. "
+            "Incidents and alerts will not be removed.",
+            QMessageBox.StandardButton.Yes
+            | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        self.repository.clear_notifications()
+        self.dashboard.refresh_summary()
+        self.statusBar().showMessage(
+            "Dashboard notifications cleared.",
+            4000,
+        )
 
     def _clear_all_history(self) -> None:
         answer = QMessageBox.warning(
