@@ -546,22 +546,24 @@ class MainWindow(QMainWindow):
         ))
 
         services = (
-            ("01", "External Camera Service", "USB / RTSP / HTTP / IP",
-             "Accepts configured external camera sources and exposes a consistent runtime interface."),
-            ("02", "Frame Processing", "CameraRuntime",
-             "Reads frames, maintains connection state, measures stream statistics, and forwards frames for optional AI processing."),
-            ("03", "Person Detection", "YOLO",
-             "Finds people in individual frames and supplies bounding boxes and confidence values."),
-            ("04", "Object Tracking", "Persistent IDs",
-             "Associates detections across consecutive frames so movement can be analyzed over time."),
-            ("05", "Pose Analysis", "Keypoints / skeleton",
-             "Uses configured pose-model output to expose body keypoints and movement structure."),
-            ("06", "Temporal Classification", "MC3-18",
-             "Evaluates a short frame sequence so motion-based events can be represented as temporal model results."),
-            ("07", "Incident Service", "SQLite repository",
-             "Creates an incident from a stable event with camera, event, confidence, severity, and status."),
-            ("08", "Alert Service", "Operator review",
-             "Surfaces active events, applies configured cooldown behavior, and provides acknowledgement controls."),
+            ("01", "Camera Runtime", "USB / RTSP / HTTP / IP",
+             "Maintains the live camera stream, frame mailbox, connection state, FPS, and resolution."),
+            ("02", "Person Detection", "YOLO",
+             "Detects people in each frame and provides the regions used by downstream analysis."),
+            ("03", "Tracking", "ByteTrack",
+             "Maintains stable operator-facing person identities across consecutive frames."),
+            ("04", "Pose Analysis", "YOLO Pose",
+             "Associates pose keypoints with detected people for contextual movement analysis."),
+            ("05", "Spontim 1.0", "MC3-18 · 16 frames",
+             "Analyzes a temporal sequence rather than making a decision from one isolated frame."),
+            ("06", "Event Stability", "Temporal gate",
+             "Requires consecutive fight predictions and sustained confidence before creating one persistent event."),
+            ("07", "Footage Recorder", "MP4 evidence",
+             "Stores one complete detection clip in CampusGuard storage and links it to the incident."),
+            ("08", "Incident & Alert Service", "SQLite",
+             "Persists incidents, alerts, notifications, confidence, severity, status, and saved footage references."),
+            ("09", "Operator UI", "Glass workspace",
+             "Presents live cameras, incidents, alerts, system status, AI status, and in-app evidence viewing."),
         )
         for i, (number, title, subtitle, detail) in enumerate(services):
             layout.addWidget(self._flow_node(number, title, f"{subtitle} — {detail}"))
@@ -588,24 +590,24 @@ class MainWindow(QMainWindow):
         ))
 
         tools = (
-            ("Camera Manager", "Connection and lifecycle",
+            ("Camera Manager", "Live operations",
              "Add, test, reconnect, remove, and monitor configured external camera sources."),
-            ("AI Model Configuration", "Model availability",
-             "Review detector, pose, temporal classifier, model paths, and compute-device status."),
-            ("Person Detection", "Frame-level analysis",
-             "Produces person bounding boxes and confidence information when the detector is available."),
-            ("Tracking", "Cross-frame association",
-             "Associates detections across frames so movement can be analyzed as a continuous track."),
-            ("Pose / Skeleton", "Body keypoints",
-             "Represents pose information as keypoints and skeleton data when configured."),
-            ("Temporal Action Analysis", "Sequence-level analysis",
-             "Uses a frame clip to classify motion patterns with the configured temporal model."),
+            ("Spontim 1.0", "Temporal detection",
+             "Runs the configured fight-classification pipeline on short frame sequences."),
+            ("Tracking + Pose", "Context",
+             "Combines person tracking and pose information to improve attribution and operator context."),
             ("Incident History", "Evidence index",
-             "Search and review stored incidents, severity, confidence, status, and camera source."),
-            ("Alert Console", "Active response",
-             "Review active alerts and acknowledge them from the Alerts page."),
-            ("System Settings", "Runtime control",
-             "Configure model locations, compute settings, thresholds, and alert cooldown behavior."),
+             "Review persistent incidents with camera, confidence, severity, status, and linked footage."),
+            ("Alert Console", "Response",
+             "Review active alerts and open the associated saved detection footage."),
+            ("Footage Storage", "MP4 evidence",
+             "Keep detection clips locally and clear stored footage without deleting incident history."),
+            ("System Stats", "Runtime overview",
+             "View camera health, incident totals, alert state, and monitoring status in the glass dashboard panel."),
+            ("AI Engine", "Inference overview",
+             "View active model, pipeline stages, runtime state, confidence threshold, and compute device."),
+            ("Glass Operations UI", "In-app workflow",
+             "Camera viewing and confirmation actions stay inside the CampusGuard window."),
         )
 
         for i in range(0, len(tools), 3):
@@ -643,30 +645,26 @@ class MainWindow(QMainWindow):
         ))
 
         pipeline = (
-            ("01", "External Camera", "USB / RTSP / HTTP / IP",
-             "A configured external camera becomes the source of frames."),
-            ("02", "Camera Runtime", "OpenCV capture",
-             "The runtime opens the source, reads frames, reports LIVE/OFFLINE/ERROR, and measures FPS and resolution."),
-            ("03", "Frame Preparation", "Runtime handoff",
-             "Frames enter the AI path only when AI processing is enabled and the relevant model configuration is available."),
-            ("04", "Person Detection", "YOLO bounding boxes",
-             "The detector identifies people and provides bounding boxes and confidence values."),
-            ("05", "Tracking", "Persistent person IDs",
-             "Detections are associated across frames so movement can be analyzed continuously."),
-            ("06", "Pose Estimation", "Keypoints / skeleton",
-             "A configured pose model can produce body keypoints describing posture and movement structure."),
-            ("07", "Temporal Buffer", "Consecutive frames",
-             "A short sequence is accumulated for temporal analysis; the current application describes the action classifier as using a 16-frame clip."),
-            ("08", "Temporal Classification", "MC3-18 action score",
-             "The temporal model produces an action score from the clip rather than a single image."),
-            ("09", "Event Stability", "Confidence + cooldown",
-             "The event result and configured cooldown behavior are applied before persistent incident creation."),
-            ("10", "Incident Persistence", "SQLite",
-             "A created incident records camera, event, confidence, severity, and operational status."),
-            ("11", "Alert Surface", "Alerts + notifications",
-             "The event is reflected in incident and alert views for operator inspection and acknowledgement."),
-            ("12", "Operations UI", "Dashboard / Cameras / Incidents / Alerts",
-             "The desktop interface presents live state, model state, incidents, alerts, and configuration."),
+            ("01", "Camera Source", "USB / RTSP / HTTP / IP",
+             "A configured external camera supplies the live frames used by CampusGuard."),
+            ("02", "Frame Runtime", "OpenCV + latest-frame mailbox",
+             "The runtime keeps the newest frame available so stale frames do not build an unnecessary queue."),
+            ("03", "Person Detection", "YOLO",
+             "People are detected and passed into tracking and contextual analysis."),
+            ("04", "Tracking", "ByteTrack + stable display IDs",
+             "Cross-frame association keeps the operator view coherent even when internal tracker IDs change."),
+            ("05", "Pose", "YOLO Pose",
+             "Pose keypoints are matched to people and drawn only when their confidence is sufficient."),
+            ("06", "Temporal Clip", "16-frame sequence",
+             "Spontim 1.0 evaluates motion over a short sequence instead of treating every frame as a separate event."),
+            ("07", "Fight Gate", "4 trigger / 6 release",
+             "The temporal gate suppresses isolated predictions and latches one continuous detection."),
+            ("08", "Incident", "SQLite",
+             "One stable event becomes one incident and one alert rather than a frame-by-frame stream of records."),
+            ("09", "Footage", "Single MP4 clip",
+             "The detection is recorded as one continuous video clip and linked to the incident."),
+            ("10", "Operator Review", "View inside CampusGuard",
+             "The incident or alert provides a View action that opens the saved footage inside the application."),
         )
         for i, (number, title, subtitle, detail) in enumerate(pipeline):
             layout.addWidget(self._flow_node(number, title, f"{subtitle} — {detail}"))
@@ -686,9 +684,9 @@ class MainWindow(QMainWindow):
 
         card, body = make_card("Model behavior", icon="cpu")
         note = QLabel(
-            "CampusGuard reports model availability component-by-component. If a model is missing, "
-            "the application should report that status rather than inventing detections or confidence "
-            "scores. AI behavior therefore depends on the model files configured in Settings."
+            "Spontim 1.0 evaluates a 16-frame temporal sequence. Stable event gating prevents isolated "
+            "predictions from becoming persistent incidents. Confirmed detections are recorded as one MP4 "
+            "clip and linked to the incident for operator review."
         )
         note.setWordWrap(True)
         body.addWidget(note)
