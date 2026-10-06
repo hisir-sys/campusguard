@@ -713,6 +713,7 @@ class _HistoryPopup(QWidget):
 
 class IncidentsPage(QWidget):
     status_change_requested = Signal(str, str)
+    clear_all_requested = Signal()
 
     def __init__(
         self,
@@ -794,6 +795,18 @@ class IncidentsPage(QWidget):
 
         self.total_badge.setMinimumHeight(
             28
+        )
+
+        self.clear_all_button = QPushButton("Clear All")
+        self.clear_all_button.setProperty("secondaryButton", True)
+        self.clear_all_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.clear_all_button.setMinimumHeight(30)
+        self.clear_all_button.clicked.connect(self.clear_all_requested.emit)
+
+        header.addWidget(
+            self.clear_all_button,
+            0,
+            Qt.AlignmentFlag.AlignTop,
         )
 
         header.addWidget(
@@ -1441,6 +1454,7 @@ class IncidentsPage(QWidget):
 
 class AlertsPage(QWidget):
     acknowledge_requested = Signal(int)
+    clear_all_requested = Signal()
 
     def __init__(
         self,
@@ -1518,6 +1532,18 @@ class AlertsPage(QWidget):
 
         self.alert_badge.setMinimumHeight(
             28
+        )
+
+        self.clear_all_button = QPushButton("Clear All")
+        self.clear_all_button.setProperty("secondaryButton", True)
+        self.clear_all_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.clear_all_button.setMinimumHeight(30)
+        self.clear_all_button.clicked.connect(self.clear_all_requested.emit)
+
+        header.addWidget(
+            self.clear_all_button,
+            0,
+            Qt.AlignmentFlag.AlignTop,
         )
 
         header.addWidget(
