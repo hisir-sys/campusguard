@@ -36,7 +36,7 @@ from campusguard.ui.glass_nav import BackdropWidget, BottomBar, TopBar
 from campusguard.ui.history_pages import AlertsPage, IncidentsPage
 from campusguard.ui.icons import set_icon_theme
 from campusguard.ui.settings_page import SettingsPage
-from campusguard.ui.theme import get_palette
+from campusguard.ui.theme import get_palette, rgba
 
 
 class InAppOverlay(QFrame):
@@ -48,12 +48,12 @@ class InAppOverlay(QFrame):
         self.setStyleSheet(
             """
             QFrame#inAppOverlay {
-                background: rgba(4, 7, 12, 118);
+                background: rgba(0, 0, 0, 115);
                 border: none;
             }
             QFrame#inAppPanel {
-                background: rgba(16, 23, 30, 148);
-                border: 1px solid rgba(255,255,255,0.18);
+                background: {rgba(palette.glass, palette.glass_alpha)};
+                border: 1px solid {rgba(palette.line, min(255, int(palette.line_alpha * 1.6)))};
                 border-radius: 26px;
             }
             QLabel#overlayTitle {
@@ -67,13 +67,13 @@ class InAppOverlay(QFrame):
                 background: transparent;
             }
             QLabel#overlayClose {
-                background: rgba(255,255,255,0.07);
-                border: 1px solid rgba(255,255,255,0.08);
+                background: {rgba(palette.veil, min(255, palette.veil_alpha * 2))};
+                border: 1px solid {rgba(palette.line, palette.line_alpha)};
                 border-radius: 15px;
                 font-size: 14pt;
             }
             QLabel#overlayClose:hover {
-                background: rgba(255,255,255,0.13);
+                background: {rgba(palette.veil, min(255, palette.veil_alpha * 3))};
             }
             QLabel#cameraViewport {
                 background: #080d11;
@@ -82,6 +82,8 @@ class InAppOverlay(QFrame):
             }
             """
         )
+        palette = get_palette()
+
         self._panel = QFrame(self)
         self._panel.setObjectName("inAppPanel")
         self._panel.setFixedSize(820, 560)
