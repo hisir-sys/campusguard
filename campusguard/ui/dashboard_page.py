@@ -1772,20 +1772,9 @@ class DashboardPage(QWidget):
         confidence_threshold: float,
         detection_enabled: bool,
     ) -> None:
-
-        self._set_value(
-            "threshold",
-            f"{confidence_threshold:.0%}",
-        )
-
-        self._set_value(
-            "detection",
-            (
-                "Enabled"
-                if detection_enabled
-                else "Disabled"
-            ),
-        )
+        # Detailed configuration is shown only inside the AI Engine popup.
+        # The dashboard card stays intentionally minimal.
+        return
 
     def update_model_configuration(
         self,
