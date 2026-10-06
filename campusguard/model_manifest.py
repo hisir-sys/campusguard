@@ -30,7 +30,7 @@ class ModelManifest:
 MODEL_MANIFESTS: dict[str, ModelManifest] = {
     "mc3": ModelManifest(
         key="mc3",
-        name="Current MC3-18",
+        name="CampusGuard MC3-18 (baseline)",
         description="CampusGuard's existing MC3-18 temporal fight classifier.",
         architecture="mc3",
         path_setting="fight_model_path",
@@ -45,8 +45,8 @@ MODEL_MANIFESTS: dict[str, ModelManifest] = {
     ),
     "fdsc_mc3": ModelManifest(
         key="fdsc_mc3",
-        name="FDSC MC3-18",
-        description="FDSC fine-tuned MC3-18 surveillance classifier.",
+        name="MohamedSebaie FDSC MC3-18 (92.5% reported)",
+        description="MohamedSebaie FDSC fine-tuned MC3-18 surveillance classifier; published 92.5% top-1 accuracy run.",
         architecture="mc3",
         path_setting="fdsc_mc3_model_path",
         class_labels=("fight", "noFight"),
@@ -54,9 +54,9 @@ MODEL_MANIFESTS: dict[str, ModelManifest] = {
         preprocessing="RGB, 16 frames, 112x112; Kinetics-style normalization",
         semantic_status="verified",
         source_note=(
-            "Verified against the FDSC project's published inference contract: "
+            "Verified against MohamedSebaie/Fight_Detection_From_Surveillance_Cameras-PyTorch_Project: "
             "the checkpoint is model_16_m3_0.8888.pth, uses a 16-frame sequence, "
-            "and the project defines CLASSES_LIST as ['fight', 'noFight']."
+            "and the project reports a 92.5% top-1 MC3-18 run with 0.90 fight recall."
         ),
     ),
     "r3d": ModelManifest(
