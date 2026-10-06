@@ -371,13 +371,10 @@ class VisionPipeline:
                                 "inference_stride": model.INFERENCE_STRIDE,
                             }
                         )
-                        candidate_event = self.decision.update(state, confidence)
-                        if (
-                            candidate_event is not None
-                            and len(people) >= 2
-                            and bool(pair_ids)
-                        ):
-                            event = candidate_event
+                        if len(people) >= 2 and bool(pair_ids):
+                            event = self.decision.update(state, confidence)
+                        elif state == "NORMAL":
+                            self.decision.update("NORMAL", None)
                         self.last_state, self.last_confidence = state, confidence
                 else:
                     self._update_person_clips(frame, people, model)
@@ -515,10 +512,16 @@ class VisionPipeline:
             ids = self._assign_fallback_track_ids(xyxy)
 
         people = []
+        used_display_ids: set[int] = set()
         for raw_box, raw_conf, raw_id in zip(xyxy, confs, ids):
             x1, y1, x2, y2 = (int(v) for v in raw_box)
             track_id = int(raw_id)
-            display_id = self._stable_display_id(track_id, (x1, y1, x2, y2))
+            display_id = self._stable_display_id(
+                track_id,
+                (x1, y1, x2, y2),
+                used_display_ids,
+            )
+            used_display_ids.add(display_id)
             person = TrackedPerson(
                 track_id=track_id,
                 display_id=display_id,
@@ -550,6 +553,7 @@ class VisionPipeline:
         self,
         track_id: int,
         bbox: tuple[int, int, int, int],
+        used_display_ids: set[int],
     ) -> int:
         """Keep operator-facing IDs stable when ByteTrack briefly re-issues an ID."""
         if track_id in self.display_ids:
@@ -564,6 +568,8 @@ class VisionPipeline:
         bh = max(1, by2 - by1)
 
         for display_id, (previous_bbox, last_seen) in self.display_track_memory.items():
+            if display_id in used_display_ids:
+                continue
             if self.frame_index - last_seen > 12:
                 continue
             px1, py1, px2, py2 = previous_bbox
