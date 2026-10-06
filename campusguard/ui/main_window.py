@@ -514,6 +514,7 @@ class MainWindow(QMainWindow):
         self.dashboard.clear_notifications_requested.connect(self._clear_dashboard_notifications)
         self.incidents_page.status_change_requested.connect(self._set_incident_status)
         self.incidents_page.clear_all_requested.connect(self._clear_all_history)
+        self.incidents_page.clear_footage_requested.connect(self._clear_footage_storage)
         self.alerts_page.clear_all_requested.connect(self._clear_all_history)
         self.settings_page.settings_changed.connect(self._save_settings)
 
@@ -834,6 +835,28 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(
             "Dashboard notifications cleared.",
             4000,
+        )
+
+    def _clear_footage_storage(self) -> None:
+        answer = QMessageBox.warning(
+            self,
+            "Clear saved footage?",
+            "This will permanently delete all saved fight MP4 footage. "
+            "Incident and alert records will remain.",
+            QMessageBox.StandardButton.Yes
+            | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        removed = clear_footage(self.repository.footage_dir)
+        self.repository.clear_incident_footage_paths()
+        self.incidents_page.refresh()
+        self.alerts_page.refresh()
+        self.statusBar().showMessage(
+            f"Saved footage cleared ({removed} video{'s' if removed != 1 else ''}).",
+            5000,
         )
 
     def _clear_all_history(self) -> None:
