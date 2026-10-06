@@ -1265,8 +1265,9 @@ class IncidentsPage(QWidget):
         subtitle: str,
     ) -> None:
         if self._popup is not None:
-            self._popup.close_popup()
-            self._popup.deleteLater()
+            old_popup = self._popup
+            old_popup.close_popup()
+            old_popup.deleteLater()
 
         self._blur_effect = QGraphicsBlurEffect()
         self._blur_effect.setBlurRadius(
@@ -1853,8 +1854,9 @@ class AlertsPage(QWidget):
         active: bool,
     ) -> None:
         if self._popup is not None:
-            self._popup.close_popup()
-            self._popup.deleteLater()
+            old_popup = self._popup
+            old_popup.close_popup()
+            old_popup.deleteLater()
 
         self._blur_effect = QGraphicsBlurEffect()
 
