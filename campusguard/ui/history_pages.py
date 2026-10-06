@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QUrl, Qt, Signal
 from PySide6.QtGui import QColor, QPalette
+from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
+from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWidgets import (
     QComboBox,
+    QDialog,
     QFrame,
     QGraphicsBlurEffect,
     QGridLayout,
@@ -27,6 +31,56 @@ from campusguard.ui.common import make_page_title
 # ============================================================================
 # HELPERS
 # ============================================================================
+# ============================================================================
+# FOOTAGE PLAYER
+# ============================================================================
+
+class FootagePlayerDialog(QDialog):
+    def __init__(self, footage_path: str, title: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(f"CampusGuard — {title}")
+        self.resize(980, 620)
+        self.setMinimumSize(760, 480)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(10)
+
+        self.video = QVideoWidget()
+        self.video.setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatio)
+        layout.addWidget(self.video, 1)
+
+        controls = QHBoxLayout()
+        controls.addStretch(1)
+        close_button = QPushButton("Close")
+        close_button.setProperty("secondaryButton", True)
+        close_button.clicked.connect(self.close)
+        controls.addWidget(close_button)
+        layout.addLayout(controls)
+
+        self.player = QMediaPlayer(self)
+        self.audio = QAudioOutput(self)
+        self.audio.setVolume(0.7)
+        self.player.setAudioOutput(self.audio)
+        self.player.setVideoOutput(self.video)
+
+        path = Path(footage_path)
+        if not path.is_file():
+            message = QLabel("The saved footage file is no longer available.")
+            message.setProperty("muted", True)
+            message.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            layout.insertWidget(0, message)
+            self.video.hide()
+            return
+
+        self.player.setSource(QUrl.fromLocalFile(str(path.resolve())))
+        self.player.play()
+
+    def closeEvent(self, event) -> None:
+        self.player.stop()
+        super().closeEvent(event)
+
+
 
 def _local_time(value: str) -> str:
     try:
@@ -714,6 +768,7 @@ class _HistoryPopup(QWidget):
 class IncidentsPage(QWidget):
     status_change_requested = Signal(str, str)
     clear_all_requested = Signal()
+    clear_footage_requested = Signal()
 
     def __init__(
         self,
@@ -799,17 +854,20 @@ class IncidentsPage(QWidget):
             28
         )
 
+        self.clear_footage_button = QPushButton("Clear Footage")
+        self.clear_footage_button.setProperty("secondaryButton", True)
+        self.clear_footage_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.clear_footage_button.setMinimumHeight(30)
+        self.clear_footage_button.clicked.connect(self.clear_footage_requested.emit)
+
         self.clear_all_button = QPushButton("Clear All")
         self.clear_all_button.setProperty("secondaryButton", True)
         self.clear_all_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.clear_all_button.setMinimumHeight(30)
         self.clear_all_button.clicked.connect(self.clear_all_requested.emit)
 
-        header.addWidget(
-            self.clear_all_button,
-            0,
-            Qt.AlignmentFlag.AlignTop,
-        )
+        header.addWidget(self.clear_footage_button, 0, Qt.AlignmentFlag.AlignTop)
+        header.addWidget(self.clear_all_button, 0, Qt.AlignmentFlag.AlignTop)
 
         header.addWidget(
             self.total_badge,
@@ -1338,6 +1396,7 @@ class IncidentsPage(QWidget):
                     "SEVERITY",
                     "STATUS",
                     "TIME",
+                    "FOOTAGE",
                 ]
             )
 
@@ -1347,7 +1406,7 @@ class IncidentsPage(QWidget):
 
             table = QTableWidget(
                 len(rows),
-                7,
+                8,
             )
 
             _configure_table(
@@ -1388,6 +1447,11 @@ class IncidentsPage(QWidget):
 
             header.setSectionResizeMode(
                 6,
+                header.ResizeMode.ResizeToContents,
+            )
+
+            header.setSectionResizeMode(
+                7,
                 header.ResizeMode.ResizeToContents,
             )
 
@@ -1449,6 +1513,8 @@ class IncidentsPage(QWidget):
                     ),
                 )
 
+                self._set_footage_cell(table, index, 7, row)
+
             layout.addWidget(
                 table,
                 1,
@@ -1459,6 +1525,44 @@ class IncidentsPage(QWidget):
         )
 
         popup.show_popup()
+
+    def _set_footage_cell(self, table: QTableWidget, row_index: int, column: int, row: dict) -> None:
+        path = str(row.get("footage_path") or "")
+        available = Path(path).is_file()
+        button = _action_button("View" if available else "Unavailable", "view")
+        button.setEnabled(available)
+        if available:
+            button.clicked.connect(
+                lambda checked=False, p=path, public_id=row["public_id"]:
+                self._open_footage(p, public_id)
+            )
+        actions = QWidget()
+        action_layout = QHBoxLayout(actions)
+        action_layout.setContentsMargins(3, 2, 3, 2)
+        action_layout.addWidget(button)
+        table.setCellWidget(row_index, column, actions)
+
+    def _open_footage(self, path: str, public_id: str) -> None:
+        FootagePlayerDialog(path, f"Incident {public_id}", self).exec()
+
+    def _set_footage_cell(self, table: QTableWidget, row_index: int, column: int, row: dict) -> None:
+        path = str(row.get("footage_path") or "")
+        available = Path(path).is_file()
+        button = _action_button("View" if available else "Unavailable", "view")
+        button.setEnabled(available)
+        if available:
+            button.clicked.connect(
+                lambda checked=False, p=path, public_id=row["public_id"]:
+                self._open_footage(p, public_id)
+            )
+        actions = QWidget()
+        action_layout = QHBoxLayout(actions)
+        action_layout.setContentsMargins(3, 2, 3, 2)
+        action_layout.addWidget(button)
+        table.setCellWidget(row_index, column, actions)
+
+    def _open_footage(self, path: str, public_id: str) -> None:
+        FootagePlayerDialog(path, f"Alert {public_id}", self).exec()
 
     def _close_popup(self) -> None:
         if self._blur_effect is not None:
@@ -1473,7 +1577,6 @@ class IncidentsPage(QWidget):
 # ============================================================================
 
 class AlertsPage(QWidget):
-    acknowledge_requested = Signal(int)
     clear_all_requested = Signal()
 
     def __init__(
@@ -1942,10 +2045,8 @@ class AlertsPage(QWidget):
                 "SEVERITY",
                 "TIME",
                 "INCIDENT",
+                "FOOTAGE",
             ]
-
-            if active:
-                columns.append("ACTION")
 
             layout.addWidget(
                 _popup_header(
@@ -1953,11 +2054,7 @@ class AlertsPage(QWidget):
                 )
             )
 
-            table_columns = (
-                7
-                if active
-                else 6
-            )
+            table_columns = 7
 
             table = QTableWidget(
                 len(rows),
@@ -2000,11 +2097,10 @@ class AlertsPage(QWidget):
                 header.ResizeMode.ResizeToContents,
             )
 
-            if active:
-                header.setSectionResizeMode(
-                    6,
-                    header.ResizeMode.ResizeToContents,
-                )
+            header.setSectionResizeMode(
+                6,
+                header.ResizeMode.ResizeToContents,
+            )
 
             _apply_table_palette(
                 table
@@ -2062,44 +2158,7 @@ class AlertsPage(QWidget):
                     ),
                 )
 
-                if active:
-                    button = _action_button(
-                        "Acknowledge",
-                        "acknowledge",
-                    )
-
-                    button.clicked.connect(
-                        lambda checked=False,
-                        alert_id=int(
-                            row["alert_id"]
-                        ):
-                        self.acknowledge_requested.emit(
-                            alert_id
-                        )
-                    )
-
-                    actions = QWidget()
-
-                    action_layout = QHBoxLayout(
-                        actions
-                    )
-
-                    action_layout.setContentsMargins(
-                        3,
-                        2,
-                        3,
-                        2,
-                    )
-
-                    action_layout.addWidget(
-                        button
-                    )
-
-                    table.setCellWidget(
-                        index,
-                        6,
-                        actions,
-                    )
+                self._set_footage_cell(table, index, 6, row)
 
             layout.addWidget(
                 table,
