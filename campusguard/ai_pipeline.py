@@ -227,9 +227,9 @@ class VisionPipeline:
         selected_key = settings.violence_model
         if selected_key == "enhanced":
             self.status("fight", "CampusGuard Enhanced — COMING SOON (not operational)")
-            selected_key = "mc3"
+            selected_key = "fdsc_mc3"
 
-        profile = MODEL_PROFILES.get(selected_key, MODEL_PROFILES["mc3"])
+        profile = MODEL_PROFILES.get(selected_key, MODEL_PROFILES["fdsc_mc3"])
         paths = {
             "mc3": settings.fight_model_path,
             "fdsc_mc3": settings.fdsc_mc3_model_path,
@@ -318,12 +318,12 @@ class VisionPipeline:
                 self.status("pose", f"MODEL ERROR — {error}")
 
         pair_ids = self.interactions.update(people)
-        model_key = settings.violence_model if settings.violence_model != "enhanced" else "mc3"
+        model_key = settings.violence_model if settings.violence_model != "enhanced" else "fdsc_mc3"
         model = self._selected_model(model_key)
         if model is not None and model.ready:
             try:
                 inference_started = perf_counter()
-                if model_key == "mc3":
+                if model_key in {"mc3", "fdsc_mc3"}:
                     # MC3 was trained and validated on full-scene temporal clips.
                     # Do not crop the scene to individual people: that removes the
                     # interaction context that the verified checkpoint relies on.
@@ -626,7 +626,7 @@ class VisionPipeline:
     def _draw_people(self, annotated: np.ndarray, people: list[TrackedPerson]) -> None:
         for person in people:
             x1, y1, x2, y2 = person.bbox
-            color = (64, 68, 235) if person.involved else (95, 194, 132)
+            color = (0, 215, 255) if person.involved else (95, 194, 132)
             cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2, cv2.LINE_AA)
 
             label = f"PERSON #{person.display_id}"
