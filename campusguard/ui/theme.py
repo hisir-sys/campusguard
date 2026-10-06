@@ -76,7 +76,7 @@ DARK = Palette(
     veil="#ffffff",
     veil_alpha=10,
     glass="#0f151b",
-    glass_alpha=170,
+    glass_alpha=138,
     field="#05080b",
     field_alpha=120,
     edge="#ffffff",
@@ -107,7 +107,7 @@ LIGHT = Palette(
     veil="#0f1a22",
     veil_alpha=10,
     glass="#ffffff",
-    glass_alpha=185,
+    glass_alpha=176,
     field="#ffffff",
     field_alpha=200,
     edge="#d9363e",
@@ -240,14 +240,14 @@ QCheckBox::indicator:unchecked { background: @field@; border: 1px solid @line_st
 QSlider::groove:horizontal { height: 4px; background: @line_strong@; border-radius: 2px; }
 QSlider::handle:horizontal { background: @accent@; width: 14px; margin: -5px 0; border-radius: 7px; }
 
-QScrollBar:vertical { background: transparent; width: 10px; margin: 2px; }
-QScrollBar::handle:vertical { background: @handle@; border-radius: 4px; min-height: 28px; }
+QScrollBar:vertical { background: transparent; width: 6px; margin: 3px 0; }
+QScrollBar::handle:vertical { background: @handle@; border-radius: 3px; min-height: 30px; }
 QScrollBar::handle:vertical:hover { background: @handle_hover@; }
-QScrollBar:horizontal { background: transparent; height: 10px; margin: 2px; }
-QScrollBar::handle:horizontal { background: @handle@; border-radius: 4px; min-width: 28px; }
+QScrollBar:horizontal { background: transparent; height: 6px; margin: 0 3px; }
+QScrollBar::handle:horizontal { background: @handle@; border-radius: 3px; min-width: 30px; }
 QScrollBar::handle:horizontal:hover { background: @handle_hover@; }
 QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
-QScrollBar::add-page, QScrollBar::sub-page { background: none; }
+QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 """
 
 
