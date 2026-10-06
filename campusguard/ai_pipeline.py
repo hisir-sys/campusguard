@@ -88,30 +88,34 @@ def combinations(items: list[TrackedPerson]):
 
 
 class FightDecision:
-    """Turn noisy temporal predictions into one stable event per continuous episode.
+    """Turn noisy temporal predictions into one stable, high-confidence event.
 
-    A brief NORMAL prediction must not immediately unlock a new alert. This is
-    important for fight footage because temporal classifiers can oscillate when
-    people overlap, motion blurs, or a single clip contains a transition.
+    Persistent incidents require several consecutive FIGHT predictions with a
+    strong rolling confidence average. POSSIBLE ALTERCATION remains a visual
+    state but does not create a persistent incident.
     """
 
     NORMAL_RELEASE_PREDICTIONS = 6
-    TRIGGER_PREDICTIONS = 3
+    TRIGGER_PREDICTIONS = 4
+    MIN_TRIGGER_CONFIDENCE = 0.75
 
     def __init__(self, threshold: float) -> None:
         self.threshold = threshold
         self.states: deque[str] = deque(maxlen=self.TRIGGER_PREDICTIONS)
+        self.confidences: deque[float] = deque(maxlen=self.TRIGGER_PREDICTIONS)
         self.event_latched = False
         self.normal_release_count = 0
 
     def reset(self) -> None:
         self.states.clear()
+        self.confidences.clear()
         self.event_latched = False
         self.normal_release_count = 0
 
     def update(self, state: str, confidence: float | None) -> Event | None:
         if state == "NORMAL":
             self.states.clear()
+            self.confidences.clear()
             self.normal_release_count += 1
             if self.normal_release_count >= self.NORMAL_RELEASE_PREDICTIONS:
                 self.event_latched = False
@@ -119,7 +123,14 @@ class FightDecision:
             return None
 
         self.normal_release_count = 0
+
+        if state != "FIGHT DETECTED" or confidence is None:
+            self.states.clear()
+            self.confidences.clear()
+            return None
+
         self.states.append(state)
+        self.confidences.append(float(confidence))
 
         if self.event_latched:
             return None
@@ -127,12 +138,17 @@ class FightDecision:
             return None
         if not all(item == "FIGHT DETECTED" for item in self.states):
             return None
-        if confidence is None or confidence < self.threshold:
+
+        rolling_confidence = float(np.mean(self.confidences))
+        required_confidence = max(
+            float(self.threshold),
+            self.MIN_TRIGGER_CONFIDENCE,
+        )
+        if rolling_confidence < required_confidence:
             return None
 
         self.event_latched = True
-        severity = "HIGH"
-        return state, confidence, severity
+        return "FIGHT DETECTED", rolling_confidence, "HIGH"
 
 
 class VisionPipeline:
@@ -150,8 +166,11 @@ class VisionPipeline:
         self.decision = FightDecision(settings.confidence_threshold)
         self.interactions = InteractionEngine()
         self.display_ids: dict[int, int] = {}
+        self.display_track_memory: dict[int, tuple[tuple[int, int, int, int], int]] = {}
         self.next_display_id = 1
         self.fallback_tracks: dict[int, tuple[float, float, float]] = {}
+        self.last_scene_signature: tuple[int, int, int] | None = None
+        self.scene_cut_cooldown = 0
         self.next_fallback_track_id = -1
         self.last_state = "MODEL NOT LOADED"
         self.last_confidence: float | None = None
@@ -256,6 +275,11 @@ class VisionPipeline:
         self.person_frame_counts.clear()
         self.person_scores.clear()
         self.fallback_tracks.clear()
+        self.display_ids.clear()
+        self.display_track_memory.clear()
+        self.next_display_id = 1
+        self.last_scene_signature = None
+        self.scene_cut_cooldown = 0
         self.decision.reset()
         self.last_state = "MODEL NOT LOADED"
         self.last_confidence = None
@@ -288,6 +312,11 @@ class VisionPipeline:
         self.configure(settings)
         self.frame_index += 1
         self.last_diagnostics.clear()
+
+        if self._detect_scene_cut(frame):
+            self._reset_tracking_state()
+        elif self.scene_cut_cooldown > 0:
+            self.scene_cut_cooldown -= 1
         process_started = perf_counter()
         annotated = frame.copy()
         state = "AI DISABLED" if not ai_enabled else "MODEL NOT LOADED"
@@ -342,7 +371,13 @@ class VisionPipeline:
                                 "inference_stride": model.INFERENCE_STRIDE,
                             }
                         )
-                        event = self.decision.update(state, confidence)
+                        candidate_event = self.decision.update(state, confidence)
+                        if (
+                            candidate_event is not None
+                            and len(people) >= 2
+                            and bool(pair_ids)
+                        ):
+                            event = candidate_event
                         self.last_state, self.last_confidence = state, confidence
                 else:
                     self._update_person_clips(frame, people, model)
@@ -483,18 +518,114 @@ class VisionPipeline:
         for raw_box, raw_conf, raw_id in zip(xyxy, confs, ids):
             x1, y1, x2, y2 = (int(v) for v in raw_box)
             track_id = int(raw_id)
-            if track_id not in self.display_ids:
-                self.display_ids[track_id] = self.next_display_id
-                self.next_display_id += 1
+            display_id = self._stable_display_id(track_id, (x1, y1, x2, y2))
             person = TrackedPerson(
                 track_id=track_id,
-                display_id=self.display_ids[track_id],
+                display_id=display_id,
                 bbox=(x1, y1, x2, y2),
                 detection_confidence=float(raw_conf),
                 center=((x1 + x2) / 2.0, (y1 + y2) / 2.0),
             )
             people.append(person)
         return people
+
+    @staticmethod
+    def _bbox_iou(
+        left: tuple[int, int, int, int],
+        right: tuple[int, int, int, int],
+    ) -> float:
+        lx1, ly1, lx2, ly2 = left
+        rx1, ry1, rx2, ry2 = right
+        ix1, iy1 = max(lx1, rx1), max(ly1, ry1)
+        ix2, iy2 = min(lx2, rx2), min(ly2, ry2)
+        iw, ih = max(0, ix2 - ix1), max(0, iy2 - iy1)
+        intersection = iw * ih
+        if intersection <= 0:
+            return 0.0
+        left_area = max(1, lx2 - lx1) * max(1, ly2 - ly1)
+        right_area = max(1, rx2 - rx1) * max(1, ry2 - ry1)
+        return intersection / float(left_area + right_area - intersection)
+
+    def _stable_display_id(
+        self,
+        track_id: int,
+        bbox: tuple[int, int, int, int],
+    ) -> int:
+        """Keep operator-facing IDs stable when ByteTrack briefly re-issues an ID."""
+        if track_id in self.display_ids:
+            display_id = self.display_ids[track_id]
+            self.display_track_memory[display_id] = (bbox, self.frame_index)
+            return display_id
+
+        best_display: int | None = None
+        best_score = 0.0
+        bx1, by1, bx2, by2 = bbox
+        bcx, bcy = (bx1 + bx2) / 2.0, (by1 + by2) / 2.0
+        bh = max(1, by2 - by1)
+
+        for display_id, (previous_bbox, last_seen) in self.display_track_memory.items():
+            if self.frame_index - last_seen > 12:
+                continue
+            px1, py1, px2, py2 = previous_bbox
+            pcx, pcy = (px1 + px2) / 2.0, (py1 + py2) / 2.0
+            ph = max(1, py2 - py1)
+            distance = float(np.hypot(bcx - pcx, bcy - pcy))
+            distance_limit = max(50.0, max(bh, ph) * 1.25)
+            iou = self._bbox_iou(bbox, previous_bbox)
+            proximity = max(0.0, 1.0 - distance / distance_limit)
+            score = max(iou, proximity * 0.70)
+            if distance <= distance_limit and score > best_score:
+                best_display = display_id
+                best_score = score
+
+        if best_display is None:
+            best_display = self.next_display_id
+            self.next_display_id += 1
+
+        self.display_ids[track_id] = best_display
+        self.display_track_memory[best_display] = (bbox, self.frame_index)
+        return best_display
+
+    def _detect_scene_cut(self, frame: np.ndarray) -> bool:
+        """Detect abrupt source-video cuts so old tracking/clip state is not reused."""
+        small = cv2.resize(frame, (32, 18))
+        gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+        signature = (
+            int(gray.mean()),
+            int(gray.std()),
+            int(gray[::4, ::4].mean()),
+        )
+
+        if self.last_scene_signature is None:
+            self.last_scene_signature = signature
+            return False
+
+        previous = np.array(self.last_scene_signature, dtype=np.float32)
+        current = np.array(signature, dtype=np.float32)
+        difference = float(np.linalg.norm(current - previous))
+        self.last_scene_signature = signature
+
+        if self.scene_cut_cooldown > 0:
+            self.scene_cut_cooldown -= 1
+            return False
+
+        if difference >= 28.0:
+            self.scene_cut_cooldown = 8
+            return True
+        return False
+
+    def _reset_tracking_state(self) -> None:
+        self.display_ids.clear()
+        self.display_track_memory.clear()
+        self.next_display_id = 1
+        self.fallback_tracks.clear()
+        self.next_fallback_track_id = -1
+        self.person_buffers.clear()
+        self.person_frame_counts.clear()
+        self.person_scores.clear()
+        self.interactions.pair_history.clear()
+        self.decision.reset()
+        self.last_involved_ids.clear()
 
     def _assign_fallback_track_ids(self, boxes: np.ndarray) -> list[int]:
         """Keep temporal ROI IDs stable when ByteTrack is disabled/unavailable."""
@@ -532,42 +663,82 @@ class VisionPipeline:
         return [track_id for track_id, *_ in current]
 
 
-    def _attach_pose(self, frame: np.ndarray, people: list[TrackedPerson], annotated: np.ndarray, settings: AppSettings) -> None:
-        pose_confidence = POSE_DETECTION_CONFIDENCE
+    def _attach_pose(
+        self,
+        frame: np.ndarray,
+        people: list[TrackedPerson],
+        annotated: np.ndarray,
+        settings: AppSettings,
+    ) -> None:
         results = self.pose_model.predict(
             frame,
-            conf=pose_confidence,
+            conf=POSE_DETECTION_CONFIDENCE,
             classes=[0],
             device=str(self.device),
             verbose=False,
         )
         if not results or results[0].keypoints is None or not people:
             return
-        keypoints = results[0].keypoints
+
+        result = results[0]
+        keypoints = result.keypoints
         points = keypoints.xy.detach().cpu().numpy()
-        confidences = keypoints.conf.detach().cpu().numpy() if keypoints.conf is not None else np.ones(points.shape[:2], dtype=np.float32)
+        confidences = (
+            keypoints.conf.detach().cpu().numpy()
+            if keypoints.conf is not None
+            else np.ones(points.shape[:2], dtype=np.float32)
+        )
 
         candidates: list[tuple[float, int, int, float]] = []
         for pose_index, person_points in enumerate(points):
-            valid = confidences[pose_index] >= 0.5
-            if not np.any(valid):
+            pose_conf = confidences[pose_index]
+            valid = pose_conf >= 0.50
+            if int(np.count_nonzero(valid)) < 5:
                 continue
-            pose_center = np.mean(person_points[valid], axis=0)
+
+            valid_points = person_points[valid]
+            px1 = int(np.min(valid_points[:, 0]))
+            py1 = int(np.min(valid_points[:, 1]))
+            px2 = int(np.max(valid_points[:, 0]))
+            py2 = int(np.max(valid_points[:, 1]))
+            pose_box = (px1, py1, px2, py2)
+            pose_center = ((px1 + px2) / 2.0, (py1 + py2) / 2.0)
+
             for person_index, person in enumerate(people):
-                distance = float(np.hypot(person.center[0] - pose_center[0], person.center[1] - pose_center[1]))
-                box_scale = max(30, max(person.bbox[2] - person.bbox[0], person.bbox[3] - person.bbox[1]))
-                if distance <= box_scale * 0.9:
-                    candidates.append((distance, pose_index, person_index, float(np.mean(confidences[pose_index][valid]))))
+                iou = self._bbox_iou(person.bbox, pose_box)
+                distance = float(
+                    np.hypot(
+                        person.center[0] - pose_center[0],
+                        person.center[1] - pose_center[1],
+                    )
+                )
+                person_height = max(1, person.bbox[3] - person.bbox[1])
+                distance_limit = max(45.0, person_height * 0.75)
+
+                if iou >= 0.10:
+                    score = 1.0 + iou
+                elif distance <= distance_limit:
+                    score = max(0.0, 0.55 - distance / distance_limit * 0.55)
+                else:
+                    continue
+
+                candidates.append(
+                    (-score, pose_index, person_index, float(np.mean(pose_conf[valid])))
+                )
 
         assigned_people: set[int] = set()
         assigned_poses: set[int] = set()
         for _, pose_index, person_index, pose_confidence in sorted(candidates):
             if pose_index in assigned_poses or person_index in assigned_people:
                 continue
-            people[person_index].keypoints = points[pose_index]
+            selected_points = points[pose_index].copy()
+            selected_conf = confidences[pose_index]
+            selected_points[selected_conf < 0.50] = -1
+            people[person_index].keypoints = selected_points
             people[person_index].pose_confidence = pose_confidence
             assigned_people.add(person_index)
             assigned_poses.add(pose_index)
+
 
     def _clear_involvement(self, people: list[TrackedPerson]) -> None:
         self.last_involved_ids.clear()
@@ -626,7 +797,10 @@ class VisionPipeline:
     def _draw_people(self, annotated: np.ndarray, people: list[TrackedPerson]) -> None:
         for person in people:
             x1, y1, x2, y2 = person.bbox
-            color = (0, 215, 255) if person.involved else (95, 194, 132)
+            if person.involved and person.violence_confidence is not None:
+                color = (74, 74, 223) if person.violence_confidence >= 0.75 else (0, 191, 255)
+            else:
+                color = (95, 194, 132)
             cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2, cv2.LINE_AA)
 
             label = f"PERSON #{person.display_id}"
@@ -643,15 +817,43 @@ class VisionPipeline:
             if person.keypoints is not None:
                 self._draw_skeleton(annotated, person.keypoints, color)
 
-    def _draw_skeleton(self, annotated: np.ndarray, points: np.ndarray, color: tuple[int, int, int]) -> None:
+    def _draw_skeleton(
+        self,
+        annotated: np.ndarray,
+        points: np.ndarray,
+        color: tuple[int, int, int],
+    ) -> None:
         for start, end in SKELETON_EDGES:
-            if start < len(points) and end < len(points):
-                a, b = points[start], points[end]
-                if a[0] > 0 and a[1] > 0 and b[0] > 0 and b[1] > 0:
-                    cv2.line(annotated, tuple(int(v) for v in a), tuple(int(v) for v in b), color, 2, cv2.LINE_AA)
-        for point in points:
+            if start >= len(points) or end >= len(points):
+                continue
+            a, b = points[start], points[end]
+            if (
+                a[0] <= 0 or a[1] <= 0
+                or b[0] <= 0 or b[1] <= 0
+                or np.any(np.abs(a) > 10000)
+                or np.any(np.abs(b) > 10000)
+            ):
+                continue
+            cv2.line(
+                annotated,
+                tuple(int(v) for v in a),
+                tuple(int(v) for v in b),
+                color,
+                2,
+                cv2.LINE_AA,
+            )
+
+        for point in points[:17]:
             if point[0] > 0 and point[1] > 0:
-                cv2.circle(annotated, tuple(int(v) for v in point), 3, (242, 238, 225), -1, cv2.LINE_AA)
+                cv2.circle(
+                    annotated,
+                    tuple(int(v) for v in point),
+                    3,
+                    (242, 238, 225),
+                    -1,
+                    cv2.LINE_AA,
+                )
+
 
     def _draw_status(self, annotated: np.ndarray, state: str, confidence: float | None, model_key: str) -> None:
         text = self.model_display_name(model_key)
