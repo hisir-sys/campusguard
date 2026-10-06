@@ -45,6 +45,12 @@ class Repository:
         finally:
             connection.close()
 
+    @property
+    def footage_dir(self) -> Path:
+        directory = self.data_dir / "footage"
+        directory.mkdir(parents=True, exist_ok=True)
+        return directory
+
     def _initialize(self) -> None:
         schema = """
         CREATE TABLE IF NOT EXISTS cameras (
@@ -64,7 +70,8 @@ class Repository:
             event TEXT NOT NULL,
             confidence REAL NOT NULL,
             severity TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'NEW'
+            status TEXT NOT NULL DEFAULT 'NEW',
+            footage_path TEXT
         );
         CREATE INDEX IF NOT EXISTS incidents_camera_time
             ON incidents(camera_id, happened_at DESC);
@@ -92,6 +99,16 @@ class Repository:
         with self._lock, self._connection() as connection:
             connection.execute("PRAGMA journal_mode = WAL")
             connection.executescript(schema)
+            columns = {
+                row["name"]
+                for row in connection.execute(
+                    "PRAGMA table_info(incidents)"
+                ).fetchall()
+            }
+            if "footage_path" not in columns:
+                connection.execute(
+                    "ALTER TABLE incidents ADD COLUMN footage_path TEXT"
+                )
 
     def list_cameras(self) -> list[CameraConfig]:
         with self._lock, self._connection() as connection:
@@ -245,6 +262,13 @@ class Repository:
                 (max(1, limit),),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def attach_incident_footage(self, public_id: str, footage_path: str) -> None:
+        with self._lock, self._connection() as connection:
+            connection.execute(
+                "UPDATE incidents SET footage_path = ? WHERE public_id = ?",
+                (str(footage_path), public_id),
+            )
 
     def update_incident_status(self, public_id: str, status: str) -> None:
         if status not in {"NEW", "ACKNOWLEDGED", "RESOLVED"}:
