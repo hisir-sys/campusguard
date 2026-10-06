@@ -317,6 +317,10 @@ class Repository:
         with self._lock, self._connection() as connection:
             connection.execute("DELETE FROM notifications")
 
+    def clear_incident_footage_paths(self) -> None:
+        with self._lock, self._connection() as connection:
+            connection.execute("UPDATE incidents SET footage_path = NULL")
+
     def incident_count(self) -> int:
         with self._lock, self._connection() as connection:
             return int(connection.execute("SELECT COUNT(*) FROM incidents").fetchone()[0])
