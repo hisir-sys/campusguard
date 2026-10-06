@@ -117,16 +117,17 @@ class DecisionTests(unittest.TestCase):
         decision = FightDecision(0.65)
         self.assertIsNone(decision.update("FIGHT DETECTED", 0.90))
         self.assertIsNone(decision.update("FIGHT DETECTED", 0.90))
+        decision.update("FIGHT DETECTED", 0.90)
         event = decision.update("FIGHT DETECTED", 0.90)
         self.assertEqual(event, ("FIGHT DETECTED", 0.90, "HIGH"))
 
     def test_normal_resets_event_latch(self):
         decision = FightDecision(0.65)
-        decision.update("FIGHT DETECTED", 0.90)
-        decision.update("FIGHT DETECTED", 0.90)
-        decision.update("FIGHT DETECTED", 0.90)
+        for _ in range(FightDecision.TRIGGER_PREDICTIONS):
+            decision.update("FIGHT DETECTED", 0.90)
         self.assertTrue(decision.event_latched)
-        decision.update("NORMAL", 0.20)
+        for _ in range(FightDecision.NORMAL_RELEASE_PREDICTIONS):
+            decision.update("NORMAL", 0.20)
         self.assertFalse(decision.event_latched)
 
 
