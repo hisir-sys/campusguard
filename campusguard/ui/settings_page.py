@@ -70,7 +70,7 @@ class SettingsPage(QWidget):
             1,
         )
 
-        self.status_pill = QLabel("LOCAL CONFIGURATION")
+        self.status_pill = QLabel("SYSTEM CONTROLS")
         self.status_pill.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.status_pill.setMinimumHeight(30)
         self.status_pill.setStyleSheet(
@@ -141,17 +141,6 @@ class SettingsPage(QWidget):
         index = self.device_input.findData(settings.device)
         self.device_input.setCurrentIndex(max(0, index))
 
-        self.violence_model_input = QComboBox()
-        self.violence_model_input.addItem("Spontim 1.0", "fdsc_mc3")
-        self.violence_model_input.setCurrentIndex(0)
-        self.violence_model_input.setEnabled(False)
-
-        self.violence_model_note = QLabel(
-            "Spontim 1.0 is the configured production detection engine. "
-            "Advanced model configuration is managed internally by CampusGuard."
-        )
-        self.violence_model_note.setWordWrap(True)
-        self.violence_model_note.setProperty("muted", True)
         self.device_status = QLabel("CUDA availability will be reported by the AI worker.")
         self.device_status.setWordWrap(True)
         self.device_status.setProperty("muted", True)
@@ -163,73 +152,11 @@ class SettingsPage(QWidget):
         form.addRow("Alert cooldown", self.cooldown_input)
         form.addRow("Camera reconnect", self.reconnect_toggle)
         form.addRow("Compute device", self.device_input)
-        form.addRow("", self.violence_model_note)
         form.addRow("", self.device_status)
 
         ai_section.body.addLayout(form)
         content_layout.addWidget(ai_section)
 
-        # ------------------------------------------------------------------
-        # AI MODEL STATUS
-        # ------------------------------------------------------------------
-        model_section = SettingsSection(
-            "ACTIVE AI MODEL",
-            "CampusGuard uses its packaged AI configuration. Model files are managed internally and are not exposed as operator settings.",
-        )
-
-        model_card = QFrame()
-        model_card.setObjectName("activeModelCard")
-        model_card.setStyleSheet("""
-            QFrame#activeModelCard {
-                background: rgba(255, 193, 7, 0.09);
-                border: 1px solid rgba(255, 193, 7, 0.34);
-                border-radius: 16px;
-            }
-        """)
-        model_row = QHBoxLayout(model_card)
-        model_row.setContentsMargins(16, 13, 16, 13)
-        model_row.setSpacing(12)
-
-        model_icon = QLabel("AI")
-        model_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        model_icon.setFixedSize(38, 38)
-        model_icon.setStyleSheet("""
-            QLabel {
-                background: rgba(255, 193, 7, 0.16);
-                border: 1px solid rgba(255, 193, 7, 0.30);
-                border-radius: 19px;
-                color: #ffc107;
-                font-weight: 900;
-            }
-        """)
-
-        model_text = QVBoxLayout()
-        model_text.setSpacing(2)
-        active_title = QLabel("Spontim 1.0")
-        active_title.setStyleSheet("font-size: 12pt; font-weight: 850; color: #ffc107;")
-        active_subtitle = QLabel("Active temporal fight-detection engine")
-        active_subtitle.setProperty("muted", True)
-        model_text.addWidget(active_title)
-        model_text.addWidget(active_subtitle)
-
-        model_row.addWidget(model_icon)
-        model_row.addLayout(model_text, 1)
-
-        active_badge = QLabel("ACTIVE")
-        active_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        active_badge.setStyleSheet("""
-            QLabel {
-                padding: 5px 9px;
-                border-radius: 8px;
-                background: rgba(255, 193, 7, 0.16);
-                color: #ffc107;
-                font-size: 8pt;
-                font-weight: 850;
-            }
-        """)
-        model_row.addWidget(active_badge)
-        model_section.body.addWidget(model_card)
-        content_layout.addWidget(model_section)
         # ------------------------------------------------------------------
         # APPEARANCE
         # ------------------------------------------------------------------
