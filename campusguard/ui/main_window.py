@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QScrollArea,
     QMessageBox,
+    QPushButton,
     QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
@@ -29,14 +30,7 @@ from campusguard.settings import (
 )
 from campusguard.storage import Repository
 from campusguard.ui.camera_page import CamerasPage
-from campusguard.ui.common import (
-    apply_theme,
-    make_card,
-    make_page_title,
-    apply_theme,
-    make_card,
-    make_page_title,
-)
+from campusguard.ui.common import apply_theme, make_card, make_page_title
 from campusguard.ui.dashboard_page import DashboardPage
 from campusguard.ui.glass_nav import BackdropWidget, BottomBar, TopBar
 from campusguard.ui.history_pages import AlertsPage, IncidentsPage
@@ -136,8 +130,8 @@ class InAppOverlay(QFrame):
             max(18, (self.height() - self._panel.height()) // 2),
         )
 
-    def show_confirmation(self, title: str, message: str) -> None:
-        self._confirm_callback = None
+    def show_confirmation(self, title: str, message: str, callback) -> None:
+        self._confirm_callback = callback
         self._clear_body()
         self._title.setText(title)
         self._body.setText(message)
@@ -162,7 +156,11 @@ class InAppOverlay(QFrame):
         self._center()
 
     def _confirm(self) -> None:
+        callback = self._confirm_callback
+        self._confirm_callback = None
         self.hide()
+        if callback is not None:
+            callback()
         self.confirmed.emit()
 
     def show_camera(self, camera: CameraConfig, image=None, stats: CameraStats | None = None) -> None:
@@ -1009,18 +1007,13 @@ class MainWindow(QMainWindow):
         self.incidents_page.refresh()
 
     def _clear_dashboard_notifications(self) -> None:
-        answer = QMessageBox.question(
-            self,
+        self._in_app_overlay.show_confirmation(
             "Clear dashboard notifications?",
-            "This will clear the notification list shown on the Dashboard. "
-            "Incidents and alerts will not be removed.",
-            QMessageBox.StandardButton.Yes
-            | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Cancel,
+            "This will clear the notification list shown on the Dashboard. Incidents and alerts will not be removed.",
+            self._confirm_clear_dashboard_notifications,
         )
-        if answer != QMessageBox.StandardButton.Yes:
-            return
 
+    def _confirm_clear_dashboard_notifications(self) -> None:
         self.repository.clear_notifications()
         self.dashboard.refresh_summary()
         self.statusBar().showMessage(
@@ -1029,18 +1022,13 @@ class MainWindow(QMainWindow):
         )
 
     def _clear_footage_storage(self) -> None:
-        answer = QMessageBox.warning(
-            self,
+        self._in_app_overlay.show_confirmation(
             "Clear saved footage?",
-            "This will permanently delete all saved fight MP4 footage. "
-            "Incident and alert records will remain.",
-            QMessageBox.StandardButton.Yes
-            | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Cancel,
+            "This permanently deletes saved fight MP4 footage. Incident and alert records will remain.",
+            self._confirm_clear_footage,
         )
-        if answer != QMessageBox.StandardButton.Yes:
-            return
 
+    def _confirm_clear_footage(self) -> None:
         removed = clear_footage(self.repository.footage_dir)
         self.repository.clear_incident_footage_paths()
         self.incidents_page.refresh()
@@ -1051,18 +1039,13 @@ class MainWindow(QMainWindow):
         )
 
     def _clear_all_history(self) -> None:
-        answer = QMessageBox.warning(
-            self,
+        self._in_app_overlay.show_confirmation(
             "Clear all history and alerts?",
-            "This will permanently erase all stored incidents, alerts, and notifications. "
-            "It will not remove cameras or model settings.",
-            QMessageBox.StandardButton.Yes
-            | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Cancel,
+            "This permanently erases stored incidents, alerts, and notifications. Cameras and AI configuration will remain.",
+            self._confirm_clear_all_history,
         )
-        if answer != QMessageBox.StandardButton.Yes:
-            return
 
+    def _confirm_clear_all_history(self) -> None:
         self.repository.clear_all_incidents_alerts_notifications()
         self._pending_footage_incidents.clear()
         self.incidents_page.refresh()
