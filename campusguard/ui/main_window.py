@@ -45,8 +45,10 @@ class InAppOverlay(QFrame):
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent)
         self.setObjectName("inAppOverlay")
+        palette = get_palette()
+
         self.setStyleSheet(
-            """
+            f"""
             QFrame#inAppOverlay {
                 background: rgba(0, 0, 0, 115);
                 border: none;
@@ -76,14 +78,12 @@ class InAppOverlay(QFrame):
                 background: {rgba(palette.veil, min(255, palette.veil_alpha * 3))};
             }
             QLabel#cameraViewport {
-                background: #080d11;
-                border: 1px solid rgba(255,255,255,0.08);
+                background: {rgba(palette.bg0, 245)};
+                border: 1px solid {rgba(palette.line, palette.line_alpha)};
                 border-radius: 18px;
             }
             """
         )
-        palette = get_palette()
-
         self._panel = QFrame(self)
         self._panel.setObjectName("inAppPanel")
         self._panel.setFixedSize(820, 560)
