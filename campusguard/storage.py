@@ -292,6 +292,16 @@ class Repository:
         with self._lock, self._connection() as connection:
             return int(connection.execute("SELECT COUNT(*) FROM incidents").fetchone()[0])
 
+    def clear_all_incidents_alerts_notifications(self) -> None:
+        """Delete incident history, alerts, and operator notifications together."""
+        with self._lock, self._connection() as connection:
+            connection.execute("DELETE FROM alerts")
+            connection.execute("DELETE FROM incidents")
+            connection.execute("DELETE FROM notifications")
+            connection.execute(
+                "DELETE FROM sqlite_sequence WHERE name = 'incidents'"
+            )
+
     def active_alert_count(self) -> int:
         with self._lock, self._connection() as connection:
             return int(
