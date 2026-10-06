@@ -6,7 +6,6 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
-    QMessageBox,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -136,19 +135,8 @@ class CameraRow(QFrame):
         self.status_label.setToolTip(stats.message or "")
 
     def _confirm_remove(self) -> None:
-        answer = QMessageBox.question(
-            self,
-            "Remove camera",
-            (
-                f"Remove {self.camera.name} ({self.camera.camera_id}) "
-                "and its saved connection credentials?"
-            ),
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Cancel,
-        )
+        self.remove_requested.emit(self.camera.camera_id)
 
-        if answer == QMessageBox.StandardButton.Yes:
-            self.remove_requested.emit(self.camera.camera_id)
 
 
 class CamerasPage(QWidget):
