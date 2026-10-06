@@ -288,6 +288,11 @@ class Repository:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def clear_notifications(self) -> None:
+        """Delete operator notifications without changing incidents or alerts."""
+        with self._lock, self._connection() as connection:
+            connection.execute("DELETE FROM notifications")
+
     def incident_count(self) -> int:
         with self._lock, self._connection() as connection:
             return int(connection.execute("SELECT COUNT(*) FROM incidents").fetchone()[0])
