@@ -126,6 +126,14 @@ class InAppOverlay(QFrame):
                 else:
                     widget.deleteLater()
 
+            child_layout = item.layout()
+            if child_layout is not None:
+                while child_layout.count():
+                    child_item = child_layout.takeAt(0)
+                    child_widget = child_item.widget()
+                    if child_widget is not None:
+                        child_widget.deleteLater()
+
     def _center(self) -> None:
         self._panel.adjustSize()
         self._panel.move(
