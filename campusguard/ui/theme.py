@@ -180,6 +180,7 @@ QFrame[tile="true"] {
 }
 
 QLabel { background: transparent; }
+QLabel[videoSurface="true"] { background: @video_bg@; color: @video_text@; border: 1px solid @video_line@; }
 QLabel[muted="true"] { color: @muted@; }
 QLabel[eyebrow="true"] { color: @muted@; font-size: 8pt; font-weight: 700; }
 QLabel[cardtitle="true"] { font-size: 11pt; font-weight: 700; }
@@ -264,6 +265,9 @@ def build_qss(theme: str) -> str:
         "bad": p.bad,
         "bg1": p.bg1,
         "popup": p.popup,
+        "video_bg": rgba(p.bg0, 245),
+        "video_text": p.muted,
+        "video_line": rgba(p.line, int(p.line_alpha * 1.1)),
         "surface": rgba(p.surface, p.surface_alpha),
         "glass": rgba(p.glass, p.glass_alpha),
         "glass_line": rgba(p.line, min(255, int(p.line_alpha * 1.35))),
