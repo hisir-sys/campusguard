@@ -371,6 +371,7 @@ class FrameAnalysisThread(QThread):
                     frame,
                     state,
                     event_started=event is not None,
+                    source_fps=self.options.source_fps,
                 )
                 if finished_footage is not None:
                     self.footage_saved.emit(str(finished_footage))
