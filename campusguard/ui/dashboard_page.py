@@ -331,10 +331,10 @@ class GlassPopup(QFrame):
         self.subtitle.setText(subtitle)
 
         # Replace only the icon widget in the existing header.
-        header_layout = self.icon.parentWidget().layout()
-
-        if header_layout is None:
-            return
+        # Never derive this from parentWidget(): nested Qt layouts can make
+        # the parent the popup root, which previously stranded the icon at
+        # the bottom of the popup.
+        header_layout = self._header_layout
 
         index = header_layout.indexOf(
             self.icon
@@ -739,8 +739,8 @@ class DashboardPage(QWidget):
 
     def _build_stats_card(self) -> QFrame:
         frame, layout = make_card("System Stats", icon="server")
-        frame.setMinimumHeight(112)
-        frame.setMaximumHeight(112)
+        frame.setMinimumHeight(104)
+        frame.setMaximumHeight(104)
         frame.setCursor(Qt.CursorShape.PointingHandCursor)
         frame.installEventFilter(self)
         for child in frame.findChildren(QWidget):
@@ -748,8 +748,8 @@ class DashboardPage(QWidget):
 
         preview = QGridLayout()
         preview.setContentsMargins(0, 0, 0, 0)
-        preview.setHorizontalSpacing(14)
-        preview.setVerticalSpacing(6)
+        preview.setHorizontalSpacing(18)
+        preview.setVerticalSpacing(4)
 
         self.online_value = QLabel("0")
         self.online_value.setProperty("kvvalue", True)
@@ -757,13 +757,9 @@ class DashboardPage(QWidget):
         self.incident_value.setProperty("kvvalue", True)
         self.alert_value = QLabel("0")
         self.alert_value.setProperty("kvvalue", True)
-        self.offline_value = QLabel("0")
-        self.offline_value.setProperty("kvvalue", True)
-
         values = (
-            ("video", "good", self.online_value, "Online"),
-            ("video-off", "muted", self.offline_value, "Offline"),
-            ("file-warning", "warn", self.incident_value, "Incidents"),
+            ("video", "good", self.online_value, "Cameras"),
+            ("file-warning", "warn", self.incident_value, "Open incidents"),
             ("shield-alert", "bad", self.alert_value, "Alerts"),
         )
         for index, (icon, tone, value, label_text) in enumerate(values):
@@ -777,7 +773,7 @@ class DashboardPage(QWidget):
             cell.addStretch(1)
             wrapper = QWidget()
             wrapper.setLayout(cell)
-            preview.addWidget(wrapper, index // 2, index % 2)
+            preview.addWidget(wrapper, index // 3, index % 3)
 
         layout.addLayout(preview)
         return frame
@@ -1170,7 +1166,7 @@ class DashboardPage(QWidget):
         self._popup.clear_body()
 
         # --------------------------------------------------------------
-        # Four metric cards
+        # Three operator metrics: cameras, open incidents, alerts
         # --------------------------------------------------------------
 
         grid = QGridLayout()
@@ -1181,14 +1177,6 @@ class DashboardPage(QWidget):
                 "video",
                 "good",
                 "Cameras Online",
-            )
-        )
-
-        offline_tile, offline_value = (
-            self._stat_tile(
-                "video-off",
-                "muted",
-                "Cameras Offline",
             )
         )
 
@@ -1212,10 +1200,6 @@ class DashboardPage(QWidget):
             self.online_value.text()
         )
 
-        offline_value.setText(
-            self.offline_value.text()
-        )
-
         incident_value.setText(
             self.incident_value.text()
         )
@@ -1231,21 +1215,15 @@ class DashboardPage(QWidget):
         )
 
         grid.addWidget(
-            offline_tile,
-            0,
-            1,
-        )
-
-        grid.addWidget(
             incident_tile,
-            1,
             0,
+            1,
         )
 
         grid.addWidget(
             alert_tile,
-            1,
-            1,
+            0,
+            2,
         )
 
         self._popup.body.addLayout(
@@ -1297,11 +1275,6 @@ class DashboardPage(QWidget):
             or "0"
         )
 
-        offline = max(
-            0,
-            total - online,
-        )
-
         self._popup_key_value(
             section_layout,
             "Configured cameras",
@@ -1312,12 +1285,6 @@ class DashboardPage(QWidget):
             section_layout,
             "Live cameras",
             str(online),
-        )
-
-        self._popup_key_value(
-            section_layout,
-            "Offline cameras",
-            str(offline),
         )
 
         self._popup.body.addWidget(
