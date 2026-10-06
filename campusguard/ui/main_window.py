@@ -291,6 +291,20 @@ class MainWindow(QMainWindow):
         self._refresh_timer.timeout.connect(self._refresh_pages)
         self._refresh_timer.start()
 
+        # Do not start camera/model workers inside the window constructor.
+        # Starting them after the event loop begins guarantees the Dashboard
+        # can render immediately, even when a camera or AI model takes time
+        # to initialize.
+        QTimer.singleShot(0, self._start_cameras)
+
+        self._add_shortcut("Ctrl+1", lambda: self.navigate("dashboard"))
+        self._add_shortcut("Ctrl+2", lambda: self.navigate("cameras"))
+        self._add_shortcut("Ctrl+3", lambda: self.navigate("incidents"))
+        self._add_shortcut("Ctrl+4", lambda: self.navigate("alerts"))
+        self._add_shortcut("Ctrl+5", lambda: self.navigate("settings"))
+        self._add_shortcut("Ctrl+K", self.top_bar.focus_search)
+
+    def _start_cameras(self) -> None:
         for camera in self.cameras.values():
             try:
                 self.camera_manager.start_camera(camera)
@@ -300,13 +314,6 @@ class MainWindow(QMainWindow):
                     "ERROR",
                     f"Camera could not start: {error}",
                 )
-
-        self._add_shortcut("Ctrl+1", lambda: self.navigate("dashboard"))
-        self._add_shortcut("Ctrl+2", lambda: self.navigate("cameras"))
-        self._add_shortcut("Ctrl+3", lambda: self.navigate("incidents"))
-        self._add_shortcut("Ctrl+4", lambda: self.navigate("alerts"))
-        self._add_shortcut("Ctrl+5", lambda: self.navigate("settings"))
-        self._add_shortcut("Ctrl+K", self.top_bar.focus_search)
 
     def _add_shortcut(self, sequence: str, callback) -> None:
         action = QAction(self)
