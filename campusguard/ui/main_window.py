@@ -504,7 +504,7 @@ class MainWindow(QMainWindow):
         card, body = make_card("System purpose", icon="shield")
         points = (
             "CampusGuard connects external USB, RTSP, HTTP/MJPEG, and IP camera sources to one desktop operations interface.",
-            "Camera acquisition, AI processing, incident persistence, alert review, and operator controls are separated into dedicated modules.",
+            "Camera acquisition, AI processing, temporal event gating, evidence recording, incident persistence, alert review, and operator controls are separated into dedicated modules.",
             "It does not perform facial recognition or identify people. Detection results are represented as camera events and tracked objects.",
         )
         for text in points:
@@ -522,7 +522,7 @@ class MainWindow(QMainWindow):
         ), 1)
         row.addWidget(self._tech_card(
             "Local persistence", "SQLite repository",
-            "Camera configuration, settings, notifications, incidents, and alert state are stored locally.",
+            "Camera configuration, settings, notifications, incidents, alerts, and saved detection footage are stored locally.",
         ), 1)
         row.addWidget(self._tech_card(
             "Camera security", "OS credential vault",
@@ -533,9 +533,9 @@ class MainWindow(QMainWindow):
         card, body = make_card("Technical boundaries", icon="activity")
         boundaries = (
             ("Camera layer", "Reads frames and reports connection state, FPS, resolution, and runtime errors."),
-            ("AI layer", "Loads configured local models and reports component-level model status."),
-            ("Event layer", "Converts stable model results into cooldown-controlled incidents and alerts."),
-            ("Operations layer", "Presents cameras, incidents, alerts, and settings without replacing the processing pipeline."),
+            ("AI layer", "Runs the configured Spontim 1.0 pipeline and reports runtime model status without exposing model-file administration to operators."),
+            ("Event layer", "Converts stable temporal results into one continuous incident and alert, with linked MP4 evidence."),
+            ("Operations layer", "Presents live cameras, incidents, alerts, AI status, system stats, settings, and in-app evidence viewing."),
         )
         for title, detail in boundaries:
             label = QLabel(f"<b>{title}</b><br>{detail}")
