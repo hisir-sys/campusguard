@@ -941,9 +941,8 @@ class MainWindow(QMainWindow):
             camera_id,
             self.camera_stats[camera_id],
         )
-        dialog = self._camera_dialogs.get(camera_id)
-        if dialog:
-            dialog.set_camera_stats(self.camera_stats[camera_id])
+        if self._camera_view_camera_id == camera_id:
+            self._in_app_overlay.set_camera_stats(self.camera_stats[camera_id])
         if message:
             self.statusBar().showMessage(f"{camera_id}: {message}", 8000)
 
@@ -958,9 +957,8 @@ class MainWindow(QMainWindow):
         self.camera_stats[camera_id] = stats
         self.camera_page.update_camera_stats(camera_id, stats)
         self.dashboard.update_camera_stats(camera_id, stats)
-        dialog = self._camera_dialogs.get(camera_id)
-        if dialog:
-            dialog.set_camera_stats(stats)
+        if self._camera_view_camera_id == camera_id:
+            self._in_app_overlay.set_camera_stats(stats)
 
     def _on_frame(self, camera_id: str, image, state: str, confidence) -> None:
         self.dashboard.update_frame(camera_id, image, state, confidence)
