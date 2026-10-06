@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
-    QFileDialog,
     QFormLayout,
     QFrame,
     QHBoxLayout,
@@ -57,7 +55,7 @@ class SettingsPage(QWidget):
         super().__init__(parent)
 
         self._updating = False
-        self._paths: dict[str, QLineEdit] = {}
+        self._initial_settings = settings
 
         root = QVBoxLayout(self)
         root.setContentsMargins(20, 16, 20, 16)
@@ -146,38 +144,16 @@ class SettingsPage(QWidget):
         self.device_input.setCurrentIndex(max(0, index))
 
         self.violence_model_input = QComboBox()
-        self.violence_model_input.addItem("Current MC3-18", "mc3")
         self.violence_model_input.addItem("Spontim 1.0", "fdsc_mc3")
-        self.violence_model_input.addItem("FDSC R3D-18 — Technical Issue", "r3d")
-        self.violence_model_input.addItem("X3D-M", "x3d")
-        self.violence_model_input.addItem("CampusGuard Enhanced — Coming Soon", "enhanced")
-
-        # R3D remains documented in the model registry, but its original FDSC
-        # checkpoint is currently unavailable. Keep the entry visible for
-        # transparency while preventing operators from selecting it.
-        r3d_index = self.violence_model_input.findData("r3d")
-        r3d_item = self.violence_model_input.model().item(r3d_index)
-        if r3d_item is not None:
-            r3d_item.setEnabled(False)
-
-        enhanced_index = self.violence_model_input.findData("enhanced")
-        enhanced_item = self.violence_model_input.model().item(enhanced_index)
-        if enhanced_item is not None:
-            enhanced_item.setEnabled(False)
-
-        selected_model = settings.violence_model if settings.violence_model not in {"enhanced", "r3d"} else "mc3"
-        model_index = self.violence_model_input.findData(selected_model)
-        self.violence_model_input.setCurrentIndex(max(0, model_index))
+        self.violence_model_input.setCurrentIndex(0)
+        self.violence_model_input.setEnabled(False)
 
         self.violence_model_note = QLabel(
-            "The selected violence model runs on each tracked person's temporal ROI. "
-            "Three models are currently verified and operational: Current MC3-18, Spontim 1.0, and X3D-M. "
-            "FDSC R3D-18 is temporarily unavailable because the original checkpoint could not be obtained; "
-            "CampusGuard Enhanced is reserved for a future multi-model ensemble."
+            "Spontim 1.0 is the configured production detection engine. "
+            "Advanced model configuration is managed internally by CampusGuard."
         )
         self.violence_model_note.setWordWrap(True)
         self.violence_model_note.setProperty("muted", True)
-
         self.device_status = QLabel("CUDA availability will be reported by the AI worker.")
         self.device_status.setWordWrap(True)
         self.device_status.setProperty("muted", True)
@@ -189,7 +165,6 @@ class SettingsPage(QWidget):
         form.addRow("Alert cooldown", self.cooldown_input)
         form.addRow("Camera reconnect", self.reconnect_toggle)
         form.addRow("Compute device", self.device_input)
-        form.addRow("Violence model", self.violence_model_input)
         form.addRow("", self.violence_model_note)
         form.addRow("", self.device_status)
 
@@ -197,79 +172,66 @@ class SettingsPage(QWidget):
         content_layout.addWidget(ai_section)
 
         # ------------------------------------------------------------------
-        # MODEL FILES
+        # AI MODEL STATUS
         # ------------------------------------------------------------------
-        models_section = SettingsSection(
-            "MODEL FILES",
-            "Point CampusGuard to local model weights. Missing files remain unloaded and no artificial model output is generated.",
+        model_section = SettingsSection(
+            "ACTIVE AI MODEL",
+            "CampusGuard uses its packaged AI configuration. Model files are managed internally and are not exposed as operator settings.",
         )
 
-        models_form = QFormLayout()
-        models_form.setHorizontalSpacing(18)
-        models_form.setVerticalSpacing(11)
+        model_card = QFrame()
+        model_card.setObjectName("activeModelCard")
+        model_card.setStyleSheet("""
+            QFrame#activeModelCard {
+                background: rgba(255, 193, 7, 0.09);
+                border: 1px solid rgba(255, 193, 7, 0.34);
+                border-radius: 16px;
+            }
+        """)
+        model_row = QHBoxLayout(model_card)
+        model_row.setContentsMargins(16, 13, 16, 13)
+        model_row.setSpacing(12)
 
-        self._add_model_path(
-            models_form,
-            "Person detector (YOLO)",
-            "detector_model_path",
-            settings.detector_model_path,
-            "*.pt",
-        )
-        self._add_model_path(
-            models_form,
-            "Pose estimator (YOLO Pose)",
-            "pose_model_path",
-            settings.pose_model_path,
-            "*.pt",
-        )
-        self._add_model_path(
-            models_form,
-            "Fight classifier (MC3-18)",
-            "fight_model_path",
-            settings.fight_model_path,
-            "*.pth",
-        )
-        self._add_model_path(
-            models_form,
-            "Spontim 1.0",
-            "fdsc_mc3_model_path",
-            settings.fdsc_mc3_model_path,
-            "*.pth",
-        )
-        self._add_model_path(
-            models_form,
-            "FDSC R3D-18 (unavailable)",
-            "r3d_model_path",
-            settings.r3d_model_path,
-            "*.pth",
-        )
-        self._add_model_path(
-            models_form,
-            "X3D-M",
-            "x3d_model_path",
-            settings.x3d_model_path,
-            "*.pt",
-        )
+        model_icon = QLabel("AI")
+        model_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        model_icon.setFixedSize(38, 38)
+        model_icon.setStyleSheet("""
+            QLabel {
+                background: rgba(255, 193, 7, 0.16);
+                border: 1px solid rgba(255, 193, 7, 0.30);
+                border-radius: 19px;
+                color: #ffc107;
+                font-weight: 900;
+            }
+        """)
 
-        self.positive_class_input = QComboBox()
-        self.positive_class_input.addItem("Output 1 is fight", 1)
-        self.positive_class_input.addItem("Output 0 is fight", 0)
+        model_text = QVBoxLayout()
+        model_text.setSpacing(2)
+        active_title = QLabel("Spontim 1.0")
+        active_title.setStyleSheet("font-size: 12pt; font-weight: 850; color: #ffc107;")
+        active_subtitle = QLabel("Active temporal fight-detection engine")
+        active_subtitle.setProperty("muted", True)
+        model_text.addWidget(active_title)
+        model_text.addWidget(active_subtitle)
 
-        positive_index = self.positive_class_input.findData(settings.fight_positive_class)
-        self.positive_class_input.setCurrentIndex(max(0, positive_index))
+        model_row.addWidget(model_icon)
+        model_row.addLayout(model_text, 1)
 
-        models_form.addRow("Two-class MC3-18 mapping", self.positive_class_input)
-        models_section.body.addLayout(models_form)
-
-        model_note = QLabel(
-            "Recommended: keep model files in the project's models directory so the configuration remains portable."
-        )
-        model_note.setWordWrap(True)
-        model_note.setProperty("muted", True)
-        models_section.body.addWidget(model_note)
-
-        content_layout.addWidget(models_section)
-
+        active_badge = QLabel("ACTIVE")
+        active_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        active_badge.setStyleSheet("""
+            QLabel {
+                padding: 5px 9px;
+                border-radius: 8px;
+                background: rgba(255, 193, 7, 0.16);
+                color: #ffc107;
+                font-size: 8pt;
+                font-weight: 850;
+            }
+        """)
+        model_row.addWidget(active_badge)
+        model_section.body.addWidget(model_card)
+        content_layout.addWidget(model_section)
         # ------------------------------------------------------------------
         # APPEARANCE
         # ------------------------------------------------------------------
@@ -406,56 +368,6 @@ class SettingsPage(QWidget):
         frame.value_label = value_label  # type: ignore[attr-defined]
         return frame
 
-    def _add_model_path(
-        self,
-        form: QFormLayout,
-        label: str,
-        key: str,
-        value: str,
-        extension: str,
-    ) -> None:
-        container = QWidget()
-        row = QHBoxLayout(container)
-        row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(8)
-
-        line = QLineEdit(value)
-        line.setPlaceholderText("Select local model file...")
-
-        button = QPushButton("Browse")
-        button.setMinimumWidth(82)
-
-        row.addWidget(line, 1)
-        row.addWidget(button)
-
-        button.clicked.connect(
-            lambda checked=False, field=line, title=label, ext=extension:
-            self._browse_model(field, title, ext)
-        )
-        line.editingFinished.connect(self._emit_settings)
-
-        self._paths[key] = line
-        form.addRow(label, container)
-
-    def _browse_model(
-        self,
-        field: QLineEdit,
-        title: str,
-        extension: str,
-    ) -> None:
-        start = field.text() or str(Path.cwd())
-
-        path, _ = QFileDialog.getOpenFileName(
-            self,
-            f"Select {title}",
-            start,
-            f"Model files ({extension});;All files (*.*)",
-        )
-
-        if path:
-            field.setText(path)
-            self._emit_settings()
-
     def _emit_settings(self, *_args) -> None:
         if self._updating:
             return
@@ -468,13 +380,13 @@ class SettingsPage(QWidget):
             alert_cooldown_seconds=self.cooldown_input.value(),
             auto_reconnect=self.reconnect_toggle.isChecked(),
             theme=str(self.theme_input.currentData()),
-            detector_model_path=self._paths["detector_model_path"].text().strip(),
-            pose_model_path=self._paths["pose_model_path"].text().strip(),
-            fight_model_path=self._paths["fight_model_path"].text().strip(),
-            fdsc_mc3_model_path=self._paths["fdsc_mc3_model_path"].text().strip(),
-            r3d_model_path=self._paths["r3d_model_path"].text().strip(),
-            x3d_model_path=self._paths["x3d_model_path"].text().strip(),
-            violence_model=str(self.violence_model_input.currentData()),
+            detector_model_path=self._initial_settings.detector_model_path,
+            pose_model_path=self._initial_settings.pose_model_path,
+            fight_model_path=self._initial_settings.fight_model_path,
+            fdsc_mc3_model_path=self._initial_settings.fdsc_mc3_model_path,
+            r3d_model_path=self._initial_settings.r3d_model_path,
+            x3d_model_path=self._initial_settings.x3d_model_path,
+            violence_model="fdsc_mc3",
             device=str(self.device_input.currentData()),
             fight_positive_class=int(self.positive_class_input.currentData()),
         )
