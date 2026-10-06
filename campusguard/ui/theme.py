@@ -168,8 +168,16 @@ QToolTip {
   padding: 4px 7px; border-radius: 6px;
 }
 
-QFrame[card="true"] { background: @surface@; border: 1px solid @line@; border-radius: 14px; }
-QFrame[tile="true"] { background: @veil@; border: 1px solid @line_soft@; border-radius: 12px; }
+QFrame[card="true"] {
+  background: @glass@;
+  border: 1px solid @glass_line@;
+  border-radius: 18px;
+}
+QFrame[tile="true"] {
+  background: @veil@;
+  border: 1px solid @line_soft@;
+  border-radius: 12px;
+}
 
 QLabel { background: transparent; }
 QLabel[muted="true"] { color: @muted@; }
@@ -257,6 +265,8 @@ def build_qss(theme: str) -> str:
         "bg1": p.bg1,
         "popup": p.popup,
         "surface": rgba(p.surface, p.surface_alpha),
+        "glass": rgba(p.glass, p.glass_alpha),
+        "glass_line": rgba(p.line, min(255, int(p.line_alpha * 1.35))),
         "line": rgba(p.line, p.line_alpha),
         "line_soft": rgba(p.line, int(p.line_alpha * 0.6)),
         "line_strong": rgba(p.line, int(p.line_alpha * 2.4)),
