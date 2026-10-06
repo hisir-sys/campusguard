@@ -194,6 +194,7 @@ class GlassPopup(QFrame):
         header = QHBoxLayout()
         header.setContentsMargins(0, 0, 0, 0)
         header.setSpacing(13)
+        self._header_layout = header
 
         self.icon = IconLabel(
             "cpu",
@@ -1809,18 +1810,8 @@ class DashboardPage(QWidget):
             for camera_id in self._cameras
         )
 
-        offline = max(
-            0,
-            len(self._cameras)
-            - online,
-        )
-
         self.online_value.setText(
-            str(online)
-        )
-
-        self.offline_value.setText(
-            str(offline)
+            str(len(self._cameras))
         )
 
         self.incident_value.setText(
