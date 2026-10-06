@@ -45,7 +45,7 @@ MODEL_MANIFESTS: dict[str, ModelManifest] = {
     ),
     "fdsc_mc3": ModelManifest(
         key="fdsc_mc3",
-        name="MohamedSebaie FDSC MC3-18 (92.5% reported)",
+        name="Spontim 1.0",
         description="MohamedSebaie FDSC fine-tuned MC3-18 surveillance classifier; published 92.5% top-1 accuracy run.",
         architecture="mc3",
         path_setting="fdsc_mc3_model_path",
