@@ -325,6 +325,15 @@ class Repository:
         with self._lock, self._connection() as connection:
             return int(connection.execute("SELECT COUNT(*) FROM incidents").fetchone()[0])
 
+    def open_incident_count(self) -> int:
+        """Count incidents that are still open for operator review."""
+        with self._lock, self._connection() as connection:
+            return int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM incidents WHERE status != 'RESOLVED'"
+                ).fetchone()[0]
+            )
+
     def clear_all_incidents_alerts_notifications(self) -> None:
         """Delete incident history, alerts, and operator notifications together."""
         with self._lock, self._connection() as connection:
