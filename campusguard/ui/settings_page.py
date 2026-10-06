@@ -315,8 +315,6 @@ class SettingsPage(QWidget):
         self.cooldown_input.valueChanged.connect(self._emit_settings)
         self.reconnect_toggle.toggled.connect(self._emit_settings)
         self.device_input.currentIndexChanged.connect(self._emit_settings)
-        self.violence_model_input.currentIndexChanged.connect(self._emit_settings)
-        self.positive_class_input.currentIndexChanged.connect(self._emit_settings)
         self.theme_input.currentIndexChanged.connect(self._emit_settings)
 
         self._refresh_status_cards()
@@ -386,7 +384,7 @@ class SettingsPage(QWidget):
             x3d_model_path=self._initial_settings.x3d_model_path,
             violence_model="fdsc_mc3",
             device=str(self.device_input.currentData()),
-            fight_positive_class=int(self.positive_class_input.currentData()),
+            fight_positive_class=self._initial_settings.fight_positive_class,
         )
 
         self._refresh_status_cards()
