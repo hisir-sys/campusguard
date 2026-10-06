@@ -231,7 +231,7 @@ class SettingsPage(QWidget):
         )
         self._add_model_path(
             models_form,
-            "FDSC MC3-18",
+            "Spontim 1.0",
             "fdsc_mc3_model_path",
             settings.fdsc_mc3_model_path,
             "*.pth",
