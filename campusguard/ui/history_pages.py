@@ -1591,6 +1591,11 @@ class AlertsPage(QWidget):
         self._blur_effect: QGraphicsBlurEffect | None = None
         self._popup: _HistoryPopup | None = None
 
+        # Signal handlers are stored so refresh() can safely replace
+        # existing button connections without disconnecting unknown slots.
+        self._live_open_handler = None
+        self._history_open_handler = None
+
         # ------------------------------------------------------------------
         # Root
         # ------------------------------------------------------------------
