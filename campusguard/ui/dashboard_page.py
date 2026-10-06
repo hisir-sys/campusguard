@@ -78,27 +78,27 @@ class GlassPopup(QFrame):
         self.setObjectName("glassPopup")
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
-        self.setMinimumWidth(560)
-        self.setMaximumWidth(680)
+        self.setMinimumWidth(780)
+        self.setMaximumWidth(920)
 
-        # Keep the popup vertically bounded so it never reaches the
-        # bottom navigation/status area.
-        self.setMinimumHeight(260)
-        self.setMaximumHeight(650)
+        # A wider, lower glass panel keeps normal status information readable
+        # without forcing the operator through a long scroll.
+        self.setMinimumHeight(360)
+        self.setMaximumHeight(590)
 
         palette = get_palette()
 
         self.setStyleSheet(
             f"""
             QFrame#glassPopup {{
-                background: {palette.glass};
-                border: 1px solid rgba(255,255,255,0.14);
-                border-radius: 24px;
+                background: rgba(16, 23, 30, 138);
+                border: 1px solid rgba(255,255,255,0.18);
+                border-radius: 26px;
             }}
 
             QLabel#popupTitle {{
-                font-size: 17pt;
-                font-weight: 750;
+                font-size: 18pt;
+                font-weight: 760;
                 background: transparent;
                 border: none;
             }}
@@ -122,15 +122,15 @@ class GlassPopup(QFrame):
             }}
 
             QFrame#popupSection {{
-                background: rgba(255,255,255,0.035);
-                border: 1px solid rgba(255,255,255,0.06);
-                border-radius: 16px;
+                background: rgba(255,255,255,0.045);
+                border: 1px solid rgba(255,255,255,0.10);
+                border-radius: 17px;
             }}
 
             QFrame#popupMetric {{
-                background: rgba(255,255,255,0.035);
-                border: 1px solid rgba(255,255,255,0.055);
-                border-radius: 14px;
+                background: rgba(255,255,255,0.04);
+                border: 1px solid rgba(255,255,255,0.085);
+                border-radius: 15px;
             }}
 
             QLabel#popupSectionTitle {{
@@ -647,7 +647,7 @@ class DashboardPage(QWidget):
         # Never allow the popup to become excessively tall.
         maximum_height = min(
             maximum_height,
-            650,
+            590,
         )
 
         self._popup.setMaximumHeight(
@@ -706,8 +706,8 @@ class DashboardPage(QWidget):
 
     def _build_engine_card(self) -> QFrame:
         frame, layout = make_card("AI Engine", icon="cpu")
-        frame.setMinimumHeight(112)
-        frame.setMaximumHeight(112)
+        frame.setMinimumHeight(150)
+        frame.setMaximumHeight(150)
         frame.setCursor(Qt.CursorShape.PointingHandCursor)
         frame.installEventFilter(self)
         for child in frame.findChildren(QWidget):
