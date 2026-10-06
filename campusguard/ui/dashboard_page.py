@@ -1329,7 +1329,7 @@ class DashboardPage(QWidget):
 
         self._popup_key_value(
             activity_layout,
-            "Total incidents",
+            "Open incidents",
             self.incident_value.text(),
         )
 
@@ -1825,7 +1825,7 @@ class DashboardPage(QWidget):
 
         self.incident_value.setText(
             str(
-                self.repository.incident_count()
+                self.repository.open_incident_count()
             )
         )
 
