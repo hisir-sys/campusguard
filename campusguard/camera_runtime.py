@@ -10,6 +10,7 @@ from PySide6.QtCore import QObject, QThread, QTimer, Signal
 from PySide6.QtGui import QImage
 
 from campusguard.ai_pipeline import VisionPipeline
+from campusguard.footage import FightFootageRecorder
 from campusguard.credentials import CredentialVault
 from campusguard.settings import AppSettings, CameraConfig, CameraCredentials
 
@@ -289,15 +290,18 @@ class FrameAnalysisThread(QThread):
     frame_ready = Signal(QImage, str, object)
     model_status = Signal(str, str)
     event_detected = Signal(str, float, str)
+    footage_saved = Signal(str)
 
     def __init__(
         self,
         mailbox: LatestFrameMailbox,
         options: RuntimeOptions,
+        footage_dir,
     ) -> None:
         super().__init__()
         self.mailbox = mailbox
         self.options = options
+        self.footage_recorder = FightFootageRecorder(footage_dir)
 
     def run(self) -> None:
         latest_sequence = 0
@@ -346,11 +350,24 @@ class FrameAnalysisThread(QThread):
                     QImage.Format.Format_RGB888,
                 ).copy()
                 self.frame_ready.emit(image, state, confidence)
+
+                finished_footage = self.footage_recorder.update(
+                    frame,
+                    state,
+                    event_started=event is not None,
+                )
+                if finished_footage is not None:
+                    self.footage_saved.emit(str(finished_footage))
+
                 if event is not None:
                     event_name, event_confidence, severity = event
                     self.event_detected.emit(event_name, event_confidence, severity)
             except Exception as error:
                 self.model_status.emit("engine", f"Frame analysis error — {error}")
+
+        finished_footage = self.footage_recorder.stop()
+        if finished_footage is not None:
+            self.footage_saved.emit(str(finished_footage))
 
 
 class CameraTestThread(QThread):
@@ -418,10 +435,17 @@ class CameraManager(QObject):
     frame_ready = Signal(str, QImage, str, object)
     model_status_changed = Signal(str, str, str)
     event_detected = Signal(str, str, float, str)
+    footage_saved = Signal(str, str)
 
-    def __init__(self, vault: CredentialVault, parent: QObject | None = None) -> None:
+    def __init__(
+        self,
+        vault: CredentialVault,
+        footage_dir=None,
+        parent: QObject | None = None,
+    ) -> None:
         super().__init__(parent)
         self.vault = vault
+        self.footage_dir = footage_dir
         self._sessions: dict[str, CameraSession] = {}
         self._retiring: list[CameraSession] = []
         self._settings = AppSettings()
@@ -444,7 +468,7 @@ class CameraManager(QObject):
         mailbox = LatestFrameMailbox()
         options = RuntimeOptions(self._settings, camera.ai_enabled)
         capture = CameraCaptureThread(camera, credentials, mailbox, options)
-        analysis = FrameAnalysisThread(mailbox, options)
+        analysis = FrameAnalysisThread(mailbox, options, self.footage_dir)
 
         capture.status_changed.connect(
             lambda status, message, camera_id=camera.camera_id:
@@ -465,6 +489,10 @@ class CameraManager(QObject):
         analysis.event_detected.connect(
             lambda event, confidence, severity, camera_id=camera.camera_id:
             self.event_detected.emit(camera_id, event, confidence, severity)
+        )
+        analysis.footage_saved.connect(
+            lambda path, camera_id=camera.camera_id:
+            self.footage_saved.emit(camera_id, path)
         )
 
         session = CameraSession(camera, mailbox, options, capture, analysis)
