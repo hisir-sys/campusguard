@@ -432,6 +432,90 @@ class CameraTestThread(QThread):
                 capture.release()
 
 
+class LocalVideoTestThread(QThread):
+    """Play one local video through the production AI pipeline without creating camera records."""
+
+    frame_ready = Signal(QImage, str, object)
+    status_changed = Signal(str)
+    model_status = Signal(str, str)
+
+    def __init__(self, video_path: str, settings: AppSettings) -> None:
+        super().__init__()
+        self.video_path = video_path
+        self.settings = settings
+
+    def run(self) -> None:
+        capture = None
+        try:
+            capture = cv2.VideoCapture(self.video_path)
+            if capture is None or not capture.isOpened():
+                self.status_changed.emit("ERROR — Could not open the selected video.")
+                return
+
+            fps = float(capture.get(cv2.CAP_PROP_FPS) or 0.0)
+            if fps <= 1.0 or fps > 240.0:
+                fps = 30.0
+            frame_interval = 1.0 / fps
+            next_frame_time = time.monotonic()
+
+            # A local test always exercises the AI pipeline, while keeping the
+            # user's other production settings unchanged.
+            test_settings = AppSettings.from_dict(
+                {
+                    **self.settings.to_dict(),
+                    "detection_enabled": True,
+                }
+            )
+
+            def report_model_status(component: str, message: str) -> None:
+                self.model_status.emit(component, message)
+
+            self.status_changed.emit("LOADING MODEL")
+            pipeline = VisionPipeline(test_settings, report_model_status)
+
+            self.status_changed.emit("PLAYING")
+            while not self.isInterruptionRequested():
+                ok, frame = capture.read()
+                if not ok or frame is None or frame.size == 0:
+                    break
+
+                processed, state, confidence, _ = pipeline.process(
+                    frame,
+                    test_settings,
+                    True,
+                    test_settings.tracking_enabled,
+                    test_settings.pose_enabled,
+                )
+
+                rgb = cv2.cvtColor(processed, cv2.COLOR_BGR2RGB)
+                height, width = rgb.shape[:2]
+                image = QImage(
+                    rgb.data,
+                    width,
+                    height,
+                    int(rgb.strides[0]),
+                    QImage.Format.Format_RGB888,
+                ).copy()
+                self.frame_ready.emit(image, state, confidence)
+
+                next_frame_time += frame_interval
+                delay = next_frame_time - time.monotonic()
+                if delay > 0:
+                    self.msleep(max(1, int(delay * 1000)))
+                elif delay < -frame_interval * 4:
+                    next_frame_time = time.monotonic()
+
+            if self.isInterruptionRequested():
+                self.status_changed.emit("STOPPED")
+            else:
+                self.status_changed.emit("FINISHED")
+        except Exception as error:
+            self.status_changed.emit(f"ERROR — {error}")
+        finally:
+            if capture is not None:
+                capture.release()
+
+
 @dataclass
 class CameraSession:
     camera: CameraConfig
