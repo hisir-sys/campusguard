@@ -510,7 +510,9 @@ class MainWindow(QMainWindow):
         self.camera_page.reconnect_requested.connect(self._reconnect_camera)
         self.camera_page.ai_changed.connect(self._set_camera_ai)
         self.incidents_page.status_change_requested.connect(self._set_incident_status)
+        self.incidents_page.clear_all_requested.connect(self._clear_all_history)
         self.alerts_page.acknowledge_requested.connect(self._acknowledge_alert)
+        self.alerts_page.clear_all_requested.connect(self._clear_all_history)
         self.settings_page.settings_changed.connect(self._save_settings)
 
     def _connect_camera_manager(self) -> None:
@@ -795,6 +797,29 @@ class MainWindow(QMainWindow):
     def _set_incident_status(self, public_id: str, status: str) -> None:
         self.repository.update_incident_status(public_id, status)
         self.incidents_page.refresh()
+
+    def _clear_all_history(self) -> None:
+        answer = QMessageBox.warning(
+            self,
+            "Clear all history and alerts?",
+            "This will permanently erase all stored incidents, alerts, and notifications. "
+            "It will not remove cameras or model settings.",
+            QMessageBox.StandardButton.Clear
+            | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if answer != QMessageBox.StandardButton.Clear:
+            return
+
+        self.repository.clear_all_incidents_alerts_notifications()
+        self.incidents_page.refresh()
+        self.alerts_page.refresh()
+        self.dashboard.refresh_summary()
+        self._update_alert_badge()
+        self.statusBar().showMessage(
+            "All incidents, alerts, and notifications were cleared.",
+            5000,
+        )
 
     def _acknowledge_alert(self, alert_id: int) -> None:
         self.repository.acknowledge_alert(alert_id)
