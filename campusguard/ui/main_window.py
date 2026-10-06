@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from campusguard.camera_runtime import CameraManager
+from campusguard.footage import clear_footage
 from campusguard.credentials import CredentialVault
 from campusguard.settings import (
     AppSettings,
@@ -62,11 +63,12 @@ class MainWindow(QMainWindow):
         self._previous_camera_status: dict[str, str] = {}
         self._camera_dialogs: dict[str, EnlargedCameraDialog] = {}
         self.operator_name: str | None = None
+        self._pending_footage_incidents: dict[str, str] = {}
 
         # Pick the icon/palette theme before any widget is built so nothing flashes.
         set_icon_theme(self.settings.theme)
 
-        self.camera_manager = CameraManager(self.vault, self)
+        self.camera_manager = CameraManager(self.vault, self.repository.footage_dir, self)
         self.camera_manager.set_settings(self.settings)
         self._connect_camera_manager()
         self._build_ui()
@@ -512,7 +514,6 @@ class MainWindow(QMainWindow):
         self.dashboard.clear_notifications_requested.connect(self._clear_dashboard_notifications)
         self.incidents_page.status_change_requested.connect(self._set_incident_status)
         self.incidents_page.clear_all_requested.connect(self._clear_all_history)
-        self.alerts_page.acknowledge_requested.connect(self._acknowledge_alert)
         self.alerts_page.clear_all_requested.connect(self._clear_all_history)
         self.settings_page.settings_changed.connect(self._save_settings)
 
@@ -522,6 +523,7 @@ class MainWindow(QMainWindow):
         self.camera_manager.frame_ready.connect(self._on_frame)
         self.camera_manager.model_status_changed.connect(self._on_model_status)
         self.camera_manager.event_detected.connect(self._on_event)
+        self.camera_manager.footage_saved.connect(self._on_footage_saved)
 
     # ------------------------------------------------------------------
     # Navigation
@@ -783,6 +785,9 @@ class MainWindow(QMainWindow):
         )
         if incident is None:
             return
+        self._pending_footage_incidents[camera_id] = str(
+            incident["public_id"]
+        )
         self.statusBar().showMessage(
             f"{severity} alert: {event} on {camera.name} ({confidence:.0%}).",
             12000,
@@ -795,6 +800,18 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     # Incidents / alerts
     # ------------------------------------------------------------------
+    def _on_footage_saved(self, camera_id: str, footage_path: str) -> None:
+        public_id = self._pending_footage_incidents.pop(camera_id, None)
+        if public_id is None:
+            return
+        self.repository.attach_incident_footage(public_id, footage_path)
+        self.incidents_page.refresh()
+        self.alerts_page.refresh()
+        self.statusBar().showMessage(
+            f"Fight footage saved for {public_id}.",
+            6000,
+        )
+
     def _set_incident_status(self, public_id: str, status: str) -> None:
         self.repository.update_incident_status(public_id, status)
         self.incidents_page.refresh()
@@ -833,6 +850,7 @@ class MainWindow(QMainWindow):
             return
 
         self.repository.clear_all_incidents_alerts_notifications()
+        self._pending_footage_incidents.clear()
         self.incidents_page.refresh()
         self.alerts_page.refresh()
         self.dashboard.refresh_summary()
@@ -841,12 +859,6 @@ class MainWindow(QMainWindow):
             "All incidents, alerts, and notifications were cleared.",
             5000,
         )
-
-    def _acknowledge_alert(self, alert_id: int) -> None:
-        self.repository.acknowledge_alert(alert_id)
-        self.alerts_page.refresh()
-        self.dashboard.refresh_summary()
-        self._update_alert_badge()
 
     def _update_alert_badge(self) -> None:
         self.bottom_bar.set_badge("alerts", self.repository.active_alert_count())
