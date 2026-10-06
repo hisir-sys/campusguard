@@ -371,7 +371,12 @@ class VisionPipeline:
                                 "inference_stride": model.INFERENCE_STRIDE,
                             }
                         )
-                        if len(people) >= 2 and bool(pair_ids):
+                        # Spontim/MC3 is a whole-scene temporal classifier.
+                        # Its verified decision must not be blocked by the
+                        # optional person-interaction heuristic: that heuristic
+                        # can miss valid confrontations because people may be
+                        # separated, partially occluded, or tracked imperfectly.
+                        if len(people) >= 2:
                             event = self.decision.update(state, confidence)
                         elif state == "NORMAL":
                             self.decision.update("NORMAL", None)
