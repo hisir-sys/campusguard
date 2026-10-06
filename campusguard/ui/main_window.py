@@ -49,41 +49,40 @@ class InAppOverlay(QFrame):
 
         self.setStyleSheet(
             f"""
-            QFrame#inAppOverlay {
+            QFrame#inAppOverlay {{
                 background: rgba(0, 0, 0, 115);
                 border: none;
-            }
-            QFrame#inAppPanel {
+            }}
+            QFrame#inAppPanel {{
                 background: {rgba(palette.glass, palette.glass_alpha)};
                 border: 1px solid {rgba(palette.line, min(255, int(palette.line_alpha * 1.6)))};
                 border-radius: 26px;
-            }
-            QLabel#overlayTitle {
+            }}
+            QLabel#overlayTitle {{
                 font-size: 16pt;
                 font-weight: 800;
                 background: transparent;
-            }
-            QLabel#overlayBody {
+            }}
+            QLabel#overlayBody {{
                 font-size: 10pt;
                 line-height: 1.4;
                 background: transparent;
-            }
-            QLabel#overlayClose {
+            }}
+            QLabel#overlayClose {{
                 background: {rgba(palette.veil, min(255, palette.veil_alpha * 2))};
                 border: 1px solid {rgba(palette.line, palette.line_alpha)};
                 border-radius: 15px;
                 font-size: 14pt;
-            }
-            QLabel#overlayClose:hover {
+            }}
+            QLabel#overlayClose:hover {{
                 background: {rgba(palette.veil, min(255, palette.veil_alpha * 3))};
-            }
-            QLabel#cameraViewport {
+            }}
+            QLabel#cameraViewport {{
                 background: {rgba(palette.bg0, 245)};
                 border: 1px solid {rgba(palette.line, palette.line_alpha)};
                 border-radius: 18px;
-            }
-            """
-        )
+            }}
+            """        )
         self._panel = QFrame(self)
         self._panel.setObjectName("inAppPanel")
         self._panel.setFixedSize(820, 560)
