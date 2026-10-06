@@ -1167,7 +1167,7 @@ class DashboardPage(QWidget):
         self._popup.clear_body()
 
         # --------------------------------------------------------------
-        # Three operator metrics: cameras, open incidents, alerts
+        # Four metric cards
         # --------------------------------------------------------------
 
         grid = QGridLayout()
@@ -1181,11 +1181,19 @@ class DashboardPage(QWidget):
             )
         )
 
+        offline_tile, offline_value = (
+            self._stat_tile(
+                "video-off",
+                "muted",
+                "Cameras Offline",
+            )
+        )
+
         incident_tile, incident_value = (
             self._stat_tile(
                 "file-warning",
                 "warn",
-                "Total Incidents",
+                "Open Incidents",
             )
         )
 
@@ -1199,6 +1207,10 @@ class DashboardPage(QWidget):
 
         online_value.setText(
             self.online_value.text()
+        )
+
+        offline_value.setText(
+            self.offline_value.text()
         )
 
         incident_value.setText(
@@ -1216,23 +1228,198 @@ class DashboardPage(QWidget):
         )
 
         grid.addWidget(
-            incident_tile,
+            offline_tile,
             0,
             1,
         )
 
         grid.addWidget(
-            alert_tile,
+            incident_tile,
+            1,
             0,
-            2,
+        )
+
+        grid.addWidget(
+            alert_tile,
+            1,
+            1,
         )
 
         self._popup.body.addLayout(
             grid
         )
 
-        # Keep the compact three-metric layout at the top.
-        self._popup.scroll.verticalScrollBar().setValue(0)
+        # --------------------------------------------------------------
+        # Camera network section
+        # --------------------------------------------------------------
+
+        section = QFrame()
+        section.setObjectName(
+            "popupSection"
+        )
+
+        section_layout = QVBoxLayout(
+            section
+        )
+
+        section_layout.setContentsMargins(
+            18,
+            15,
+            18,
+            15,
+        )
+
+        section_layout.setSpacing(
+            8
+        )
+
+        title = QLabel(
+            "Camera Network"
+        )
+
+        title.setObjectName(
+            "popupSectionTitle"
+        )
+
+        section_layout.addWidget(
+            title
+        )
+
+        total = len(
+            self._cameras
+        )
+
+        online = int(
+            self.online_value.text()
+            or "0"
+        )
+
+        offline = max(
+            0,
+            total - online,
+        )
+
+        self._popup_key_value(
+            section_layout,
+            "Configured cameras",
+            str(total),
+        )
+
+        self._popup_key_value(
+            section_layout,
+            "Live cameras",
+            str(online),
+        )
+
+        self._popup_key_value(
+            section_layout,
+            "Offline cameras",
+            str(offline),
+        )
+
+        self._popup.body.addWidget(
+            section
+        )
+
+        # --------------------------------------------------------------
+        # System activity section
+        # --------------------------------------------------------------
+
+        activity = QFrame()
+        activity.setObjectName(
+            "popupSection"
+        )
+
+        activity_layout = QVBoxLayout(
+            activity
+        )
+
+        activity_layout.setContentsMargins(
+            18,
+            15,
+            18,
+            15,
+        )
+
+        activity_layout.setSpacing(
+            8
+        )
+
+        title = QLabel(
+            "System Activity"
+        )
+
+        title.setObjectName(
+            "popupSectionTitle"
+        )
+
+        activity_layout.addWidget(
+            title
+        )
+
+        self._popup_key_value(
+            activity_layout,
+            "Open incidents",
+            self.incident_value.text(),
+        )
+
+        self._popup_key_value(
+            activity_layout,
+            "Active alerts",
+            self.alert_value.text(),
+        )
+
+        monitoring = QLabel(
+            "Monitoring"
+            if online > 0
+            else "Waiting for cameras"
+        )
+
+        monitoring.setObjectName(
+            "popupValue"
+        )
+
+        set_tone(
+            monitoring,
+            "good"
+            if online > 0
+            else "warn",
+        )
+
+        row = QHBoxLayout()
+
+        label = QLabel(
+            "Monitoring state"
+        )
+
+        label.setObjectName(
+            "popupKey"
+        )
+
+        row.addWidget(
+            label
+        )
+
+        row.addStretch(1)
+
+        row.addWidget(
+            monitoring
+        )
+
+        activity_layout.addLayout(
+            row
+        )
+
+        self._popup.body.addWidget(
+            activity
+        )
+
+        self._popup.body.addStretch(1)
+
+        # Reset to the top whenever System Stats opens.
+        self._popup.scroll.verticalScrollBar().setValue(
+            0
+        )
 
     # ==================================================================
     # POPUP HELPERS
