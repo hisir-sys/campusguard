@@ -804,11 +804,11 @@ class MainWindow(QMainWindow):
             "Clear all history and alerts?",
             "This will permanently erase all stored incidents, alerts, and notifications. "
             "It will not remove cameras or model settings.",
-            QMessageBox.StandardButton.Clear
+            QMessageBox.StandardButton.Yes
             | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Cancel,
         )
-        if answer != QMessageBox.StandardButton.Clear:
+        if answer != QMessageBox.StandardButton.Yes:
             return
 
         self.repository.clear_all_incidents_alerts_notifications()
