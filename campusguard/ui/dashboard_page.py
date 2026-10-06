@@ -704,292 +704,82 @@ class DashboardPage(QWidget):
     # AI ENGINE CARD
     # ==================================================================
 
-    def _build_engine_card(
-        self,
-    ) -> QFrame:
-        """
-        Compact AI Engine card.
-
-        The title is explicitly rendered in the card header. This avoids
-        relying on make_card() alone for the title visibility.
-        """
-
-        frame, layout = make_card(
-            "AI Engine",
-            icon="cpu",
-        )
-
-        # --------------------------------------------------------------
-        # Explicit title/header rendering
-        # --------------------------------------------------------------
-
-        header_layout = getattr(
-            frame,
-            "header_layout",
-            None,
-        )
-
-        if header_layout is not None:
-            title = QLabel(
-                "AI Engine"
-            )
-
-            title.setProperty(
-                "cardTitle",
-                True,
-            )
-
-            title.setStyleSheet(
-                """
-                QLabel {
-                    font-size: 12pt;
-                    font-weight: 750;
-                    background: transparent;
-                    border: none;
-                }
-                """
-            )
-
-            # Only add our explicit title if the card header does not
-            # already contain a visible title with this text.
-            has_title = False
-
-            for index in range(
-                header_layout.count()
-            ):
-                item = header_layout.itemAt(
-                    index
-                )
-
-                widget = (
-                    item.widget()
-                    if item is not None
-                    else None
-                )
-
-                if (
-                    isinstance(widget, QLabel)
-                    and widget.text().strip()
-                    == "AI Engine"
-                ):
-                    has_title = True
-                    break
-
-            if not has_title:
-                # Insert the title after the icon.
-                insert_index = 1
-
-                if (
-                    header_layout.count()
-                    < insert_index
-                ):
-                    insert_index = (
-                        header_layout.count()
-                    )
-
-                header_layout.insertWidget(
-                    insert_index,
-                    title,
-                    0,
-                    Qt.AlignmentFlag.AlignVCenter,
-                )
-
-        # --------------------------------------------------------------
-        # Compact card sizing
-        # --------------------------------------------------------------
-
-        frame.setMinimumHeight(76)
-        frame.setMaximumHeight(76)
-
-        frame.setCursor(
-            Qt.CursorShape.PointingHandCursor
-        )
-
+    def _build_engine_card(self) -> QFrame:
+        frame, layout = make_card("AI Engine", icon="cpu")
+        frame.setMinimumHeight(112)
+        frame.setMaximumHeight(112)
+        frame.setCursor(Qt.CursorShape.PointingHandCursor)
         frame.installEventFilter(self)
-
         for child in frame.findChildren(QWidget):
             child.installEventFilter(self)
 
-        # --------------------------------------------------------------
-        # Existing backend values
-        # --------------------------------------------------------------
-
-        self.engine_values: dict[
-            str,
-            QLabel,
-        ] = {}
-
+        self.engine_values = {}
         rows = (
-            (
-                "detector",
-                "Person detector",
-            ),
-            (
-                "pose",
-                "Pose model",
-            ),
-            (
-                "fight",
-                "Fight classifier",
-            ),
-            (
-                "violence_model",
-                "Violence model",
-            ),
-            (
-                "status",
-                "Status",
-            ),
-            (
-                "device",
-                "Compute device",
-            ),
-            (
-                "threshold",
-                "Confidence threshold",
-            ),
-            (
-                "detection",
-                "Detection",
-            ),
+            ("violence_model", "Active model"),
+            ("status", "Engine status"),
+            ("device", "Compute"),
         )
-
         for key, text in rows:
             row = QHBoxLayout()
-
-            name = QLabel(text)
-            name.setProperty(
-                "kvlabel",
-                True,
-            )
-
+            label = QLabel(text)
+            label.setProperty("kvlabel", True)
             value = QLabel("—")
-            value.setProperty(
-                "kvvalue",
-                True,
-            )
-
-            value.setAlignment(
-                Qt.AlignmentFlag.AlignRight
-                | Qt.AlignmentFlag.AlignVCenter
-            )
-
-            row.addWidget(name)
+            value.setProperty("kvvalue", True)
+            value.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            row.addWidget(label)
             row.addStretch(1)
             row.addWidget(value)
-
             layout.addLayout(row)
-
             self.engine_values[key] = value
-
-        layout.addStretch(1)
-
         return frame
 
     # ==================================================================
     # SYSTEM STATS CARD
     # ==================================================================
 
-    def _build_stats_card(
-        self,
-    ) -> QFrame:
-        frame, layout = make_card(
-            "System Stats",
-            icon="server",
-        )
-
-        frame.setMinimumHeight(76)
-        frame.setMaximumHeight(76)
-
-        frame.setCursor(
-            Qt.CursorShape.PointingHandCursor
-        )
-
+    def _build_stats_card(self) -> QFrame:
+        frame, layout = make_card("System Stats", icon="server")
+        frame.setMinimumHeight(112)
+        frame.setMaximumHeight(112)
+        frame.setCursor(Qt.CursorShape.PointingHandCursor)
         frame.installEventFilter(self)
-
         for child in frame.findChildren(QWidget):
             child.installEventFilter(self)
 
-        preview = QHBoxLayout()
-        preview.setContentsMargins(
-            0,
-            0,
-            0,
-            0,
-        )
-        preview.setSpacing(10)
+        preview = QGridLayout()
+        preview.setContentsMargins(0, 0, 0, 0)
+        preview.setHorizontalSpacing(14)
+        preview.setVerticalSpacing(6)
 
         self.online_value = QLabel("0")
-        self.online_value.setProperty(
-            "kvvalue",
-            True,
-        )
-
-        online_label = QLabel("Online")
-        online_label.setProperty(
-            "muted",
-            True,
-        )
-
+        self.online_value.setProperty("kvvalue", True)
         self.incident_value = QLabel("0")
-        self.incident_value.setProperty(
-            "kvvalue",
-            True,
-        )
-
-        incident_label = QLabel("Incidents")
-        incident_label.setProperty(
-            "muted",
-            True,
-        )
-
-        preview.addWidget(
-            IconLabel(
-                "video",
-                16,
-                "good",
-            ),
-            0,
-            Qt.AlignmentFlag.AlignCenter,
-        )
-
-        preview.addWidget(
-            self.online_value
-        )
-
-        preview.addWidget(
-            online_label
-        )
-
-        preview.addSpacing(14)
-
-        preview.addWidget(
-            IconLabel(
-                "file-warning",
-                16,
-                "warn",
-            ),
-            0,
-            Qt.AlignmentFlag.AlignCenter,
-        )
-
-        preview.addWidget(
-            self.incident_value
-        )
-
-        preview.addWidget(
-            incident_label
-        )
-
-        preview.addStretch(1)
-
-        layout.addLayout(
-            preview
-        )
-
-        self.offline_value = QLabel("0")
+        self.incident_value.setProperty("kvvalue", True)
         self.alert_value = QLabel("0")
+        self.alert_value.setProperty("kvvalue", True)
+        self.offline_value = QLabel("0")
+        self.offline_value.setProperty("kvvalue", True)
 
+        values = (
+            ("video", "good", self.online_value, "Online"),
+            ("video-off", "muted", self.offline_value, "Offline"),
+            ("file-warning", "warn", self.incident_value, "Incidents"),
+            ("shield-alert", "bad", self.alert_value, "Alerts"),
+        )
+        for index, (icon, tone, value, label_text) in enumerate(values):
+            cell = QHBoxLayout()
+            cell.setSpacing(6)
+            cell.addWidget(IconLabel(icon, 14, tone))
+            cell.addWidget(value)
+            label = QLabel(label_text)
+            label.setProperty("muted", True)
+            cell.addWidget(label)
+            cell.addStretch(1)
+            wrapper = QWidget()
+            wrapper.setLayout(cell)
+            preview.addWidget(wrapper, index // 2, index % 2)
+
+        layout.addLayout(preview)
         return frame
 
     # ==================================================================
@@ -1256,416 +1046,113 @@ class DashboardPage(QWidget):
     # AI ENGINE POPUP
     # ==================================================================
 
-    def _populate_ai_popup(
-        self,
-    ) -> None:
+    def _populate_ai_popup(self) -> None:
         self._popup.set_header(
             "AI Engine",
-            "Runtime models, inference configuration, and compute status.",
+            "Live inference status and the active detection pipeline.",
             "cpu",
         )
-
         self._popup.clear_body()
 
-        settings = self._settings
+        model = QFrame()
+        model.setObjectName("popupSection")
+        ml = QVBoxLayout(model)
+        ml.setContentsMargins(18, 16, 18, 16)
+        ml.setSpacing(8)
 
-        # --------------------------------------------------------------
-        # Runtime models
-        # --------------------------------------------------------------
+        title = QLabel("ACTIVE MODEL")
+        title.setObjectName("popupSectionTitle")
+        ml.addWidget(title)
 
-        section = QFrame()
-        section.setObjectName(
-            "popupSection"
+        active = QLabel("Spontim 1.0")
+        active.setObjectName("popupMetricValue")
+        set_tone(active, "warn")
+        ml.addWidget(active)
+
+        desc = QLabel("Temporal fight detection · 16-frame sequence analysis")
+        desc.setProperty("muted", True)
+        ml.addWidget(desc)
+        self._popup.body.addWidget(model)
+
+        pipeline = QFrame()
+        pipeline.setObjectName("popupSection")
+        pl = QVBoxLayout(pipeline)
+        pl.setContentsMargins(18, 16, 18, 16)
+        pl.setSpacing(8)
+
+        ptitle = QLabel("PIPELINE")
+        ptitle.setObjectName("popupSectionTitle")
+        pl.addWidget(ptitle)
+
+        stages = (
+            ("Person detection", "YOLO"),
+            ("Tracking", "ByteTrack"),
+            ("Pose analysis", "YOLO Pose"),
+            ("Temporal classifier", "Spontim 1.0"),
+            ("Event gate", "4-frame trigger / 6-frame release"),
         )
+        for label_text, value_text in stages:
+            self._popup_key_value(pl, label_text, value_text)
+        self._popup.body.addWidget(pipeline)
 
-        section_layout = QVBoxLayout(
-            section
-        )
+        runtime = QFrame()
+        runtime.setObjectName("popupSection")
+        rl = QVBoxLayout(runtime)
+        rl.setContentsMargins(18, 16, 18, 16)
+        rl.setSpacing(8)
 
-        section_layout.setContentsMargins(
-            18,
-            16,
-            18,
-            16,
-        )
+        rtitle = QLabel("RUNTIME")
+        rtitle.setObjectName("popupSectionTitle")
+        rl.addWidget(rtitle)
 
-        section_layout.setSpacing(
-            10
-        )
-
-        section_title = QLabel(
-            "Runtime Models"
-        )
-
-        section_title.setObjectName(
-            "popupSectionTitle"
-        )
-
-        section_layout.addWidget(
-            section_title
-        )
-
-        selected_key = (
-            settings.violence_model
-            if settings and settings.violence_model != "enhanced"
-            else "mc3"
-        )
-        selected_paths = {
-            "mc3": settings.fight_model_path if settings else "",
-            "fdsc_mc3": settings.fdsc_mc3_model_path if settings else "",
-            "r3d": settings.r3d_model_path if settings else "",
-            "x3d": settings.x3d_model_path if settings else "",
-        }
-        selected_model_names = {
-            "mc3": "Current MC3-18",
-            "fdsc_mc3": "Spontim 1.0",
-            "r3d": "FDSC R3D-18 — Technical Issue",
-            "x3d": "X3D-M",
-        }
-
-        paths = {
-            "detector": (
-                "Person detector",
-                settings.detector_model_path if settings else "",
-            ),
-            "pose": (
-                "Pose model",
-                settings.pose_model_path if settings else "",
-            ),
-            "fight": (
-                f"Violence model — {selected_model_names.get(selected_key, 'Spontim 1.0')}",
-                selected_paths.get(selected_key, ""),
-            ),
-        }
-
-        for key, (
-            label_text,
-            configured,
-        ) in paths.items():
-
-            row = QHBoxLayout()
-            row.setSpacing(12)
-
-            label = QLabel(
-                label_text
-            )
-
-            label.setObjectName(
-                "popupKey"
-            )
-
-            value = QLabel("—")
-
-            value.setObjectName(
-                "popupValue"
-            )
-
-            value.setAlignment(
-                Qt.AlignmentFlag.AlignRight
-                | Qt.AlignmentFlag.AlignVCenter
-            )
-
-            runtime = (
-                self._runtime_loaded.get(
-                    key
-                )
-            )
-
-            if configured:
-
-                path = Path(
-                    configured
-                ).expanduser()
-
-                exists = path.is_file()
-
-                if runtime is True:
-
-                    value.setText(
-                        path.name
-                    )
-
-                    set_tone(
-                        value,
-                        "good",
-                    )
-
-                elif runtime is False:
-
-                    value.setText(
-                        "Not loaded"
-                    )
-
-                    set_tone(
-                        value,
-                        "warn",
-                    )
-
-                elif exists:
-
-                    value.setText(
-                        path.name
-                    )
-
-                else:
-
-                    value.setText(
-                        "File not found"
-                    )
-
-                    set_tone(
-                        value,
-                        "warn",
-                    )
-
-            else:
-
-                value.setText(
-                    "Not configured"
-                )
-
-                set_tone(
-                    value,
-                    "warn",
-                )
-
-            row.addWidget(
-                label
-            )
-
-            row.addStretch(1)
-
-            row.addWidget(
-                value
-            )
-
-            section_layout.addLayout(
-                row
-            )
-
-        self._popup.body.addWidget(
-            section
-        )
-
-        selected_name = selected_model_names.get(selected_key, "Spontim 1.0")
-        selected_row = QFrame()
-        selected_row.setObjectName("popupSection")
-        selected_layout = QHBoxLayout(selected_row)
-        selected_layout.setContentsMargins(18, 12, 18, 12)
-        selected_layout.addWidget(QLabel("Active violence model"))
-        selected_layout.addStretch(1)
-        selected_value = QLabel(selected_name)
-        selected_value.setObjectName("popupValue")
-        set_tone(selected_value, "good")
-        selected_layout.addWidget(selected_value)
-        self._popup.body.addWidget(selected_row)
-
-        # --------------------------------------------------------------
-        # Configuration
-        # --------------------------------------------------------------
-
-        config = QFrame()
-        config.setObjectName(
-            "popupSection"
-        )
-
-        config_layout = QVBoxLayout(
-            config
-        )
-
-        config_layout.setContentsMargins(
-            18,
-            16,
-            18,
-            16,
-        )
-
-        config_layout.setSpacing(
-            10
-        )
-
-        title = QLabel(
-            "Inference Configuration"
-        )
-
-        title.setObjectName(
-            "popupSectionTitle"
-        )
-
-        config_layout.addWidget(
-            title
-        )
-
-        threshold = (
-            f"{settings.confidence_threshold:.0%}"
-            if settings
-            else "—"
-        )
-
-        if settings:
-            detection = (
-                "Enabled"
-                if settings.detection_enabled
-                else "Disabled"
-            )
-        else:
-            detection = "—"
-
-        if settings:
-            device = (
-                self._device_text
-                or settings.device.upper()
-            )
-        else:
-            device = "—"
-
-        self._popup_key_value(
-            config_layout,
-            "Confidence threshold",
-            threshold,
-        )
-
-        self._popup_key_value(
-            config_layout,
-            "Detection",
-            detection,
-        )
-
-        self._popup_key_value(
-            config_layout,
-            "Violence model",
-            selected_name,
-        )
-
-        self._popup_key_value(
-            config_layout,
-            "Compute device",
-            device,
-        )
-
-        status_text, status_tone = (
-            self._current_model_status()
-        )
-
+        status_text, status_tone = self._current_model_status()
         row = QHBoxLayout()
-
-        label = QLabel(
-            "Engine status"
-        )
-
-        label.setObjectName(
-            "popupKey"
-        )
-
-        value = QLabel(
-            status_text
-        )
-
-        value.setObjectName(
-            "popupValue"
-        )
-
-        set_tone(
-            value,
-            status_tone,
-        )
-
-        row.addWidget(
-            label
-        )
-
+        key = QLabel("Engine status")
+        key.setObjectName("popupKey")
+        value = QLabel(status_text)
+        value.setObjectName("popupValue")
+        set_tone(value, status_tone)
+        row.addWidget(key)
         row.addStretch(1)
+        row.addWidget(value)
+        rl.addLayout(row)
 
-        row.addWidget(
-            value
+        settings = self._settings
+        self._popup_key_value(
+            rl,
+            "Confidence threshold",
+            f"{settings.confidence_threshold:.0%}" if settings else "—",
         )
-
-        config_layout.addLayout(
-            row
+        self._popup_key_value(
+            rl,
+            "Compute device",
+            self._device_text or (settings.device.upper() if settings else "—"),
         )
-
-        self._popup.body.addWidget(
-            config
+        self._popup_key_value(
+            rl,
+            "AI monitoring",
+            "Enabled" if settings and settings.detection_enabled else "Disabled",
         )
-
+        self._popup.body.addWidget(runtime)
         self._popup.body.addStretch(1)
 
-    def _current_model_status(
-        self,
-    ) -> tuple[str, str]:
-
-        loaded = 0
-        present = 0
-
+    def _current_model_status(self) -> tuple[str, str]:
         if self._settings is None:
-            return (
-                "Waiting for configuration",
-                "",
-            )
+            return "Waiting", "warn"
 
-        paths = {
-            "detector":
-                self._settings.detector_model_path,
-            "pose":
-                self._settings.pose_model_path,
-            "fight":
-                self._settings.fight_model_path,
-        }
-
-        for key, configured in paths.items():
-
-            if not configured:
-                continue
-
-            path = Path(
-                configured
-            ).expanduser()
-
-            if path.is_file():
-                present += 1
-
-            if (
-                self._runtime_loaded.get(
-                    key
-                )
-                is True
-            ):
-                loaded += 1
-
-        if loaded == 3:
-            return (
-                "ACTIVE",
-                "good",
-            )
-
-        if loaded > 0:
-            return (
-                "PARTIAL",
-                "warn",
-            )
-
-        if self._runtime_loaded:
-            return (
-                "NOT LOADED",
-                "bad",
-            )
-
-        if present == 3:
-            return (
-                "READY",
-                "good",
-            )
-
-        if present > 0:
-            return (
-                "PARTIAL",
-                "warn",
-            )
-
-        return (
-            "NO MODELS",
-            "warn",
+        required = ("detector", "pose", "fight")
+        loaded = sum(
+            self._runtime_loaded.get(key) is True
+            for key in required
         )
+
+        if loaded == len(required):
+            return "ACTIVE", "good"
+        if loaded > 0:
+            return "PARTIAL", "warn"
+        if self._runtime_loaded:
+            return "NOT READY", "bad"
+        return "READY", "good"
 
     # ==================================================================
     # SYSTEM STATS POPUP
@@ -2314,165 +1801,16 @@ class DashboardPage(QWidget):
 
         self._refresh_engine()
 
-    def _refresh_engine(
-        self,
-    ) -> None:
-
+    def _refresh_engine(self) -> None:
         settings = self._settings
-
         if settings is None:
             return
 
-        selected_key = settings.violence_model if settings.violence_model != "enhanced" else "mc3"
-        selected_paths = {
-            "mc3": settings.fight_model_path,
-            "fdsc_mc3": settings.fdsc_mc3_model_path,
-            "r3d": settings.r3d_model_path,
-            "x3d": settings.x3d_model_path,
-        }
-        selected_names = {
-            "mc3": "Current MC3-18",
-            "fdsc_mc3": "FDSC MC3-18",
-            "r3d": "FDSC R3D-18",
-            "x3d": "X3D-M",
-        }
-        paths = {
-            "detector": settings.detector_model_path,
-            "pose": settings.pose_model_path,
-            "fight": selected_paths.get(selected_key, settings.fight_model_path),
-        }
+        self._set_value("violence_model", "Spontim 1.0", "good", "Active production fight-detection engine")
+        self._set_value("device", self._device_text or settings.device.upper())
 
-        loaded = 0
-        present = 0
-
-        for key, configured in paths.items():
-
-            path = (
-                Path(
-                    configured
-                ).expanduser()
-                if configured.strip()
-                else None
-            )
-
-            exists = bool(
-                path
-                and path.is_file()
-            )
-
-            runtime = (
-                self._runtime_loaded.get(
-                    key
-                )
-            )
-
-            name = (
-                path.name
-                if path
-                else ""
-            )
-
-            tooltip = (
-                self._runtime_messages.get(
-                    key,
-                    "",
-                )
-            )
-
-            if runtime is True:
-
-                loaded += 1
-                present += 1
-
-                self._set_value(
-                    key,
-                    name or "Loaded",
-                    "good",
-                    tooltip,
-                )
-
-            elif (
-                runtime is False
-                or not exists
-            ):
-
-                self._set_value(
-                    key,
-                    "Not loaded",
-                    "warn",
-                    tooltip
-                    or f"File not found: {configured}",
-                )
-
-            else:
-
-                present += 1
-
-                self._set_value(
-                    key,
-                    name,
-                    "",
-                    "Found on disk; loads when a camera starts",
-                )
-
-        if loaded == 3:
-
-            status = (
-                "ACTIVE",
-                "good",
-            )
-
-        elif loaded > 0:
-
-            status = (
-                "PARTIAL",
-                "warn",
-            )
-
-        elif self._runtime_loaded:
-
-            status = (
-                "NOT LOADED",
-                "bad",
-            )
-
-        elif present == 3:
-
-            status = (
-                "READY",
-                "",
-            )
-
-        elif present > 0:
-
-            status = (
-                "PARTIAL",
-                "warn",
-            )
-
-        else:
-
-            status = (
-                "NO MODELS",
-                "warn",
-            )
-
-        self._set_value(
-            "status",
-            *status,
-        )
-
-        self._set_value(
-            "device",
-            self._device_text
-            or settings.device.upper(),
-        )
-        self._set_value(
-            "violence_model",
-            selected_names.get(selected_key, "Current MC3-18"),
-            "good",
-            "Selected in System Settings → AI Engine → Violence model",
-        )
+        status_text, status_tone = self._current_model_status()
+        self._set_value("status", status_text, status_tone)
 
     def _set_value(
         self,
