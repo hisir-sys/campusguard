@@ -17,7 +17,7 @@ class AppSettings:
     fdsc_mc3_model_path: str = "models/model_16_m3_0.8888.pth"
     r3d_model_path: str = "models/fdsc_r3d_18.pth"
     x3d_model_path: str = "models/final_x3d_realtime.pt"
-    violence_model: str = "mc3"
+    violence_model: str = "fdsc_mc3"
     device: str = "auto"
     fight_positive_class: int = 0
 
@@ -45,7 +45,7 @@ class AppSettings:
             violence_model=(
                 candidate.violence_model
                 if candidate.violence_model in models and candidate.violence_model != "enhanced"
-                else "mc3"
+                else "fdsc_mc3"
             ),
             device=candidate.device if candidate.device in {"auto", "cpu", "cuda"} else "auto",
             fight_positive_class=0 if int(candidate.fight_positive_class) == 0 else 1,
