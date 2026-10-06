@@ -297,7 +297,7 @@ class FrameAnalysisThread(QThread):
         self,
         mailbox: LatestFrameMailbox,
         options: RuntimeOptions,
-        footage_dir,
+        footage_dir=None,
     ) -> None:
         super().__init__()
         self.mailbox = mailbox
