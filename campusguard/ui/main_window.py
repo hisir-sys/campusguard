@@ -121,7 +121,10 @@ class InAppOverlay(QFrame):
             item = self._body_layout.takeAt(0)
             widget = item.widget()
             if widget is not None:
-                widget.deleteLater()
+                if widget is self._body:
+                    self._body.setVisible(False)
+                else:
+                    widget.deleteLater()
 
     def _center(self) -> None:
         self._panel.adjustSize()
