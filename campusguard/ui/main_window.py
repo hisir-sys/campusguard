@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QInputDialog,
+    QFileDialog,
     QLabel,
     QMainWindow,
     QScrollArea,
@@ -29,7 +30,7 @@ from campusguard.settings import (
     CameraStats,
 )
 from campusguard.storage import Repository
-from campusguard.ui.camera_page import CamerasPage
+from campusguard.ui.camera_page import CamerasPage, LocalVideoTestDialog
 from campusguard.ui.common import apply_theme, make_card, make_page_title
 from campusguard.ui.dashboard_page import DashboardPage
 from campusguard.ui.glass_nav import BackdropWidget, BottomBar, TopBar
@@ -723,6 +724,7 @@ class MainWindow(QMainWindow):
         self.dashboard.camera_selected.connect(self.open_camera)
         self.dashboard.view_alerts_requested.connect(lambda: self.navigate("alerts"))
         self.camera_page.add_requested.connect(self._add_camera)
+        self.camera_page.local_test_requested.connect(self._open_local_file_test)
         self.camera_page.remove_requested.connect(self._remove_camera)
         self.camera_page.reconnect_requested.connect(self._reconnect_camera)
         self.camera_page.ai_changed.connect(self._set_camera_ai)
@@ -770,6 +772,18 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     # Cameras
     # ------------------------------------------------------------------
+    def _open_local_file_test(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select local test video",
+            "",
+            "Video files (*.mp4 *.avi *.mov *.mkv *.wmv *.m4v);;All files (*.*)",
+        )
+        if not path:
+            return
+        dialog = LocalVideoTestDialog(path, self.settings, self)
+        dialog.exec()
+
     def _add_camera(self, values: dict) -> None:
         camera = self.repository.add_camera(
             values["name"],
