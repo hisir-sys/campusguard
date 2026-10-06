@@ -48,13 +48,13 @@ class InAppOverlay(QFrame):
         self.setStyleSheet(
             """
             QFrame#inAppOverlay {
-                background: rgba(4, 7, 12, 190);
+                background: rgba(4, 7, 12, 118);
                 border: none;
             }
             QFrame#inAppPanel {
-                background: rgba(20, 27, 36, 0.94);
-                border: 1px solid rgba(255,255,255,0.14);
-                border-radius: 24px;
+                background: rgba(16, 23, 30, 148);
+                border: 1px solid rgba(255,255,255,0.18);
+                border-radius: 26px;
             }
             QLabel#overlayTitle {
                 font-size: 16pt;
@@ -78,7 +78,7 @@ class InAppOverlay(QFrame):
             QLabel#cameraViewport {
                 background: #080d11;
                 border: 1px solid rgba(255,255,255,0.08);
-                border-radius: 16px;
+                border-radius: 18px;
             }
             """
         )
@@ -161,7 +161,7 @@ class InAppOverlay(QFrame):
         buttons.addWidget(confirm)
         self._body_layout.addLayout(buttons)
 
-        self._panel.setFixedSize(560, 270)
+        self._panel.setFixedSize(640, 290)
         self.show()
         self.raise_()
         self._center()
@@ -198,7 +198,7 @@ class InAppOverlay(QFrame):
         row.addWidget(close)
         self._body_layout.addLayout(row)
 
-        self._panel.setFixedSize(900, 650)
+        self._panel.setFixedSize(1000, 660)
         self._camera_viewport = viewport
         self._camera_info = info
         self._camera = camera
