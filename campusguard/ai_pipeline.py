@@ -376,10 +376,11 @@ class VisionPipeline:
                         # optional person-interaction heuristic: that heuristic
                         # can miss valid confrontations because people may be
                         # separated, partially occluded, or tracked imperfectly.
-                        if len(people) >= 2:
-                            event = self.decision.update(state, confidence)
-                        elif state == "NORMAL":
-                            self.decision.update("NORMAL", None)
+                        # The MC3/Spontim classifier evaluates the whole scene.
+                        # Do not gate its event creation on detector/pair availability;
+                        # those auxiliary signals can temporarily miss people while
+                        # the temporal classifier is still correctly detecting the event.
+                        event = self.decision.update(state, confidence)
                         self.last_state, self.last_confidence = state, confidence
                 else:
                     self._update_person_clips(frame, people, model)
