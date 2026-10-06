@@ -147,7 +147,7 @@ class SettingsPage(QWidget):
 
         self.violence_model_input = QComboBox()
         self.violence_model_input.addItem("Current MC3-18", "mc3")
-        self.violence_model_input.addItem("FDSC MC3-18", "fdsc_mc3")
+        self.violence_model_input.addItem("Spontim 1.0", "fdsc_mc3")
         self.violence_model_input.addItem("FDSC R3D-18 — Technical Issue", "r3d")
         self.violence_model_input.addItem("X3D-M", "x3d")
         self.violence_model_input.addItem("CampusGuard Enhanced — Coming Soon", "enhanced")
@@ -171,7 +171,7 @@ class SettingsPage(QWidget):
 
         self.violence_model_note = QLabel(
             "The selected violence model runs on each tracked person's temporal ROI. "
-            "Three models are currently verified and operational: Current MC3-18, FDSC MC3-18, and X3D-M. "
+            "Three models are currently verified and operational: Current MC3-18, Spontim 1.0, and X3D-M. "
             "FDSC R3D-18 is temporarily unavailable because the original checkpoint could not be obtained; "
             "CampusGuard Enhanced is reserved for a future multi-model ensemble."
         )
