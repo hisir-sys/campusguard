@@ -88,24 +88,50 @@ def combinations(items: list[TrackedPerson]):
 
 
 class FightDecision:
+    """Turn noisy temporal predictions into one stable event per continuous episode.
+
+    A brief NORMAL prediction must not immediately unlock a new alert. This is
+    important for fight footage because temporal classifiers can oscillate when
+    people overlap, motion blurs, or a single clip contains a transition.
+    """
+
+    NORMAL_RELEASE_PREDICTIONS = 6
+    TRIGGER_PREDICTIONS = 3
+
     def __init__(self, threshold: float) -> None:
         self.threshold = threshold
-        self.states: deque[str] = deque(maxlen=3)
+        self.states: deque[str] = deque(maxlen=self.TRIGGER_PREDICTIONS)
         self.event_latched = False
+        self.normal_release_count = 0
+
+    def reset(self) -> None:
+        self.states.clear()
+        self.event_latched = False
+        self.normal_release_count = 0
 
     def update(self, state: str, confidence: float | None) -> Event | None:
-        self.states.append(state)
         if state == "NORMAL":
-            self.event_latched = False
+            self.states.clear()
+            self.normal_release_count += 1
+            if self.normal_release_count >= self.NORMAL_RELEASE_PREDICTIONS:
+                self.event_latched = False
+                self.normal_release_count = 0
             return None
-        if len(self.states) < self.states.maxlen:
+
+        self.normal_release_count = 0
+        self.states.append(state)
+
+        if self.event_latched:
             return None
-        if not all(item == state for item in self.states):
+        if len(self.states) < self.TRIGGER_PREDICTIONS:
             return None
-        if self.event_latched or confidence is None or confidence < self.threshold:
+        if not all(item == "FIGHT DETECTED" for item in self.states):
             return None
+        if confidence is None or confidence < self.threshold:
+            return None
+
         self.event_latched = True
-        severity = "HIGH" if state == "FIGHT DETECTED" else "MEDIUM"
+        severity = "HIGH"
         return state, confidence, severity
 
 
@@ -230,8 +256,7 @@ class VisionPipeline:
         self.person_frame_counts.clear()
         self.person_scores.clear()
         self.fallback_tracks.clear()
-        self.decision.states.clear()
-        self.decision.event_latched = False
+        self.decision.reset()
         self.last_state = "MODEL NOT LOADED"
         self.last_confidence = None
         self.last_involved_ids.clear()
@@ -271,8 +296,7 @@ class VisionPipeline:
 
         if not ai_enabled:
             self._clear_involvement([])
-            self.decision.states.clear()
-            self.decision.event_latched = False
+            self.decision.reset()
             self.last_state, self.last_confidence = "AI DISABLED", None
             self.last_process_fps = 1.0 / max(perf_counter() - process_started, 1e-6)
             cv2.putText(annotated, "AI OFF", (18, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (180, 180, 180), 2, cv2.LINE_AA)
