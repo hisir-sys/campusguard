@@ -74,13 +74,15 @@ Weights are deliberately not included. Select local files under
   with COCO person class `0`
 - **Pose estimator:** a compatible Ultralytics YOLO Pose checkpoint using the
   17-keypoint COCO pose layout
-- **Fight classifier:** a torchvision MC3-18 classifier checkpoint with a
-  compatible `state_dict` or `model_state_dict`
+- **Fight classifier:** the verified MohamedSebaie FDSC MC3-18 checkpoint
+  `models/model_16_m3_0.8888.pth` is the default classifier. The source project
+  reports a 92.5% top-1 accuracy run with 0.90 fight recall.
 
-For a two-class MC3-18 checkpoint, select which output index means “fight”.
+For the MohamedSebaie FDSC MC3-18 checkpoint, output class `0` is treated as `fight`.
 For a three-class checkpoint, output indices must be ordered as normal,
-possible altercation, fight. The classifier preprocessing expects 16 RGB
-frames at 112×112 with Kinetics-400 normalization. A checkpoint with a
+possible altercation, fight. The classifier preprocessing expects 16 RGB frames; the FDSC MC3-18 adapter
+resizes to 171×128, center-crops to 112×112, then applies Kinetics-style
+normalization. A checkpoint with a
 different architecture, class mapping, or preprocessing will be reported as
 unloaded or errored.
 
