@@ -67,7 +67,7 @@ class SettingsPage(QWidget):
         header.addWidget(
             make_page_title(
                 "System settings",
-                "Configure detection, camera behavior, local model files, compute resources, and the CampusGuard appearance.",
+                "Configure detection, camera behavior, compute resources, and the CampusGuard appearance.",
             ),
             1,
         )
