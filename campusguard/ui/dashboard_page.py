@@ -20,7 +20,7 @@ from campusguard.settings import CameraConfig, CameraStats
 from campusguard.storage import Repository
 from campusguard.ui.common import CameraPreview, make_card, set_tone
 from campusguard.ui.icons import IconLabel
-from campusguard.ui.theme import get_palette
+from campusguard.ui.theme import get_palette, rgba
 
 
 NOTIFICATION_TONES = {
@@ -52,7 +52,7 @@ class PopupLayer(QWidget):
         self.setStyleSheet(
             """
             QWidget#popupLayer {
-                background: rgba(5, 8, 14, 155);
+                background: rgba(0, 0, 0, 115);
             }
             """
         )
@@ -91,8 +91,8 @@ class GlassPopup(QFrame):
         self.setStyleSheet(
             f"""
             QFrame#glassPopup {{
-                background: rgba(16, 23, 30, 138);
-                border: 1px solid rgba(255,255,255,0.18);
+                background: {rgba(palette.glass, palette.glass_alpha)};
+                border: 1px solid {rgba(palette.line, min(255, int(palette.line_alpha * 1.6)))};
                 border-radius: 26px;
             }}
 
@@ -110,26 +110,26 @@ class GlassPopup(QFrame):
             }}
 
             QLabel#popupClose {{
-                background: rgba(255,255,255,0.07);
-                border: 1px solid rgba(255,255,255,0.08);
+                background: {rgba(palette.veil, min(255, palette.veil_alpha * 2))};
+                border: 1px solid {rgba(palette.line, palette.line_alpha)};
                 border-radius: 15px;
                 font-size: 15pt;
                 font-weight: 500;
             }}
 
             QLabel#popupClose:hover {{
-                background: rgba(255,255,255,0.13);
+                background: {rgba(palette.veil, min(255, palette.veil_alpha * 3))};
             }}
 
             QFrame#popupSection {{
-                background: rgba(255,255,255,0.045);
-                border: 1px solid rgba(255,255,255,0.10);
+                background: {rgba(palette.veil, max(1, int(palette.veil_alpha * 0.7)))};
+                border: 1px solid {rgba(palette.line, palette.line_alpha)};
                 border-radius: 17px;
             }}
 
             QFrame#popupMetric {{
-                background: rgba(255,255,255,0.04);
-                border: 1px solid rgba(255,255,255,0.085);
+                background: {rgba(palette.veil, max(1, int(palette.veil_alpha * 0.6)))};
+                border: 1px solid {rgba(palette.line, max(1, int(palette.line_alpha * 0.8)))};
                 border-radius: 15px;
             }}
 
