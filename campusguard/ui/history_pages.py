@@ -726,6 +726,8 @@ class IncidentsPage(QWidget):
 
         self._blur_effect: QGraphicsBlurEffect | None = None
         self._popup: _HistoryPopup | None = None
+        self._live_open_handler = None
+        self._history_open_handler = None
 
         # ------------------------------------------------------------------
         # Root
@@ -1204,20 +1206,38 @@ class IncidentsPage(QWidget):
             "No resolved incidents."
         )
 
-        self.live_card.open_button.clicked.connect(
-            lambda: self._open_incident_popup(
-                current,
-                "Current incidents",
-                "Active and acknowledged security events.",
-            )
+        if self._live_open_handler is not None:
+            try:
+                self.live_card.open_button.clicked.disconnect(
+                    self._live_open_handler
+                )
+            except (RuntimeError, TypeError):
+                pass
+
+        if self._history_open_handler is not None:
+            try:
+                self.history_card.open_button.clicked.disconnect(
+                    self._history_open_handler
+                )
+            except (RuntimeError, TypeError):
+                pass
+
+        self._live_open_handler = lambda: self._open_incident_popup(
+            current,
+            "Current incidents",
+            "Active and acknowledged security events.",
+        )
+        self._history_open_handler = lambda: self._open_incident_popup(
+            resolved,
+            "Incident history",
+            "Previously resolved security events.",
         )
 
+        self.live_card.open_button.clicked.connect(
+            self._live_open_handler
+        )
         self.history_card.open_button.clicked.connect(
-            lambda: self._open_incident_popup(
-                resolved,
-                "Incident history",
-                "Previously resolved security events.",
-            )
+            self._history_open_handler
         )
 
     def _update_preview(
@@ -1266,6 +1286,7 @@ class IncidentsPage(QWidget):
     ) -> None:
         if self._popup is not None:
             old_popup = self._popup
+            self._popup = None
             old_popup.close_popup()
             old_popup.deleteLater()
 
@@ -1441,9 +1462,7 @@ class IncidentsPage(QWidget):
 
     def _close_popup(self) -> None:
         if self._blur_effect is not None:
-            self.main_content.setGraphicsEffect(
-                None
-            )
+            self.main_content.setGraphicsEffect(None)
 
         self._blur_effect = None
         self._popup = None
@@ -1778,33 +1797,42 @@ class AlertsPage(QWidget):
             "No previous alerts."
         )
 
-        # Prevent duplicate signal connections.
-        try:
-            self.active_panel.open_button.clicked.disconnect()
-        except RuntimeError:
-            pass
+        # Prevent duplicate signal connections without calling
+        # disconnect() on an unconnected PySide signal.
+        if self._live_open_handler is not None:
+            try:
+                self.active_panel.open_button.clicked.disconnect(
+                    self._live_open_handler
+                )
+            except (RuntimeError, TypeError):
+                pass
 
-        try:
-            self.previous_panel.open_button.clicked.disconnect()
-        except RuntimeError:
-            pass
+        if self._history_open_handler is not None:
+            try:
+                self.previous_panel.open_button.clicked.disconnect(
+                    self._history_open_handler
+                )
+            except (RuntimeError, TypeError):
+                pass
 
-        self.active_panel.open_button.clicked.connect(
-            lambda: self._open_alert_popup(
-                active,
-                "Active alerts",
-                "Security alerts currently requiring operator attention.",
-                True,
-            )
+        self._live_open_handler = lambda: self._open_alert_popup(
+            active,
+            "Active alerts",
+            "Security alerts currently requiring operator attention.",
+            True,
+        )
+        self._history_open_handler = lambda: self._open_alert_popup(
+            previous,
+            "Previous alerts",
+            "Previously acknowledged security alerts.",
+            False,
         )
 
+        self.active_panel.open_button.clicked.connect(
+            self._live_open_handler
+        )
         self.previous_panel.open_button.clicked.connect(
-            lambda: self._open_alert_popup(
-                previous,
-                "Previous alerts",
-                "Previously acknowledged security alerts.",
-                False,
-            )
+            self._history_open_handler
         )
 
     def _update_alert_preview(
@@ -1855,6 +1883,7 @@ class AlertsPage(QWidget):
     ) -> None:
         if self._popup is not None:
             old_popup = self._popup
+            self._popup = None
             old_popup.close_popup()
             old_popup.deleteLater()
 
