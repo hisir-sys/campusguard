@@ -398,6 +398,7 @@ class GlassPopup(QFrame):
 class DashboardPage(QWidget):
     camera_selected = Signal(str)
     view_alerts_requested = Signal()
+    clear_notifications_requested = Signal()
 
     def __init__(
         self,
@@ -1021,6 +1022,25 @@ class DashboardPage(QWidget):
             self.view_alerts_requested.emit()
         )
 
+        clear_notifications = QPushButton(
+            "Clear All"
+        )
+        clear_notifications.setProperty(
+            "link",
+            True,
+        )
+        clear_notifications.setCursor(
+            Qt.CursorShape.PointingHandCursor
+        )
+        clear_notifications.clicked.connect(
+            lambda _checked=False:
+            self.clear_notifications_requested.emit()
+        )
+
+        frame.header_layout.addWidget(
+            clear_notifications
+        )
+
         frame.header_layout.addWidget(
             view_alerts
         )
@@ -1298,7 +1318,7 @@ class DashboardPage(QWidget):
         }
         selected_model_names = {
             "mc3": "Current MC3-18",
-            "fdsc_mc3": "FDSC MC3-18",
+            "fdsc_mc3": "Spontim 1.0",
             "r3d": "FDSC R3D-18 — Technical Issue",
             "x3d": "X3D-M",
         }
@@ -1313,7 +1333,7 @@ class DashboardPage(QWidget):
                 settings.pose_model_path if settings else "",
             ),
             "fight": (
-                f"Violence model — {selected_model_names.get(selected_key, 'Current MC3-18')}",
+                f"Violence model — {selected_model_names.get(selected_key, 'Spontim 1.0')}",
                 selected_paths.get(selected_key, ""),
             ),
         }
@@ -1427,7 +1447,7 @@ class DashboardPage(QWidget):
             section
         )
 
-        selected_name = selected_model_names.get(selected_key, "Current MC3-18")
+        selected_name = selected_model_names.get(selected_key, "Spontim 1.0")
         selected_row = QFrame()
         selected_row.setObjectName("popupSection")
         selected_layout = QHBoxLayout(selected_row)
