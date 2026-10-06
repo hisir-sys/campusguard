@@ -86,11 +86,12 @@ class GlassPopup(QFrame):
         self.setMinimumHeight(360)
         self.setMaximumHeight(590)
 
-        palette = get_palette()
+        self._apply_palette()
 
-        self.setStyleSheet(
-            f"""
-            QFrame#glassPopup {{
+        # The popup is created before the application's global stylesheet is
+        # applied, so its custom glass stylesheet must be refreshed explicitly
+        # when the app theme changes.
+        {
                 background: {rgba(palette.glass, palette.glass_alpha)};
                 border: 1px solid {rgba(palette.line, min(255, int(palette.line_alpha * 1.6)))};
                 border-radius: 26px;
@@ -288,6 +289,113 @@ class GlassPopup(QFrame):
             self.scroll,
             1,
         )
+
+    def _apply_palette(self) -> None:
+        palette = get_palette()
+
+        self.setStyleSheet(
+            f"""
+            QFrame#glassPopup {{
+                background: {rgba(palette.glass, palette.glass_alpha)};
+                color: {palette.text};
+                border: 1px solid {rgba(palette.line, min(255, int(palette.line_alpha * 1.6)))};
+                border-radius: 26px;
+            }}
+
+            QLabel#popupTitle {{
+                color: {palette.text};
+                font-size: 18pt;
+                font-weight: 760;
+                background: transparent;
+                border: none;
+            }}
+
+            QLabel#popupSubtitle {{
+                color: {palette.text_dim};
+                font-size: 9pt;
+                background: transparent;
+                border: none;
+            }}
+
+            QLabel#popupClose {{
+                color: {palette.text};
+                background: {rgba(palette.veil, min(255, palette.veil_alpha * 2))};
+                border: 1px solid {rgba(palette.line, palette.line_alpha)};
+                border-radius: 15px;
+                font-size: 15pt;
+                font-weight: 500;
+            }}
+
+            QLabel#popupClose:hover {{
+                background: {rgba(palette.veil, min(255, palette.veil_alpha * 3))};
+            }}
+
+            QFrame#popupSection {{
+                background: {rgba(palette.veil, max(1, int(palette.veil_alpha * 0.7)))};
+                color: {palette.text};
+                border: 1px solid {rgba(palette.line, palette.line_alpha)};
+                border-radius: 17px;
+            }}
+
+            QFrame#popupMetric {{
+                background: {rgba(palette.veil, max(1, int(palette.veil_alpha * 0.6)))};
+                color: {palette.text};
+                border: 1px solid {rgba(palette.line, max(1, int(palette.line_alpha * 0.8)))};
+                border-radius: 15px;
+            }}
+
+            QLabel#popupSectionTitle {{
+                color: {palette.text_dim};
+                font-size: 9pt;
+                font-weight: 700;
+                background: transparent;
+                border: none;
+            }}
+
+            QLabel#popupKey {{
+                color: {palette.text_dim};
+                font-size: 9pt;
+                background: transparent;
+                border: none;
+            }}
+
+            QLabel#popupValue {{
+                color: {palette.text};
+                font-size: 9pt;
+                font-weight: 650;
+                background: transparent;
+                border: none;
+            }}
+
+            QLabel#popupMetricValue {{
+                color: {palette.text};
+                font-size: 20pt;
+                font-weight: 750;
+                background: transparent;
+                border: none;
+            }}
+
+            QLabel#popupMetricCaption {{
+                color: {palette.text_dim};
+                font-size: 8pt;
+                background: transparent;
+                border: none;
+            }}
+
+            QScrollArea#popupScroll {{
+                background: transparent;
+                border: none;
+            }}
+
+            QScrollArea#popupScroll QWidget {{
+                background: transparent;
+                color: {palette.text};
+            }}
+            """
+        )
+
+    def retint(self) -> None:
+        self._apply_palette()
 
     def eventFilter(
         self,
@@ -754,6 +862,8 @@ class DashboardPage(QWidget):
 
         self.online_value = QLabel("0")
         self.online_value.setProperty("kvvalue", True)
+        self.offline_value = QLabel("0")
+        self.offline_value.setProperty("kvvalue", True)
         self.incident_value = QLabel("0")
         self.incident_value.setProperty("kvvalue", True)
         self.alert_value = QLabel("0")
@@ -1840,7 +1950,11 @@ class DashboardPage(QWidget):
         )
 
         self.online_value.setText(
-            str(len(self._cameras))
+            str(online)
+        )
+
+        self.offline_value.setText(
+            str(max(0, len(self._cameras) - online))
         )
 
         self.incident_value.setText(
