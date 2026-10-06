@@ -791,6 +791,16 @@ class MainWindow(QMainWindow):
         camera = self.cameras.get(camera_id)
         if camera is None:
             return
+        self._in_app_overlay.show_confirmation(
+            "Remove camera?",
+            f"Remove {camera.name} ({camera.camera_id}) and its saved connection credentials?",
+            lambda identifier=camera_id: self._confirm_remove_camera(identifier),
+        )
+
+    def _confirm_remove_camera(self, camera_id: str) -> None:
+        camera = self.cameras.get(camera_id)
+        if camera is None:
+            return
         self.camera_manager.stop_camera(camera_id)
         self.repository.remove_camera(camera_id)
         try:
