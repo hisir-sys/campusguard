@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from PySide6.QtGui import QAction, QKeySequence
-from PySide6.QtCore import QTimer, Qt
+from PySide6.QtGui import QAction, QKeySequence, QPixmap
+from PySide6.QtCore import QTimer, Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -30,7 +30,9 @@ from campusguard.settings import (
 from campusguard.storage import Repository
 from campusguard.ui.camera_page import CamerasPage
 from campusguard.ui.common import (
-    EnlargedCameraDialog,
+    apply_theme,
+    make_card,
+    make_page_title,
     apply_theme,
     make_card,
     make_page_title,
@@ -42,6 +44,199 @@ from campusguard.ui.icons import set_icon_theme
 from campusguard.ui.settings_page import SettingsPage
 from campusguard.ui.theme import get_palette
 
+
+class InAppOverlay(QFrame):
+    confirmed = Signal()
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setObjectName("inAppOverlay")
+        self.setStyleSheet(
+            """
+            QFrame#inAppOverlay {
+                background: rgba(4, 7, 12, 190);
+                border: none;
+            }
+            QFrame#inAppPanel {
+                background: rgba(20, 27, 36, 0.94);
+                border: 1px solid rgba(255,255,255,0.14);
+                border-radius: 24px;
+            }
+            QLabel#overlayTitle {
+                font-size: 16pt;
+                font-weight: 800;
+                background: transparent;
+            }
+            QLabel#overlayBody {
+                font-size: 10pt;
+                line-height: 1.4;
+                background: transparent;
+            }
+            QLabel#overlayClose {
+                background: rgba(255,255,255,0.07);
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 15px;
+                font-size: 14pt;
+            }
+            QLabel#overlayClose:hover {
+                background: rgba(255,255,255,0.13);
+            }
+            QLabel#cameraViewport {
+                background: #080d11;
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 16px;
+            }
+            """
+        )
+        self._panel = QFrame(self)
+        self._panel.setObjectName("inAppPanel")
+        self._panel.setFixedSize(820, 560)
+
+        self._title = QLabel()
+        self._title.setObjectName("overlayTitle")
+
+        self._body = QLabel()
+        self._body.setObjectName("overlayBody")
+        self._body.setWordWrap(True)
+
+        self._close = QPushButton("×")
+        self._close.setObjectName("overlayClose")
+        self._close.setFixedSize(32, 32)
+        self._close.clicked.connect(self.hide)
+
+        self._content = QVBoxLayout(self._panel)
+        self._content.setContentsMargins(24, 20, 24, 22)
+        self._content.setSpacing(12)
+
+        header = QHBoxLayout()
+        header.addWidget(self._title, 1)
+        header.addWidget(self._close)
+        self._content.addLayout(header)
+
+        self._body_widget = QWidget()
+        self._body_layout = QVBoxLayout(self._body_widget)
+        self._body_layout.setContentsMargins(0, 0, 0, 0)
+        self._body_layout.setSpacing(12)
+        self._content.addWidget(self._body_widget, 1)
+
+        self._confirm_callback = None
+        self.hide()
+
+    def _clear_body(self) -> None:
+        while self._body_layout.count():
+            item = self._body_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+    def _center(self) -> None:
+        self._panel.adjustSize()
+        self._panel.move(
+            max(18, (self.width() - self._panel.width()) // 2),
+            max(18, (self.height() - self._panel.height()) // 2),
+        )
+
+    def show_confirmation(self, title: str, message: str) -> None:
+        self._confirm_callback = None
+        self._clear_body()
+        self._title.setText(title)
+        self._body.setText(message)
+        self._body.setVisible(True)
+        self._body_layout.addWidget(self._body)
+
+        buttons = QHBoxLayout()
+        buttons.addStretch(1)
+        cancel = QPushButton("Cancel")
+        cancel.setProperty("secondaryButton", True)
+        cancel.clicked.connect(self.hide)
+        confirm = QPushButton("Confirm")
+        confirm.setProperty("danger", True)
+        confirm.clicked.connect(self._confirm)
+        buttons.addWidget(cancel)
+        buttons.addWidget(confirm)
+        self._body_layout.addLayout(buttons)
+
+        self._panel.setFixedSize(560, 270)
+        self.show()
+        self.raise_()
+        self._center()
+
+    def _confirm(self) -> None:
+        self.hide()
+        self.confirmed.emit()
+
+    def show_camera(self, camera: CameraConfig, image=None, stats: CameraStats | None = None) -> None:
+        self._clear_body()
+        self._title.setText(camera.name)
+        self._body.setVisible(False)
+
+        viewport = QLabel("Waiting for camera frames")
+        viewport.setObjectName("cameraViewport")
+        viewport.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        viewport.setMinimumHeight(390)
+        viewport.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self._body_layout.addWidget(viewport, 1)
+
+        info = QLabel()
+        info.setProperty("muted", True)
+        self._body_layout.addWidget(info)
+
+        close = QPushButton("Close")
+        close.setProperty("secondaryButton", True)
+        close.clicked.connect(self.hide)
+        row = QHBoxLayout()
+        row.addStretch(1)
+        row.addWidget(close)
+        self._body_layout.addLayout(row)
+
+        self._panel.setFixedSize(900, 650)
+        self._camera_viewport = viewport
+        self._camera_info = info
+        self._camera = camera
+        self._camera_stats = stats or CameraStats()
+        if image is not None:
+            self.set_camera_frame(image, "LIVE", None)
+        else:
+            self._render_camera_info()
+        self.show()
+        self.raise_()
+        self._center()
+
+    def set_camera_frame(self, image, state: str, confidence: float | None) -> None:
+        if not hasattr(self, "_camera_viewport") or not self.isVisible():
+            return
+        pixmap = QPixmap.fromImage(image)
+        self._camera_viewport.setPixmap(
+            pixmap.scaled(
+                self._camera_viewport.size(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        )
+        suffix = f"   Confidence: {confidence:.0%}" if confidence is not None else ""
+        fps = f"{self._camera_stats.fps:.1f}" if self._camera_stats.fps is not None else "N/A"
+        resolution = self._camera_stats.resolution or "N/A"
+        self._camera_info.setText(f"{state}   ·   FPS: {fps}   ·   Resolution: {resolution}{suffix}")
+
+    def set_camera_stats(self, stats: CameraStats) -> None:
+        if not hasattr(self, "_camera_info") or not self.isVisible():
+            return
+        self._camera_stats = stats
+        self._render_camera_info()
+
+    def _render_camera_info(self) -> None:
+        status = self._camera_stats.status or "CONNECTING"
+        if status != "LIVE":
+            self._camera_viewport.clear()
+            self._camera_viewport.setText(self._camera_stats.message or "Waiting for camera frames")
+        fps = f"{self._camera_stats.fps:.1f}" if self._camera_stats.fps is not None else "N/A"
+        resolution = self._camera_stats.resolution or "N/A"
+        self._camera_info.setText(f"{status}   ·   FPS: {fps}   ·   Resolution: {resolution}")
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if self.isVisible():
+            self._center()
 
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
@@ -61,7 +256,7 @@ class MainWindow(QMainWindow):
         }
         self.model_statuses: dict[str, dict[str, str]] = {}
         self._previous_camera_status: dict[str, str] = {}
-        self._camera_dialogs: dict[str, EnlargedCameraDialog] = {}
+        self._camera_view_camera_id: str | None = None
         self.operator_name: str | None = None
         self._pending_footage_incidents: dict[str, str] = {}
 
@@ -150,10 +345,15 @@ class MainWindow(QMainWindow):
         outer.addLayout(bottom_row)
 
         self.setCentralWidget(central)
+        self._in_app_overlay = InAppOverlay(central)
+        self._in_app_overlay.hide()
         self.statusBar().setSizeGripEnabled(False)
-        self.statusBar().showMessage("Ready — no sample cameras or simulated detections are loaded.")
         self._connect_pages()
 
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if hasattr(self, "_in_app_overlay"):
+            self._in_app_overlay.setGeometry(self.centralWidget().rect())
 
     # ------------------------------------------------------------------
     # Long-form technical information pages
@@ -546,19 +746,11 @@ class MainWindow(QMainWindow):
         camera = self.cameras.get(camera_id)
         if camera is None:
             return
-        dialog = self._camera_dialogs.get(camera_id)
-        if dialog is None:
-            dialog = EnlargedCameraDialog(camera, self)
-            self._camera_dialogs[camera_id] = dialog
-            dialog.finished.connect(
-                lambda _result, identifier=camera_id:
-                self._camera_dialogs.pop(identifier, None)
-            )
-            dialog.show()
-        else:
-            dialog.raise_()
-            dialog.activateWindow()
-        dialog.set_camera_stats(self.camera_stats.get(camera_id, CameraStats()))
+        self._camera_view_camera_id = camera_id
+        self._in_app_overlay.show_camera(
+            camera,
+            stats=self.camera_stats.get(camera_id, CameraStats()),
+        )
 
     # ------------------------------------------------------------------
     # Cameras
@@ -613,9 +805,9 @@ class MainWindow(QMainWindow):
         self.camera_stats.pop(camera_id, None)
         self._previous_camera_status.pop(camera_id, None)
         self.model_statuses.pop(camera_id, None)
-        dialog = self._camera_dialogs.pop(camera_id, None)
-        if dialog:
-            dialog.close()
+        if self._camera_view_camera_id == camera_id:
+            self._camera_view_camera_id = None
+            self._in_app_overlay.hide()
         self.repository.add_notification("camera_removed", f"{camera.name} ({camera_id}) removed.")
         self._sync_cameras()
 
@@ -755,9 +947,8 @@ class MainWindow(QMainWindow):
 
     def _on_frame(self, camera_id: str, image, state: str, confidence) -> None:
         self.dashboard.update_frame(camera_id, image, state, confidence)
-        dialog = self._camera_dialogs.get(camera_id)
-        if dialog:
-            dialog.set_frame(image, state, confidence)
+        if self._camera_view_camera_id == camera_id:
+            self._in_app_overlay.set_camera_frame(image, state, confidence)
 
     def _on_model_status(self, camera_id: str, component: str, message: str) -> None:
         if camera_id not in self.cameras:
