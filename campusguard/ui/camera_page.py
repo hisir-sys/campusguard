@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
+
     QCheckBox,
+    QDialog,
+    QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -13,7 +17,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from campusguard.settings import CameraConfig, CameraStats
+from campusguard.camera_runtime import LocalVideoTestThread
+from campusguard.settings import AppSettings, CameraConfig, CameraStats
 from campusguard.ui.common import CameraFormDialog, make_page_title, set_status_label
 
 
@@ -141,6 +146,7 @@ class CameraRow(QFrame):
 
 class CamerasPage(QWidget):
     add_requested = Signal(dict)
+    local_test_requested = Signal()
     remove_requested = Signal(str)
     reconnect_requested = Signal(str)
     ai_changed = Signal(str, bool)
@@ -164,6 +170,15 @@ class CamerasPage(QWidget):
             "Manage external USB, RTSP, HTTP/MJPEG and IP camera sources.",
         )
         header.addWidget(title, 1)
+
+        local_button = QPushButton("▣  Local files")
+        local_button.setMinimumHeight(38)
+        local_button.setToolTip(
+            "Test a local video file with the production AI pipeline. "
+            "It is not added as a camera."
+        )
+        local_button.clicked.connect(self.local_test_requested.emit)
+        header.addWidget(local_button, 0, Qt.AlignmentFlag.AlignBottom)
 
         add_button = QPushButton("＋  Add camera")
         add_button.setProperty("primary", True)
