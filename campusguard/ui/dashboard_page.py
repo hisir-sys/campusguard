@@ -533,17 +533,11 @@ class DashboardPage(QWidget):
 
         # ==============================================================
         # DASHBOARD BLUR
+        #
+        # Keep the dashboard unmodified during normal operation. The blur
+        # effect is created only when a popup is actually opened.
         # ==============================================================
-
-        self._dashboard_blur = (
-            QGraphicsBlurEffect(self)
-        )
-
-        self._dashboard_blur.setBlurRadius(0)
-
-        self._dashboard_content.setGraphicsEffect(
-            self._dashboard_blur
-        )
+        self._dashboard_blur = None
 
         # ==============================================================
         # POPUP OVERLAY
