@@ -392,8 +392,10 @@ def _configure_table(
     table.verticalHeader().hide()
 
     table.verticalHeader().setDefaultSectionSize(
-        48
+        64
     )
+    table.setWordWrap(False)
+    table.setTextElideMode(Qt.TextElideMode.ElideRight)
 
 
 def _apply_table_palette(
@@ -563,6 +565,8 @@ class _HistoryPopup(QWidget):
             "historyPopup"
         )
 
+        self.popup.setMinimumSize(920, 560)
+
         self.popup.setProperty(
             "card",
             True,
@@ -579,10 +583,10 @@ class _HistoryPopup(QWidget):
         outer = QVBoxLayout(self)
 
         outer.setContentsMargins(
-            42,
-            32,
-            42,
-            32,
+            20,
+            20,
+            20,
+            20,
         )
 
         outer.setAlignment(
@@ -749,9 +753,11 @@ class _HistoryPopup(QWidget):
         )
 
     def show_popup(self) -> None:
-        self.setGeometry(
-            self.parentWidget().rect()
-        )
+        parent_rect = self.parentWidget().rect()
+        width = min(1320, max(920, int(parent_rect.width() * 0.88)))
+        height = min(760, max(560, int(parent_rect.height() * 0.78)))
+        self.popup.setFixedSize(width, height)
+        self.setGeometry(parent_rect)
 
         self.raise_()
         self.show()
@@ -1029,14 +1035,14 @@ class IncidentsPage(QWidget):
         # Left: live/new incidents
         self.live_card = self._create_incident_preview(
             "CURRENT INCIDENTS",
-            "New and acknowledged security events",
+            "Open incidents awaiting operator confirmation",
             "Open incident list",
         )
 
         # Right: history
         self.history_card = self._create_incident_preview(
             "RESOLVED HISTORY",
-            "Previously resolved incidents",
+            "Incidents completed with the OK action",
             "Open incident history",
         )
 
@@ -1397,6 +1403,7 @@ class IncidentsPage(QWidget):
                     "STATUS",
                     "TIME",
                     "FOOTAGE",
+                    "ACTION",
                 ]
             )
 
@@ -1406,7 +1413,7 @@ class IncidentsPage(QWidget):
 
             table = QTableWidget(
                 len(rows),
-                8,
+                9,
             )
 
             _configure_table(
@@ -1452,6 +1459,11 @@ class IncidentsPage(QWidget):
 
             header.setSectionResizeMode(
                 7,
+                header.ResizeMode.ResizeToContents,
+            )
+
+            header.setSectionResizeMode(
+                8,
                 header.ResizeMode.ResizeToContents,
             )
 
@@ -1514,6 +1526,15 @@ class IncidentsPage(QWidget):
                 )
 
                 self._set_footage_cell(table, index, 7, row)
+                self._set_incident_action_cell(
+                    table,
+                    index,
+                    8,
+                    row,
+                    allow_resolve=(row["status"] != "RESOLVED"),
+                )
+
+            table.setRowHeight(index, 64)
 
             layout.addWidget(
                 table,
@@ -1525,6 +1546,37 @@ class IncidentsPage(QWidget):
         )
 
         popup.show_popup()
+
+    def _set_incident_action_cell(
+        self,
+        table: QTableWidget,
+        row_index: int,
+        column: int,
+        row: dict,
+        allow_resolve: bool,
+    ) -> None:
+        actions = QWidget()
+        action_layout = QHBoxLayout(actions)
+        action_layout.setContentsMargins(4, 4, 4, 4)
+        action_layout.setSpacing(7)
+
+        if allow_resolve:
+            ok_button = QPushButton("OK")
+            ok_button.setProperty("minimalAction", True)
+            ok_button.setProperty("action", "resolve")
+            ok_button.setCursor(Qt.CursorShape.PointingHandCursor)
+            ok_button.setMinimumHeight(32)
+            ok_button.clicked.connect(
+                lambda checked=False, public_id=row["public_id"]:
+                self._resolve_incident(public_id)
+            )
+            action_layout.addWidget(ok_button)
+
+        table.setCellWidget(row_index, column, actions)
+
+    def _resolve_incident(self, public_id: str) -> None:
+        self.status_change_requested.emit(public_id, "RESOLVED")
+        self._close_popup()
 
     def _set_footage_cell(self, table: QTableWidget, row_index: int, column: int, row: dict) -> None:
         path = str(row.get("footage_path") or "")
@@ -1545,31 +1597,6 @@ class IncidentsPage(QWidget):
     def _open_footage(self, path: str, public_id: str) -> None:
         FootagePlayerDialog(path, f"Incident {public_id}", self).exec()
 
-    def _set_footage_cell(self, table: QTableWidget, row_index: int, column: int, row: dict) -> None:
-        path = str(row.get("footage_path") or "")
-        available = Path(path).is_file()
-        button = _action_button("View" if available else "Unavailable", "view")
-        button.setEnabled(available)
-        if available:
-            button.clicked.connect(
-                lambda checked=False, p=path, public_id=row["public_id"]:
-                self._open_footage(p, public_id)
-            )
-        actions = QWidget()
-        action_layout = QHBoxLayout(actions)
-        action_layout.setContentsMargins(3, 2, 3, 2)
-        action_layout.addWidget(button)
-        table.setCellWidget(row_index, column, actions)
-
-    def _open_footage(self, path: str, public_id: str) -> None:
-        FootagePlayerDialog(path, f"Alert {public_id}", self).exec()
-
-    def _close_popup(self) -> None:
-        if self._blur_effect is not None:
-            self.main_content.setGraphicsEffect(None)
-
-        self._blur_effect = None
-        self._popup = None
 
 
 # ============================================================================
@@ -1696,8 +1723,8 @@ class AlertsPage(QWidget):
             "0",
         )
 
-        self.previous_card = _metric_card(
-            "PREVIOUS",
+        self.history_card = _metric_card(
+            "HISTORY",
             "0",
         )
 
@@ -1713,7 +1740,7 @@ class AlertsPage(QWidget):
 
         for card in (
             self.active_card,
-            self.previous_card,
+            self.history_card,
             self.high_card,
             self.medium_card,
         ):
@@ -1733,25 +1760,14 @@ class AlertsPage(QWidget):
         workspace = QHBoxLayout()
         workspace.setSpacing(12)
 
-        self.active_panel = self._create_alert_panel(
-            "ACTIVE ALERTS",
-            "Alerts requiring operator attention",
-            "Open active alerts",
-        )
-
-        self.previous_panel = self._create_alert_panel(
-            "PREVIOUS ALERTS",
-            "Acknowledged alert history",
+        self.history_panel = self._create_alert_panel(
+            "ALERT HISTORY",
+            "All generated security alerts, with active events shown first",
             "Open alert history",
         )
 
         workspace.addWidget(
-            self.active_panel,
-            1,
-        )
-
-        workspace.addWidget(
-            self.previous_panel,
+            self.history_panel,
             1,
         )
 
@@ -1857,28 +1873,20 @@ class AlertsPage(QWidget):
             if not row["acknowledged"]
         ]
 
-        previous = [
-            row
-            for row in rows
-            if row["acknowledged"]
-        ]
-
         high_count = sum(
             1
             for row in active
             if row["severity"] == "HIGH"
         )
 
-        medium_low_count = (
-            len(active) - high_count
-        )
+        medium_low_count = len(active) - high_count
 
         self.active_card.value_label.setText(
             str(len(active))
         )
 
-        self.previous_card.value_label.setText(
-            str(len(previous))
+        self.history_card.value_label.setText(
+            str(len(rows))
         )
 
         self.high_card.value_label.setText(
@@ -1894,52 +1902,26 @@ class AlertsPage(QWidget):
         )
 
         self._update_alert_preview(
-            self.active_panel,
-            active,
-            "No active alerts."
+            self.history_panel,
+            rows,
+            "No alerts in history."
         )
-
-        self._update_alert_preview(
-            self.previous_panel,
-            previous,
-            "No previous alerts."
-        )
-
-        # Prevent duplicate signal connections without calling
-        # disconnect() on an unconnected PySide signal.
-        if self._live_open_handler is not None:
-            try:
-                self.active_panel.open_button.clicked.disconnect(
-                    self._live_open_handler
-                )
-            except (RuntimeError, TypeError):
-                pass
 
         if self._history_open_handler is not None:
             try:
-                self.previous_panel.open_button.clicked.disconnect(
+                self.history_panel.open_button.clicked.disconnect(
                     self._history_open_handler
                 )
             except (RuntimeError, TypeError):
                 pass
 
-        self._live_open_handler = lambda: self._open_alert_popup(
-            active,
-            "Active alerts",
-            "Security alerts currently requiring operator attention.",
-            True,
-        )
         self._history_open_handler = lambda: self._open_alert_popup(
-            previous,
-            "Previous alerts",
-            "Previously acknowledged security alerts.",
-            False,
+            rows,
+            "Alert history",
+            "All generated security alerts, with active events shown first.",
         )
 
-        self.active_panel.open_button.clicked.connect(
-            self._live_open_handler
-        )
-        self.previous_panel.open_button.clicked.connect(
+        self.history_panel.open_button.clicked.connect(
             self._history_open_handler
         )
 
@@ -1987,7 +1969,6 @@ class AlertsPage(QWidget):
         rows: list[dict],
         title: str,
         subtitle: str,
-        active: bool,
     ) -> None:
         if self._popup is not None:
             old_popup = self._popup
@@ -2034,11 +2015,7 @@ class AlertsPage(QWidget):
             layout.addWidget(
                 _empty_state(
                     "Nothing to show",
-                    (
-                        "There are no active alerts."
-                        if active
-                        else "There are no previous alerts."
-                    ),
+                    "There are no alerts in history.",
                 )
             )
 
@@ -2164,6 +2141,7 @@ class AlertsPage(QWidget):
                 )
 
                 self._set_footage_cell(table, index, 6, row)
+                table.setRowHeight(index, 64)
 
             layout.addWidget(
                 table,
