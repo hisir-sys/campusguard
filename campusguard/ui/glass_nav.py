@@ -7,8 +7,8 @@ Pieces:
 * ``GlassBar``        - a rounded translucent bar. A soft light follows the mouse and a
   bright streak runs along the top edge under the cursor.
 * ``NavButton``       - text (+ optional icon) button. On hover the text brightens and a
-  red underline grows from the center; the active page keeps the underline.
-* ``SearchControl``   - a search icon that expands into a red-outlined field (ESC / x to close).
+  indigo active underline grows from the center; the active page keeps the underline.
+* ``SearchControl``   - a search icon that expands into a indigo focus field (ESC / x to close).
 * ``TopBar`` / ``BottomBar`` - the two ready-made bars used by the main window.
 
 Everything here is custom-painted from the palette in ``theme.py``, so a theme switch
@@ -252,7 +252,7 @@ class NavButton(QAbstractButton):
         self._active_anim = _make_anim(self, 240, self._set_active_value)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
-        self.setFixedHeight(40)
+        self.setFixedHeight(48)
         horizontal = QSizePolicy.Policy.Expanding if expand else QSizePolicy.Policy.Minimum
         self.setSizePolicy(horizontal, QSizePolicy.Policy.Fixed)
 
@@ -300,7 +300,7 @@ class NavButton(QAbstractButton):
 
     def sizeHint(self) -> QSize:
         self.ensurePolished()
-        return QSize(int(self._content_width()) + 36, 40)
+        return QSize(int(self._content_width()) + 36, 48)
 
     def minimumSizeHint(self) -> QSize:
         return self.sizeHint()
@@ -322,9 +322,9 @@ class NavButton(QAbstractButton):
 
         # soft pill behind the active item
         if self._active > 0.01:
-            pill = QRectF(3.0, 4.0, w - 6.0, h - 8.0)
+            pill = QRectF(2.0, 2.0, w - 4.0, h - 4.0)
             painter.setPen(QPen(qcolor(pal.accent, int(60 * self._active)), 1.0))
-            painter.setBrush(qcolor(pal.accent, int(26 * self._active)))
+            painter.setBrush(qcolor(pal.accent, int(22 * self._active)))
             painter.drawRoundedRect(pill, 12.0, 12.0)
 
         content_w = self._content_width()
@@ -343,11 +343,11 @@ class NavButton(QAbstractButton):
         # the red underline grows from the center
         if reveal > 0.01:
             underline_w = (content_w + 8.0) * reveal
-            underline_y = cy + metrics.height() / 2.0 + 2.0
+            underline_y = h - 4.0
             left = (w - underline_w) / 2.0
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(qcolor(pal.accent, int(60 * reveal)))
-            painter.drawRoundedRect(QRectF(left - 2, underline_y - 1.5, underline_w + 4, 5.0), 2.5, 2.5)
+            painter.drawRoundedRect(QRectF(left - 2, underline_y - 1.5, underline_w + 4, 4.0), 2.0, 2.0)
             painter.setBrush(qcolor(pal.accent, 255))
             painter.drawRoundedRect(QRectF(left, underline_y, underline_w, 2.0), 1.0, 1.0)
 
@@ -437,7 +437,7 @@ class GlassButton(QAbstractButton):
         self._hover_anim = _make_anim(self, 150, self._set_hover)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
-        self.setFixedHeight(34)
+        self.setFixedHeight(40)
 
     def retint(self) -> None:
         self.update()
@@ -462,7 +462,7 @@ class GlassButton(QAbstractButton):
     def sizeHint(self) -> QSize:
         self.ensurePolished()
         metrics = QFontMetrics(self._label_font())
-        return QSize(metrics.horizontalAdvance(self.text()) + 34, 34)
+        return QSize(metrics.horizontalAdvance(self.text()) + 34, 40)
 
     def minimumSizeHint(self) -> QSize:
         return self.sizeHint()
@@ -686,10 +686,10 @@ class TopBar(GlassBar):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setFixedHeight(58)
+        self.setFixedHeight(64)
         row = QHBoxLayout(self)
-        row.setContentsMargins(18, 0, 12, 0)
-        row.setSpacing(4)
+        row.setContentsMargins(16, 8, 16, 8)
+        row.setSpacing(8)
 
         logo = _Logo()
         logo.clicked.connect(lambda: self.page_requested.emit("dashboard"))
@@ -711,7 +711,7 @@ class TopBar(GlassBar):
         self.theme_button = RoundIconButton("sun", 34)
         self.theme_button.clicked.connect(lambda _checked=False: self.theme_toggle_requested.emit())
         row.addWidget(self.theme_button, 0, Qt.AlignmentFlag.AlignVCenter)
-        row.addSpacing(6)
+        row.addSpacing(8)
 
         self.login_button = GlassButton("Log in")
         self.login_button.clicked.connect(lambda _checked=False: self.login_requested.emit())
@@ -756,10 +756,10 @@ class BottomBar(GlassBar):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setFixedHeight(56)
+        self.setFixedHeight(64)
         row = QHBoxLayout(self)
-        row.setContentsMargins(10, 0, 10, 0)
-        row.setSpacing(6)
+        row.setContentsMargins(8, 8, 8, 8)
+        row.setSpacing(8)
         self._buttons: dict[str, NavButton] = {}
         for label, key, icon in self.TABS:
             button = NavButton(label, icon=icon, expand=True)
