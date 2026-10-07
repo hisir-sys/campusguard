@@ -42,10 +42,12 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QAbstractButton,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QSizePolicy,
+    QVBoxLayout,
     QWidget,
 )
 
@@ -652,16 +654,22 @@ class SearchControl(QWidget):
 class _Logo(QWidget):
     clicked = Signal()
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, expanded: bool = True, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         row = QHBoxLayout(self)
-        row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(9)
-        row.addWidget(IconLabel("shield", 22, "accent"))
-        label = QLabel("CampusGuard")
-        label.setStyleSheet("font-size: 12.5pt; font-weight: 700;")
-        row.addWidget(label)
+        row.setContentsMargins(10, 0, 10, 0)
+        row.setSpacing(10)
+        self.icon = IconLabel("shield", 24, "accent")
+        self.label = QLabel("CampusGuard")
+        self.label.setStyleSheet("font-size: 12.5pt; font-weight: 750;")
+        row.addWidget(self.icon)
+        row.addWidget(self.label, 1)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.set_expanded(expanded)
+
+    def set_expanded(self, expanded: bool) -> None:
+        self.label.setVisible(expanded)
+        self.updateGeometry()
 
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
@@ -669,8 +677,98 @@ class _Logo(QWidget):
         super().mousePressEvent(event)
 
 
+class _SideNavButton(QAbstractButton):
+    def __init__(self, text: str, icon: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._label = text
+        self._icon = icon
+        self._active = 0.0
+        self._hover = 0.0
+        self._expanded = False
+        self._badge = 0
+        self._hover_anim = _make_anim(self, 160, self._set_hover)
+        self._active_anim = _make_anim(self, 220, self._set_active)
+        self.setFixedHeight(50)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+
+    def set_expanded(self, expanded: bool) -> None:
+        self._expanded = expanded
+        self.updateGeometry()
+        self.update()
+
+    def set_active(self, active: bool) -> None:
+        _run(self._active_anim, self._active, 1.0 if active else 0.0)
+
+    def set_badge(self, count: int) -> None:
+        self._badge = max(0, int(count))
+        self.update()
+
+    def _set_hover(self, value: float) -> None:
+        self._hover = value
+        self.update()
+
+    def _set_active(self, value: float) -> None:
+        self._active = value
+        self.update()
+
+    def enterEvent(self, event) -> None:
+        _run(self._hover_anim, self._hover, 1.0)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:
+        _run(self._hover_anim, self._hover, 0.0)
+        super().leaveEvent(event)
+
+    def sizeHint(self) -> QSize:
+        return QSize(58 if not self._expanded else 196, 50)
+
+    def paintEvent(self, event) -> None:
+        pal = get_palette()
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        w = float(self.width())
+        h = float(self.height())
+        reveal = max(self._hover, self._active)
+
+        if self._active > 0.01:
+            painter.setPen(QPen(qcolor(pal.accent, int(80 * self._active)), 1))
+            painter.setBrush(qcolor(pal.accent, int(26 * self._active)))
+            painter.drawRoundedRect(QRectF(2, 2, w - 4, h - 4), 12, 12)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(qcolor(pal.accent, 255))
+            painter.drawRoundedRect(QRectF(3, 11, 3, h - 22), 1.5, 1.5)
+        elif reveal > 0.01:
+            painter.setPen(QPen(qcolor(pal.line, int(18 + 22 * self._hover)), 1))
+            painter.setBrush(qcolor(pal.veil, int(20 * self._hover)))
+            painter.drawRoundedRect(QRectF(2, 2, w - 4, h - 4), 12, 12)
+
+        color = mix_colors(QColor(pal.text_dim), QColor(pal.text), reveal)
+        icon_size = 19
+        painter.drawPixmap(QPointF(18, (h - icon_size) / 2), icon_pixmap(self._icon, icon_size, color.name()))
+
+        if self._expanded:
+            font = QFont(self.font())
+            font.setPointSizeF(9.5)
+            font.setWeight(QFont.Weight.Medium)
+            painter.setFont(font)
+            painter.setPen(color)
+            painter.drawText(QPointF(50, h / 2 + 4), self._label)
+
+        if self._badge > 0:
+            label = "9+" if self._badge > 9 else str(self._badge)
+            badge_rect = QRectF(w - 29, 8, 21, 18)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(qcolor(pal.bad, 255))
+            painter.drawRoundedRect(badge_rect, 9, 9)
+            painter.setFont(QFont(self.font()))
+            painter.setPen(QColor("#ffffff"))
+            painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, label)
+
+
 class TopBar(GlassBar):
-    """Logo, Services / About / Tools / How It Works, search, theme toggle, login."""
+    """Expandable left operations rail. Kept as TopBar for MainWindow compatibility."""
 
     page_requested = Signal(str)
     theme_toggle_requested = Signal()
@@ -678,44 +776,85 @@ class TopBar(GlassBar):
     search_submitted = Signal(str)
 
     ITEMS = (
-        ("Services", "services"),
-        ("About", "about"),
-        ("Tools", "tools"),
-        ("How It Works", "how-it-works"),
+        ("Services", "services", "layers"),
+        ("About", "about", "info"),
+        ("Tools", "tools", "wrench"),
+        ("How It Works", "how-it-works", "route"),
     )
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setFixedHeight(64)
-        row = QHBoxLayout(self)
-        row.setContentsMargins(16, 8, 16, 8)
-        row.setSpacing(8)
+        self.setObjectName("sideRail")
+        self.setFixedWidth(76)
+        self.setMinimumWidth(76)
+        self.setMaximumWidth(236)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
 
-        logo = _Logo()
-        logo.clicked.connect(lambda: self.page_requested.emit("dashboard"))
-        row.addWidget(logo)
-        row.addStretch(1)
+        self._expanded = False
+        self._width_anim = _make_anim(self, 220, self._apply_width)
 
-        self._buttons: dict[str, NavButton] = {}
-        for label, key in self.ITEMS:
-            button = NavButton(label)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(10, 14, 10, 14)
+        root.setSpacing(8)
+
+        self.logo = _Logo(False)
+        self.logo.clicked.connect(lambda: self.page_requested.emit("dashboard"))
+        root.addWidget(self.logo)
+
+        divider = QFrame()
+        divider.setFixedHeight(1)
+        divider.setStyleSheet("background: rgba(255,255,255,0.08); border:none;")
+        root.addWidget(divider)
+        root.addSpacing(6)
+
+        self._buttons: dict[str, _SideNavButton] = {}
+        for label, key, icon in self.ITEMS:
+            button = _SideNavButton(label, icon)
             button.clicked.connect(lambda _checked=False, target=key: self.page_requested.emit(target))
-            row.addWidget(button)
+            root.addWidget(button)
             self._buttons[key] = button
-        row.addStretch(1)
+
+        root.addStretch(1)
 
         self.search = SearchControl()
         self.search.submitted.connect(self.search_submitted.emit)
-        row.addWidget(self.search, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.search.setFixedWidth(48)
+        root.addWidget(self.search, 0, Qt.AlignmentFlag.AlignHCenter)
 
-        self.theme_button = RoundIconButton("sun", 34)
+        self.theme_button = RoundIconButton("sun", 40)
         self.theme_button.clicked.connect(lambda _checked=False: self.theme_toggle_requested.emit())
-        row.addWidget(self.theme_button, 0, Qt.AlignmentFlag.AlignVCenter)
-        row.addSpacing(8)
+        root.addWidget(self.theme_button, 0, Qt.AlignmentFlag.AlignHCenter)
 
         self.login_button = GlassButton("Log in")
         self.login_button.clicked.connect(lambda _checked=False: self.login_requested.emit())
-        row.addWidget(self.login_button, 0, Qt.AlignmentFlag.AlignVCenter)
+        root.addWidget(self.login_button, 0, Qt.AlignmentFlag.AlignHCenter)
+
+        self._refresh_expanded_state()
+
+    def _apply_width(self, value: float) -> None:
+        width = int(76 + (236 - 76) * value)
+        self.setFixedWidth(width)
+        self._refresh_expanded_state()
+
+    def _refresh_expanded_state(self) -> None:
+        for button in self._buttons.values():
+            button.set_expanded(self._expanded)
+        self.logo.set_expanded(self._expanded)
+        self.search.setFixedWidth(196 if self._expanded else 48)
+        self.login_button.setVisible(self._expanded)
+        if self._expanded:
+            self.login_button.setFixedWidth(196)
+        self.update()
+
+    def enterEvent(self, event) -> None:
+        self._expanded = True
+        _run(self._width_anim, self._width_anim.currentValue() if self._width_anim.currentValue() is not None else 0.0, 1.0)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:
+        self._expanded = False
+        _run(self._width_anim, self._width_anim.currentValue() if self._width_anim.currentValue() is not None else 1.0, 0.0)
+        super().leaveEvent(event)
 
     def set_active(self, page: str) -> None:
         for key, button in self._buttons.items():
@@ -738,11 +877,103 @@ class TopBar(GlassBar):
             self.login_button.setToolTip("Set a local operator display label. This does not authenticate an account.")
 
     def focus_search(self) -> None:
+        self._expanded = True
+        self._refresh_expanded_state()
+        _run(self._width_anim, 0.0, 1.0)
         self.search.expand()
 
 
+class _DockButton(QAbstractButton):
+    def __init__(self, text: str, icon: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._label = text
+        self._icon = icon
+        self._hover = 0.0
+        self._active = 0.0
+        self._badge = 0
+        self._width = 62.0
+        self._width_anim = _make_anim(self, 180, self._apply_width)
+        self._hover_anim = _make_anim(self, 160, self._set_hover)
+        self._active_anim = _make_anim(self, 220, self._set_active)
+        self.setFixedHeight(54)
+        self.setFixedWidth(62)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+
+    def _apply_width(self, value: float) -> None:
+        self._width = value
+        self.setFixedWidth(int(value))
+        self.update()
+
+    def _set_hover(self, value: float) -> None:
+        self._hover = value
+        self.update()
+
+    def _set_active(self, value: float) -> None:
+        self._active = value
+        self.update()
+
+    def set_active(self, active: bool) -> None:
+        _run(self._active_anim, self._active, 1.0 if active else 0.0)
+        if active:
+            _run(self._width_anim, self._width, 122.0)
+        elif not self.underMouse():
+            _run(self._width_anim, self._width, 62.0)
+
+    def set_badge(self, count: int) -> None:
+        self._badge = max(0, int(count))
+        self.update()
+
+    def enterEvent(self, event) -> None:
+        _run(self._hover_anim, self._hover, 1.0)
+        _run(self._width_anim, self._width, 122.0)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:
+        _run(self._hover_anim, self._hover, 0.0)
+        if not self._active:
+            _run(self._width_anim, self._width, 62.0)
+        super().leaveEvent(event)
+
+    def paintEvent(self, event) -> None:
+        pal = get_palette()
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        w = float(self.width())
+        h = float(self.height())
+        reveal = max(self._hover, self._active)
+
+        if reveal > 0.01:
+            painter.setPen(QPen(qcolor(pal.accent, int(65 * reveal)), 1))
+            painter.setBrush(qcolor(pal.accent, int(24 * reveal)))
+            painter.drawRoundedRect(QRectF(1, 1, w - 2, h - 2), 15, 15)
+
+        icon_size = 20
+        color = mix_colors(QColor(pal.text_dim), QColor(pal.text), reveal)
+        painter.drawPixmap(QPointF(18, (h - icon_size) / 2), icon_pixmap(self._icon, icon_size, color.name()))
+
+        if w > 90:
+            font = QFont(self.font())
+            font.setPointSizeF(9.5)
+            font.setWeight(QFont.Weight.Medium)
+            painter.setFont(font)
+            painter.setPen(color)
+            painter.drawText(QPointF(48, h / 2 + 4), self._label)
+
+        if self._active > 0.01:
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(qcolor(pal.accent, 255))
+            painter.drawRoundedRect(QRectF(8, h - 4, w - 16, 2), 1, 1)
+
+        if self._badge > 0:
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(qcolor(pal.bad, 255))
+            painter.drawEllipse(QRectF(w - 16, 8, 10, 10))
+
+
 class BottomBar(GlassBar):
-    """Dashboard | Cameras | Incidents | Alerts | Settings."""
+    """Floating glass operations dock: icons by default, labels on hover/active."""
 
     page_requested = Signal(str)
 
@@ -756,15 +987,18 @@ class BottomBar(GlassBar):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setFixedHeight(64)
+        self.setFixedHeight(72)
+        self.setMinimumWidth(360)
+        self.setMaximumWidth(720)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         row = QHBoxLayout(self)
-        row.setContentsMargins(8, 8, 8, 8)
-        row.setSpacing(8)
-        self._buttons: dict[str, NavButton] = {}
+        row.setContentsMargins(9, 9, 9, 9)
+        row.setSpacing(6)
+        self._buttons: dict[str, _DockButton] = {}
         for label, key, icon in self.TABS:
-            button = NavButton(label, icon=icon, expand=True)
+            button = _DockButton(label, icon)
             button.clicked.connect(lambda _checked=False, target=key: self.page_requested.emit(target))
-            row.addWidget(button, 1)
+            row.addWidget(button)
             self._buttons[key] = button
 
     def set_active(self, page: str) -> None:
