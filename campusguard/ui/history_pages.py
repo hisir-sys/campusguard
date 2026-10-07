@@ -1348,8 +1348,16 @@ class IncidentsPage(QWidget):
 
             header.setSectionResizeMode(
                 7,
-                header.ResizeMode.ResizeToContents,
+                header.ResizeMode.Fixed,
             )
+            table.setColumnWidth(0, 118)
+            table.setColumnWidth(1, 150)
+            table.setColumnWidth(2, 210)
+            table.setColumnWidth(3, 105)
+            table.setColumnWidth(4, 92)
+            table.setColumnWidth(5, 112)
+            table.setColumnWidth(6, 158)
+            table.setColumnWidth(7, 150)
 
             _apply_table_palette(
                 table
@@ -1975,8 +1983,15 @@ class AlertsPage(QWidget):
 
             header.setSectionResizeMode(
                 6,
-                header.ResizeMode.ResizeToContents,
+                header.ResizeMode.Fixed,
             )
+            table.setColumnWidth(0, 150)
+            table.setColumnWidth(1, 215)
+            table.setColumnWidth(2, 105)
+            table.setColumnWidth(3, 92)
+            table.setColumnWidth(4, 158)
+            table.setColumnWidth(5, 118)
+            table.setColumnWidth(6, 105)
 
             _apply_table_palette(
                 table
