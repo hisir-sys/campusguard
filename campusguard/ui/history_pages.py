@@ -2177,6 +2177,43 @@ class AlertsPage(QWidget):
 
         popup.show_popup()
 
+    def _set_footage_cell(
+        self,
+        table: QTableWidget,
+        row_index: int,
+        column: int,
+        row: dict,
+    ) -> None:
+        path = str(row.get("footage_path") or "")
+        available = Path(path).is_file()
+
+        button = _action_button(
+            "View" if available else "Unavailable",
+            "view",
+        )
+        button.setEnabled(available)
+
+        if available:
+            button.clicked.connect(
+                lambda checked=False, p=path, public_id=row["public_id"]:
+                self._open_footage(p, public_id)
+            )
+
+        cell = QWidget()
+        layout = QHBoxLayout(cell)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.addWidget(button)
+        table.setCellWidget(row_index, column, cell)
+
+    def _open_footage(self, path: str, public_id: str) -> None:
+        viewer = FootagePlayerDialog(
+            path,
+            f"Alert {public_id}",
+            self.window(),
+        )
+        viewer.show()
+        viewer.raise_()
+
     def _close_popup(self) -> None:
         if self._blur_effect is not None:
             self.main_content.setGraphicsEffect(
