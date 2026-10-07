@@ -1049,7 +1049,9 @@ class DashboardPage(QWidget):
         model_row.setContentsMargins(0, 0, 0, 0)
         model_row.setSpacing(14)
 
-        active = QLabel("Spontim 1.0")
+        model_names = {"fdsc_mc3": "Spontim 1.0", "mc3": "CampusGuard MC3-18", "x3d": "X3D-M"}
+        current_key = getattr(self._settings, "violence_model", "fdsc_mc3") if self._settings else "fdsc_mc3"
+        active = QLabel(model_names.get(current_key, "Spontim 1.0"))
         active.setObjectName("popupMetricValue")
         set_tone(active, "good")
         model_row.addWidget(active, 1)
@@ -1061,7 +1063,6 @@ class DashboardPage(QWidget):
             ("CampusGuard MC3-18", "mc3"),
             ("X3D-M", "x3d"),
         )
-        current_key = getattr(self._settings, "violence_model", "fdsc_mc3") if self._settings else "fdsc_mc3"
         current_index = 0
         for index, (label_text, key) in enumerate(options):
             selector.addItem(label_text, key)
@@ -1797,7 +1798,10 @@ class DashboardPage(QWidget):
         if settings is None:
             return
 
-        self._set_value("violence_model", "Spontim 1.0", "good", "Active production fight-detection engine")
+        model_names = {"fdsc_mc3": "Spontim 1.0", "mc3": "CampusGuard MC3-18", "x3d": "X3D-M"}
+        model_key = getattr(settings, "violence_model", "fdsc_mc3")
+        model_name = model_names.get(model_key, "Spontim 1.0")
+        self._set_value("violence_model", model_name, "good", "Active production fight-detection engine")
         self._set_value("device", self._device_text or settings.device.upper())
 
         status_text, status_tone = self._current_model_status()
