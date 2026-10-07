@@ -519,13 +519,13 @@ class SearchControl(QWidget):
     submitted = Signal(str)
 
     COLLAPSED_WIDTH = 40
-    EXPANDED_WIDTH = 190
+    EXPANDED_WIDTH = 174
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._open = 0.0
         self._is_open = False
-        self.setFixedSize(self.COLLAPSED_WIDTH, 34)
+        self.setFixedSize(self.COLLAPSED_WIDTH, 36)
 
         row = QHBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
@@ -794,8 +794,8 @@ class TopBar(GlassBar):
         self._width_anim = _make_anim(self, 220, self._apply_width)
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(10, 14, 10, 14)
-        root.setSpacing(8)
+        root.setContentsMargins(10, 12, 10, 10)
+        root.setSpacing(6)
 
         self.logo = _Logo(False)
         self.logo.clicked.connect(lambda: self.page_requested.emit("dashboard"))
@@ -821,7 +821,7 @@ class TopBar(GlassBar):
         self.search.setFixedWidth(48)
         root.addWidget(self.search, 0, Qt.AlignmentFlag.AlignHCenter)
 
-        self.theme_button = RoundIconButton("sun", 40)
+        self.theme_button = RoundIconButton("sun", 36)
         self.theme_button.clicked.connect(lambda _checked=False: self.theme_toggle_requested.emit())
         root.addWidget(self.theme_button, 0, Qt.AlignmentFlag.AlignHCenter)
 
@@ -914,10 +914,10 @@ class _DockButton(QAbstractButton):
         self.update()
 
     def set_active(self, active: bool) -> None:
+        # Active state is intentionally compact. Only the hover interaction
+        # expands the item; the active page gets a restrained glow + underline.
         _run(self._active_anim, self._active, 1.0 if active else 0.0)
-        if active:
-            _run(self._width_anim, self._width, 122.0)
-        elif not self.underMouse():
+        if not self.underMouse():
             _run(self._width_anim, self._width, 62.0)
 
     def set_badge(self, count: int) -> None:
@@ -942,7 +942,10 @@ class _DockButton(QAbstractButton):
         painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
         w = float(self.width())
         h = float(self.height())
-        reveal = max(self._hover, self._active)
+        # Hover is the only state that expands the dock item.
+        # Active state remains icon-only and is communicated by a soft
+        # accent glow beneath the glyph plus a thin indicator line.
+        reveal = self._hover
 
         if reveal > 0.01:
             painter.setPen(QPen(qcolor(pal.accent, int(65 * reveal)), 1))
@@ -950,8 +953,9 @@ class _DockButton(QAbstractButton):
             painter.drawRoundedRect(QRectF(1, 1, w - 2, h - 2), 15, 15)
 
         icon_size = 20
-        color = mix_colors(QColor(pal.text_dim), QColor(pal.text), reveal)
-        painter.drawPixmap(QPointF(18, (h - icon_size) / 2), icon_pixmap(self._icon, icon_size, color.name()))
+        color = mix_colors(QColor(pal.text_dim), QColor(pal.text), max(reveal, self._active * 0.55))
+        icon_x = (w - icon_size) / 2.0
+        painter.drawPixmap(QPointF(icon_x, (h - icon_size) / 2), icon_pixmap(self._icon, icon_size, color.name()))
 
         if w > 90:
             font = QFont(self.font())
@@ -962,9 +966,13 @@ class _DockButton(QAbstractButton):
             painter.drawText(QPointF(48, h / 2 + 4), self._label)
 
         if self._active > 0.01:
+            glow = QRadialGradient(QPointF(w / 2.0, h - 6.0), 24.0)
+            glow.setColorAt(0.0, qcolor(pal.accent, int(70 * self._active)))
+            glow.setColorAt(1.0, qcolor(pal.accent, 0))
+            painter.fillRect(QRectF(0, h - 18, w, 18), QBrush(glow))
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(qcolor(pal.accent, 255))
-            painter.drawRoundedRect(QRectF(8, h - 4, w - 16, 2), 1, 1)
+            painter.setBrush(qcolor(pal.accent, int(235 * self._active)))
+            painter.drawRoundedRect(QRectF(w / 2.0 - 20, h - 4, 40, 2), 1, 1)
 
         if self._badge > 0:
             painter.setPen(Qt.PenStyle.NoPen)
@@ -987,13 +995,13 @@ class BottomBar(GlassBar):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setFixedHeight(72)
+        self.setFixedHeight(68)
         self.setMinimumWidth(360)
         self.setMaximumWidth(720)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         row = QHBoxLayout(self)
-        row.setContentsMargins(9, 9, 9, 9)
-        row.setSpacing(6)
+        row.setContentsMargins(8, 7, 8, 7)
+        row.setSpacing(5)
         self._buttons: dict[str, _DockButton] = {}
         for label, key, icon in self.TABS:
             button = _DockButton(label, icon)
