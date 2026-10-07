@@ -327,24 +327,31 @@ class MainWindow(QMainWindow):
     def _build_ui(self) -> None:
         central = BackdropWidget()
         central.setObjectName("centralContent")
-        outer = QVBoxLayout(central)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
 
+        outer = QHBoxLayout(central)
+        outer.setContentsMargins(12, 12, 12, 12)
+        outer.setSpacing(12)
+
+        # Left operations rail. It stays visually quiet when collapsed and
+        # expands on hover so the workspace remains the hero.
         self.top_bar = TopBar()
-        top_row = QHBoxLayout()
-        top_row.setContentsMargins(16, 16, 16, 8)
-        top_row.addWidget(self.top_bar)
-        outer.addLayout(top_row)
+        outer.addWidget(self.top_bar, 0)
+
+        workspace = QVBoxLayout()
+        workspace.setContentsMargins(0, 0, 0, 0)
+        workspace.setSpacing(10)
 
         self.stack = QStackedWidget()
-        self.stack.setMaximumWidth(1200)
+        self.stack.setObjectName("workspaceStack")
+        self.stack.setMaximumWidth(1240)
+
         self.dashboard = DashboardPage(self.repository)
         self.camera_page = CamerasPage()
         self.incidents_page = IncidentsPage(self.repository)
         self.alerts_page = AlertsPage(self.repository)
         self.settings_page = SettingsPage(self.settings)
         self.info_pages = self._build_information_pages()
+
         self._pages = {
             "dashboard": self.dashboard,
             "cameras": self.camera_page,
@@ -353,15 +360,22 @@ class MainWindow(QMainWindow):
             "settings": self.settings_page,
             **self.info_pages,
         }
+
         for page in self._pages.values():
             self.stack.addWidget(page)
-        outer.addWidget(self.stack, 1, Qt.AlignmentFlag.AlignHCenter)
 
+        workspace.addWidget(self.stack, 1)
+
+        dock_row = QHBoxLayout()
+        dock_row.setContentsMargins(0, 0, 0, 2)
+        dock_row.setSpacing(0)
+        dock_row.addStretch(1)
         self.bottom_bar = BottomBar()
-        bottom_row = QHBoxLayout()
-        bottom_row.setContentsMargins(16, 8, 16, 16)
-        bottom_row.addWidget(self.bottom_bar)
-        outer.addLayout(bottom_row)
+        dock_row.addWidget(self.bottom_bar, 0, Qt.AlignmentFlag.AlignCenter)
+        dock_row.addStretch(1)
+        workspace.addLayout(dock_row, 0)
+
+        outer.addLayout(workspace, 1)
 
         self.setCentralWidget(central)
         self._in_app_overlay = InAppOverlay(central)
