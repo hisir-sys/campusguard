@@ -333,11 +333,12 @@ class MainWindow(QMainWindow):
 
         self.top_bar = TopBar()
         top_row = QHBoxLayout()
-        top_row.setContentsMargins(18, 14, 18, 4)
+        top_row.setContentsMargins(16, 16, 16, 8)
         top_row.addWidget(self.top_bar)
         outer.addLayout(top_row)
 
         self.stack = QStackedWidget()
+        self.stack.setMaximumWidth(1200)
         self.dashboard = DashboardPage(self.repository)
         self.camera_page = CamerasPage()
         self.incidents_page = IncidentsPage(self.repository)
@@ -354,11 +355,11 @@ class MainWindow(QMainWindow):
         }
         for page in self._pages.values():
             self.stack.addWidget(page)
-        outer.addWidget(self.stack, 1)
+        outer.addWidget(self.stack, 1, Qt.AlignmentFlag.AlignHCenter)
 
         self.bottom_bar = BottomBar()
         bottom_row = QHBoxLayout()
-        bottom_row.setContentsMargins(18, 4, 18, 14)
+        bottom_row.setContentsMargins(16, 8, 16, 16)
         bottom_row.addWidget(self.bottom_bar)
         outer.addLayout(bottom_row)
 
@@ -397,10 +398,10 @@ class MainWindow(QMainWindow):
     def _section_header(title: str, description: str) -> QWidget:
         box = QWidget()
         layout = QVBoxLayout(box)
-        layout.setContentsMargins(0, 0, 0, 4)
-        layout.setSpacing(7)
+        layout.setContentsMargins(0, 0, 0, 8)
+        layout.setSpacing(8)
         title_label = QLabel(title)
-        title_label.setStyleSheet("font-size: 18pt; font-weight: 700;")
+        title_label.setStyleSheet("font-size: 21pt; font-weight: 700; letter-spacing: -0.15px;")
         description_label = QLabel(description)
         description_label.setWordWrap(True)
         description_label.setStyleSheet("font-size: 10pt; color: palette(mid);")
@@ -411,6 +412,8 @@ class MainWindow(QMainWindow):
     @staticmethod
     def _tech_card(title: str, subtitle: str, body: str, icon: str | None = None) -> QWidget:
         card, body_layout = make_card(title, icon=icon)
+        card.setMinimumHeight(188)
+        card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         subtitle_label = QLabel(subtitle)
         subtitle_label.setStyleSheet("font-size: 9pt; color: palette(mid); font-weight: 600;")
         subtitle_label.setWordWrap(True)
@@ -434,8 +437,8 @@ class MainWindow(QMainWindow):
             f"border-radius: 16px; }}"
         )
         layout = QHBoxLayout(node)
-        layout.setContentsMargins(16, 14, 18, 14)
-        layout.setSpacing(14)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(16)
 
         badge = QFrame()
         badge.setFixedSize(38, 38)
@@ -472,7 +475,7 @@ class MainWindow(QMainWindow):
         text_column.addWidget(heading)
         text_column.addWidget(text)
 
-        layout.addWidget(badge, 0, Qt.AlignmentFlag.AlignTop)
+        layout.addWidget(badge, 0, Qt.AlignmentFlag.AlignVCenter)
         layout.addLayout(text_column, 1)
         return node
 
@@ -481,22 +484,15 @@ class MainWindow(QMainWindow):
         wrapper = QWidget()
         wrapper.setFixedHeight(26)
         layout = QHBoxLayout(wrapper)
-        layout.setContentsMargins(34, 0, 0, 0)
+        layout.setContentsMargins(20, 0, 0, 0)
         layout.setSpacing(0)
 
         line = QFrame()
-        line.setFixedWidth(1)
-        line.setStyleSheet("background: rgba(255,255,255,0.10); border: none;")
-
-        arrow = QLabel("↓")
-        arrow.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        arrow.setStyleSheet(
-            "font-size: 13pt; font-weight: 700; "
-            "color: palette(mid); background: transparent; border: none;"
+        line.setFixedHeight(2)
+        line.setStyleSheet(
+            "background: rgba(91,124,250,0.20); border: none;"
         )
-
-        layout.addWidget(line, 0, Qt.AlignmentFlag.AlignLeft)
-        layout.addWidget(arrow, 0, Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(line, 1, Qt.AlignmentFlag.AlignVCenter)
         layout.addStretch(1)
         return wrapper
 
