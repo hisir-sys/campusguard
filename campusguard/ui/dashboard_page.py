@@ -525,6 +525,7 @@ class DashboardPage(QWidget):
         # effect is created only when a popup is actually opened.
         # ==============================================================
         self._dashboard_blur = None
+        self._navigation_blurs: list[tuple[QWidget, QGraphicsBlurEffect]] = []
 
         # ==============================================================
         # POPUP OVERLAY
@@ -987,6 +988,25 @@ class DashboardPage(QWidget):
             event,
         )
 
+    def _blur_navigation(self, enabled: bool) -> None:
+        self._clear_navigation_blur()
+        if not enabled:
+            return
+        window = self.window()
+        for name in ("top_bar", "bottom_bar"):
+            widget = getattr(window, name, None)
+            if isinstance(widget, QWidget):
+                effect = QGraphicsBlurEffect(widget)
+                effect.setBlurRadius(13)
+                widget.setGraphicsEffect(effect)
+                self._navigation_blurs.append((widget, effect))
+
+    def _clear_navigation_blur(self) -> None:
+        for widget, effect in self._navigation_blurs:
+            if widget.graphicsEffect() is effect:
+                widget.setGraphicsEffect(None)
+            effect.deleteLater()
+        self._navigation_blurs.clear()
     def _open_popup(
         self,
         kind: str,
@@ -1017,6 +1037,7 @@ class DashboardPage(QWidget):
         self._dashboard_blur = QGraphicsBlurEffect(self)
         self._dashboard_blur.setBlurRadius(13)
         self._dashboard_content.setGraphicsEffect(self._dashboard_blur)
+        self._blur_navigation(True)
 
         self._popup.show()
         self._popup.raise_()
@@ -1034,6 +1055,7 @@ class DashboardPage(QWidget):
 
         if self._dashboard_blur is not None:
             self._dashboard_content.setGraphicsEffect(None)
+        self._clear_navigation_blur()
             self._dashboard_blur.deleteLater()
             self._dashboard_blur = None
 
