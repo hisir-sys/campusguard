@@ -135,18 +135,18 @@ QFrame[tile="true"] {
   border: 1px solid @line_soft@;
   border-radius: 10px;
 }
-QFrame[dashboardModelTile="true"] {
+QFrame#dashboardModelTile {
   background: @veil@;
   border: 1px solid @line_soft@;
   border-radius: 11px;
 }
-QFrame[dashboardStatTile="true"] {
+QFrame#dashboardStatTile {
   background: @veil@;
   border: 1px solid @line_soft@;
   border-radius: 11px;
 }
-QFrame[dashboardStatTile="true"]:hover,
-QFrame[dashboardModelTile="true"]:hover {
+QFrame#dashboardStatTile:hover,
+QFrame#dashboardModelTile:hover {
   border-color: @accent_line@;
   background: @veil_hover@;
 }
