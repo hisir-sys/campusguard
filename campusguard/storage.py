@@ -210,11 +210,11 @@ class Repository:
         happened_at = now.isoformat(timespec="seconds")
         with self._lock, self._connection() as connection:
             latest = connection.execute(
-                "SELECT happened_at FROM incidents WHERE camera_id = ? "
+                "SELECT happened_at, status FROM incidents WHERE camera_id = ? "
                 "ORDER BY id DESC LIMIT 1",
                 (camera.camera_id,),
             ).fetchone()
-            if latest:
+            if latest and latest["status"] != "RESOLVED":
                 last_time = datetime.fromisoformat(latest["happened_at"])
                 if now - last_time < timedelta(seconds=max(0, cooldown_seconds)):
                     return None
