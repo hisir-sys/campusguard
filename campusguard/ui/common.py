@@ -18,7 +18,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from campusguard.camera_runtime import (\n    CameraTestThread,\n    build_capture_source,\n    enumerate_local_cameras,\n)
+from campusguard.camera_runtime import (
+    CameraTestThread,
+    build_capture_source,
+    enumerate_local_cameras,
+)
 from campusguard.settings import CameraConfig, CameraCredentials, CameraStats
 from campusguard.ui.icons import IconLabel, set_icon_theme
 from campusguard.ui.theme import build_qss, get_palette, set_current
