@@ -23,6 +23,7 @@ from campusguard.storage import Repository
 from campusguard.ui.common import CameraPreview, make_card, set_tone
 from campusguard.ui.icons import IconLabel
 from campusguard.ui.theme import get_palette, rgba
+from campusguard.ui.thinking_orb import ThinkingOrb
 
 
 NOTIFICATION_TONES = {
@@ -678,11 +679,26 @@ class DashboardPage(QWidget):
         model_top.addWidget(live)
         model_box.addLayout(model_top)
 
+        model_content = QHBoxLayout()
+        model_content.setContentsMargins(0, 0, 0, 0)
+        model_content.setSpacing(10)
+
+        model_text = QVBoxLayout()
+        model_text.setContentsMargins(0, 0, 0, 0)
+        model_text.setSpacing(2)
+
         active_model = QLabel("Spontim 1.0")
         active_model.setProperty("kvvalue", True)
         active_model.setStyleSheet("font-size: 13pt; font-weight: 700;")
-        model_box.addWidget(active_model)
+        model_text.addWidget(active_model)
         self.engine_values["violence_model"] = active_model
+
+        model_content.addLayout(model_text, 1)
+        self.engine_orb = ThinkingOrb(size=48)
+        self.engine_orb.setToolTip("CampusGuard AI engine is continuously active.")
+        model_content.addWidget(self.engine_orb, 0, Qt.AlignmentFlag.AlignCenter)
+        model_box.addLayout(model_content)
+
         layout.addWidget(model_tile)
 
         rows = (
