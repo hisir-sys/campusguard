@@ -570,6 +570,7 @@ class _HistoryPopup(QWidget):
         self.setObjectName(
             "historyPopupOverlay"
         )
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
         self.setStyleSheet(
             """
@@ -584,6 +585,7 @@ class _HistoryPopup(QWidget):
         self.popup.setObjectName(
             "historyPopup"
         )
+        self.popup.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
         self.popup.setMinimumSize(920, 560)
 
@@ -776,11 +778,12 @@ class _HistoryPopup(QWidget):
         parent_rect = self.parentWidget().rect()
         width = min(1320, max(920, int(parent_rect.width() * 0.88)))
         height = min(760, max(560, int(parent_rect.height() * 0.78)))
-        self.popup.setFixedSize(width, height)
         self.setGeometry(parent_rect)
+        self.popup.setFixedSize(width, height)
 
-        self.raise_()
         self.show()
+        self.raise_()
+        self.popup.raise_()
 
     def close_popup(self) -> None:
         self.hide()
@@ -1384,7 +1387,7 @@ class IncidentsPage(QWidget):
         )
 
         popup = _HistoryPopup(
-            self,
+            self.window(),
             title,
             subtitle,
         )
@@ -1607,6 +1610,12 @@ class IncidentsPage(QWidget):
         FootagePlayerDialog(path, f"Incident {public_id}", self).exec()
 
 
+
+    def _close_popup(self) -> None:
+        if self._blur_effect is not None:
+            self.main_content.setGraphicsEffect(None)
+        self._blur_effect = None
+        self._popup = None
 
 # ============================================================================
 # ALERTS PAGE
