@@ -526,10 +526,32 @@ class DashboardPage(QWidget):
         main_row.addLayout(right_column, 2)
         root.addLayout(main_row, 0)
 
-        self._network_card.setMinimumHeight(360)
+        self._network_card.setMinimumHeight(320)
         root.addWidget(self._network_card, 1)
 
-        outer.addWidget(self._dashboard_content, 1)
+        # Keep the dashboard workspace scrollable so the fixed bottom
+        # navigation can never overlap the camera network on smaller
+        # laptop/window sizes.
+        self._dashboard_scroll = QScrollArea()
+        self._dashboard_scroll.setObjectName("dashboardScroll")
+        self._dashboard_scroll.setWidgetResizable(True)
+        self._dashboard_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._dashboard_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self._dashboard_scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        self._dashboard_scroll.setAlignment(
+            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter
+        )
+        self._dashboard_scroll.viewport().setAutoFillBackground(False)
+        self._dashboard_content.setSizePolicy(
+            self._dashboard_content.sizePolicy().horizontalPolicy(),
+            self._dashboard_content.sizePolicy().verticalPolicy(),
+        )
+        self._dashboard_scroll.setWidget(self._dashboard_content)
+        outer.addWidget(self._dashboard_scroll, 1)
 
         # ==============================================================
         # DASHBOARD BLUR
@@ -661,8 +683,8 @@ class DashboardPage(QWidget):
 
     def _build_engine_card(self) -> QFrame:
         frame, layout = make_card("AI Engine", icon="cpu")
-        frame.setMinimumHeight(176)
-        frame.setMaximumHeight(176)
+        frame.setMinimumHeight(196)
+        frame.setMaximumHeight(196)
         frame.setCursor(Qt.CursorShape.PointingHandCursor)
         frame.installEventFilter(self)
         for child in frame.findChildren(QWidget):
