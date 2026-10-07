@@ -34,22 +34,75 @@ from campusguard.ui.common import make_page_title
 # ============================================================================
 
 class FootagePlayerDialog(QWidget):
-    def __init__(self, footage_path: str, title: str, parent: QWidget | None = None) -> None:
+    """Persistent in-app incident footage viewer."""
+
+    def __init__(
+        self,
+        footage_path: str,
+        title: str,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self.setObjectName("footageViewerOverlay")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(
-            "QWidget#footageViewerOverlay { background: rgba(0, 0, 0, 135); }"
+            """
+            QWidget#footageViewerOverlay {
+                background: rgba(0, 0, 0, 145);
+            }
+            QFrame#footageViewerCard {
+                border-radius: 18px;
+            }
+            """
         )
-        self.setGeometry(parent.rect() if parent is not None else self.rect())
-        self.setMinimumSize(760, 480)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(30, 30, 30, 30)
+        self.card = QFrame(self)
+        self.card.setObjectName("footageViewerCard")
+        self.card.setProperty("card", True)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(28, 28, 28, 28)
+        outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        outer.addWidget(self.card)
+
+        layout = QVBoxLayout(self.card)
+        layout.setContentsMargins(20, 18, 20, 16)
         layout.setSpacing(10)
 
+        heading = QHBoxLayout()
+        title_block = QVBoxLayout()
+        title_block.setSpacing(2)
+
+        title_label = QLabel(title)
+        title_label.setStyleSheet(
+            "font-size: 17px; font-weight: 850;"
+        )
+
+        subtitle = QLabel("Saved incident footage")
+        subtitle.setProperty("muted", True)
+
+        title_block.addWidget(title_label)
+        title_block.addWidget(subtitle)
+        heading.addLayout(title_block, 1)
+
+        close_button = QPushButton("Close")
+        close_button.setProperty("secondaryButton", True)
+        close_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_button.setMinimumHeight(32)
+        close_button.clicked.connect(self.close)
+        heading.addWidget(
+            close_button,
+            0,
+            Qt.AlignmentFlag.AlignTop,
+        )
+
+        layout.addLayout(heading)
+
         self.video = QVideoWidget()
-        self.video.setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatio)
+        self.video.setAspectRatioMode(
+            Qt.AspectRatioMode.KeepAspectRatio
+        )
+        self.video.setMinimumSize(640, 360)
         layout.addWidget(self.video, 1)
 
         controls = QHBoxLayout()
@@ -63,15 +116,12 @@ class FootagePlayerDialog(QWidget):
         self.speed_combo.addItems(["0.5×", "0.75×", "1×"])
         self.speed_combo.setCurrentIndex(1)
         self.speed_combo.setMinimumWidth(86)
-        self.speed_combo.currentIndexChanged.connect(self._set_playback_speed)
+        self.speed_combo.currentIndexChanged.connect(
+            self._set_playback_speed
+        )
         controls.addWidget(self.speed_combo)
-
         controls.addStretch(1)
 
-        close_button = QPushButton("Close")
-        close_button.setProperty("secondaryButton", True)
-        close_button.clicked.connect(self.close)
-        controls.addWidget(close_button)
         layout.addLayout(controls)
 
         self.player = QMediaPlayer(self)
@@ -82,15 +132,46 @@ class FootagePlayerDialog(QWidget):
 
         path = Path(footage_path)
         if not path.is_file():
-            message = QLabel("The saved footage file is no longer available.")
+            message = QLabel(
+                "The saved footage file is no longer available."
+            )
             message.setProperty("muted", True)
             message.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            layout.insertWidget(0, message)
+            layout.insertWidget(1, message, 1)
             self.video.hide()
             return
 
-        self.player.setSource(QUrl.fromLocalFile(str(path.resolve())))
+        self.player.setSource(
+            QUrl.fromLocalFile(str(path.resolve()))
+        )
         self.player.setPlaybackRate(0.75)
+
+        # Clicking the video area closes the viewer as requested.
+        self.video.installEventFilter(self)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        self.raise_()
+        self.card.raise_()
+
+        if self.player.source().isValid():
+            self.player.play()
+
+    def eventFilter(self, watched, event) -> bool:
+        if (
+            watched is self.video
+            and event.type() == event.Type.MouseButtonPress
+        ):
+            self.close()
+            return True
+        return super().eventFilter(watched, event)
+
+    def mousePressEvent(self, event) -> None:
+        # Clicking the dimmed area closes the viewer.
+        if not self.card.geometry().contains(event.position().toPoint()):
+            self.close()
+            return
+        super().mousePressEvent(event)
 
     def _set_playback_speed(self, index: int) -> None:
         rates = [0.5, 0.75, 1.0]
@@ -403,8 +484,8 @@ def _configure_table(
         Qt.AlignmentFlag.AlignLeft
         | Qt.AlignmentFlag.AlignVCenter
     )
-    header.setMinimumHeight(34)
-    header.setFixedHeight(34)
+    header.setMinimumHeight(38)
+    header.setFixedHeight(38)
     header.setStretchLastSection(False)
 
     table.setWordWrap(False)
@@ -681,6 +762,7 @@ class IncidentsPage(QWidget):
 
         self._blur_effect: QGraphicsBlurEffect | None = None
         self._popup: _HistoryPopup | None = None
+        self._footage_viewer: FootagePlayerDialog | None = None
         self._live_open_handler = None
         self._history_open_handler = None
 
@@ -1424,7 +1506,7 @@ class IncidentsPage(QWidget):
                     allow_resolve=(row["status"] != "RESOLVED"),
                 )
 
-                table.setRowHeight(index, 64)
+                table.setRowHeight(index, 68)
 
             layout.addWidget(
                 table,
@@ -1481,10 +1563,23 @@ class IncidentsPage(QWidget):
         self._close_popup()
 
     def _open_footage(self, path: str, public_id: str) -> None:
-        viewer = FootagePlayerDialog(path, f"Incident {public_id}", self.window())
-        viewer.show()
-        viewer.raise_()
+        if self._footage_viewer is not None:
+            self._footage_viewer.close()
+            self._footage_viewer.deleteLater()
 
+        self._footage_viewer = FootagePlayerDialog(
+            path,
+            f"Incident {public_id}",
+            self.window(),
+        )
+        self._footage_viewer.destroyed.connect(
+            lambda: setattr(self, "_footage_viewer", None)
+        )
+        self._footage_viewer.setGeometry(
+            self.window().rect()
+        )
+        self._footage_viewer.show()
+        self._footage_viewer.raise_()
 
 
 
@@ -1512,6 +1607,7 @@ class AlertsPage(QWidget):
 
         self._blur_effect: QGraphicsBlurEffect | None = None
         self._popup: _HistoryPopup | None = None
+        self._footage_viewer: FootagePlayerDialog | None = None
 
         # Signal handlers are stored so refresh() can safely replace
         # existing button connections without disconnecting unknown slots.
@@ -2091,13 +2187,23 @@ class AlertsPage(QWidget):
         table.setCellWidget(row_index, column, cell)
 
     def _open_footage(self, path: str, public_id: str) -> None:
-        viewer = FootagePlayerDialog(
+        if self._footage_viewer is not None:
+            self._footage_viewer.close()
+            self._footage_viewer.deleteLater()
+
+        self._footage_viewer = FootagePlayerDialog(
             path,
             f"Alert {public_id}",
             self.window(),
         )
-        viewer.show()
-        viewer.raise_()
+        self._footage_viewer.destroyed.connect(
+            lambda: setattr(self, "_footage_viewer", None)
+        )
+        self._footage_viewer.setGeometry(
+            self.window().rect()
+        )
+        self._footage_viewer.show()
+        self._footage_viewer.raise_()
 
     def _close_popup(self) -> None:
         if self._blur_effect is not None:
