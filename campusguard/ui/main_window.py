@@ -391,6 +391,13 @@ class MainWindow(QMainWindow):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        scroll.viewport().setAutoFillBackground(False)
+        content.setMinimumWidth(0)
+        content.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Preferred,
+        )
         scroll.setWidget(content)
         return scroll
 
@@ -413,6 +420,7 @@ class MainWindow(QMainWindow):
     def _tech_card(title: str, subtitle: str, body: str, icon: str | None = None) -> QWidget:
         card, body_layout = make_card(title, icon=icon)
         card.setMinimumHeight(188)
+        card.setMinimumWidth(0)
         card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         subtitle_label = QLabel(subtitle)
         subtitle_label.setStyleSheet("font-size: 9pt; color: palette(mid); font-weight: 600;")
