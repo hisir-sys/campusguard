@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QGraphicsDropShadowEffect,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -70,10 +71,10 @@ class ClickableFrame(QFrame):
 def make_page_title(title: str, subtitle: str) -> QWidget:
     widget = QWidget()
     layout = QVBoxLayout(widget)
-    layout.setContentsMargins(0, 0, 0, 5)
-    layout.setSpacing(3)
+    layout.setContentsMargins(0, 0, 0, 8)
+    layout.setSpacing(8)
     heading = QLabel(title)
-    heading.setStyleSheet("font-size: 19pt; font-weight: 700;")
+    heading.setStyleSheet("font-size: 21pt; font-weight: 700; letter-spacing: -0.15px;")
     description = QLabel(subtitle)
     description.setProperty("muted", True)
     layout.addWidget(heading)
@@ -94,8 +95,14 @@ def make_card(
     frame = QFrame(parent)
     frame.setProperty("card", True)
     layout = QVBoxLayout(frame)
-    layout.setContentsMargins(20, 18, 20, 18)
-    layout.setSpacing(14)
+    layout.setContentsMargins(24, 24, 24, 24)
+    layout.setSpacing(16)
+
+    shadow = QGraphicsDropShadowEffect(frame)
+    shadow.setBlurRadius(28)
+    shadow.setOffset(0, 8)
+    shadow.setColor(QColor(0, 0, 0, 72))
+    frame.setGraphicsEffect(shadow)
 
     header = QHBoxLayout()
     header.setSpacing(10)
@@ -136,7 +143,7 @@ class CameraPreview(QFrame):
         self.setMinimumHeight(230)
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(12, 10, 12, 10)
+        outer.setContentsMargins(16, 16, 16, 16)
         outer.setSpacing(8)
         header = QHBoxLayout()
         labels = QVBoxLayout()
