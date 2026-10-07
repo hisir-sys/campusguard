@@ -3,10 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, Qt, Signal
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
     QGraphicsBlurEffect,
+    QGraphicsDropShadowEffect,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -88,13 +89,19 @@ class GlassPopup(QFrame):
 
         self._apply_palette()
 
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(36)
+        shadow.setOffset(0, 12)
+        shadow.setColor(QColor(0, 0, 0, 105))
+        self.setGraphicsEffect(shadow)
+
         # --------------------------------------------------------------
         # Main popup layout
         # --------------------------------------------------------------
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(24, 20, 24, 20)
-        root.setSpacing(14)
+        root.setContentsMargins(32, 32, 32, 32)
+        root.setSpacing(16)
 
         # --------------------------------------------------------------
         # TOP HEADER
@@ -1006,8 +1013,8 @@ class DashboardPage(QWidget):
         model = QFrame()
         model.setObjectName("popupSection")
         ml = QVBoxLayout(model)
-        ml.setContentsMargins(18, 16, 18, 16)
-        ml.setSpacing(8)
+        ml.setContentsMargins(24, 24, 24, 24)
+        ml.setSpacing(16)
 
         title = QLabel("ACTIVE MODEL")
         title.setObjectName("popupSectionTitle")
@@ -1026,8 +1033,8 @@ class DashboardPage(QWidget):
         pipeline = QFrame()
         pipeline.setObjectName("popupSection")
         pl = QVBoxLayout(pipeline)
-        pl.setContentsMargins(18, 16, 18, 16)
-        pl.setSpacing(8)
+        pl.setContentsMargins(24, 24, 24, 24)
+        pl.setSpacing(16)
 
         ptitle = QLabel("PIPELINE")
         ptitle.setObjectName("popupSectionTitle")
