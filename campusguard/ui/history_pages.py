@@ -1346,18 +1346,17 @@ class IncidentsPage(QWidget):
                 header.ResizeMode.ResizeToContents,
             )
 
-            header.setSectionResizeMode(
-                7,
-                header.ResizeMode.Fixed,
-            )
-            table.setColumnWidth(0, 118)
-            table.setColumnWidth(1, 150)
-            table.setColumnWidth(2, 210)
-            table.setColumnWidth(3, 105)
-            table.setColumnWidth(4, 92)
-            table.setColumnWidth(5, 112)
-            table.setColumnWidth(6, 158)
-            table.setColumnWidth(7, 150)
+            for column in (3, 4, 5, 6, 7):
+                header.setSectionResizeMode(
+                    column,
+                    header.ResizeMode.Fixed,
+                )
+
+            table.setColumnWidth(3, 95)
+            table.setColumnWidth(4, 90)
+            table.setColumnWidth(5, 105)
+            table.setColumnWidth(6, 145)
+            table.setColumnWidth(7, 145)
 
             _apply_table_palette(
                 table
@@ -1981,16 +1980,16 @@ class AlertsPage(QWidget):
                 header.ResizeMode.ResizeToContents,
             )
 
-            header.setSectionResizeMode(
-                6,
-                header.ResizeMode.Fixed,
-            )
-            table.setColumnWidth(0, 150)
-            table.setColumnWidth(1, 215)
-            table.setColumnWidth(2, 105)
-            table.setColumnWidth(3, 92)
-            table.setColumnWidth(4, 158)
-            table.setColumnWidth(5, 118)
+            for column in (2, 3, 4, 5, 6):
+                header.setSectionResizeMode(
+                    column,
+                    header.ResizeMode.Fixed,
+                )
+
+            table.setColumnWidth(2, 95)
+            table.setColumnWidth(3, 90)
+            table.setColumnWidth(4, 145)
+            table.setColumnWidth(5, 115)
             table.setColumnWidth(6, 105)
 
             _apply_table_palette(
