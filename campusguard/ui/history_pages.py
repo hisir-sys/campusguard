@@ -3,10 +3,10 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QUrl, Qt, Signal
-from PySide6.QtGui import QColor
-from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
-from PySide6.QtMultimediaWidgets import QVideoWidget
+import cv2
+
+from PySide6.QtCore import QEvent, QTimer, Qt, Signal
+from PySide6.QtGui import QColor, QImage, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -34,7 +34,11 @@ from campusguard.ui.common import make_page_title
 # ============================================================================
 
 class FootagePlayerDialog(QWidget):
-    """Persistent in-app incident footage viewer."""
+    """Persistent in-app incident footage viewer using OpenCV decoding.
+
+    OpenCV is also the writer used by FightFootageRecorder, so playback uses
+    the same decoder path instead of depending on Windows/Qt codec availability.
+    """
 
     def __init__(
         self,
@@ -74,9 +78,7 @@ class FootagePlayerDialog(QWidget):
         title_block.setSpacing(2)
 
         title_label = QLabel(title)
-        title_label.setStyleSheet(
-            "font-size: 17px; font-weight: 850;"
-        )
+        title_label.setStyleSheet("font-size: 17px; font-weight: 850;")
 
         subtitle = QLabel("Saved incident footage")
         subtitle.setProperty("muted", True)
@@ -90,19 +92,16 @@ class FootagePlayerDialog(QWidget):
         close_button.setCursor(Qt.CursorShape.PointingHandCursor)
         close_button.setMinimumHeight(32)
         close_button.clicked.connect(self.close)
-        heading.addWidget(
-            close_button,
-            0,
-            Qt.AlignmentFlag.AlignTop,
-        )
-
+        heading.addWidget(close_button, 0, Qt.AlignmentFlag.AlignTop)
         layout.addLayout(heading)
 
-        self.video = QVideoWidget()
-        self.video.setAspectRatioMode(
-            Qt.AspectRatioMode.KeepAspectRatio
-        )
+        self.video = QLabel("Loading saved footage…")
+        self.video.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.video.setMinimumSize(640, 360)
+        self.video.setStyleSheet(
+            "QLabel { background: #050505; border-radius: 12px; color: #AAB4C0; }"
+        )
+        self.video.installEventFilter(self)
         layout.addWidget(self.video, 1)
 
         controls = QHBoxLayout()
@@ -116,58 +115,56 @@ class FootagePlayerDialog(QWidget):
         self.speed_combo.addItems(["0.5×", "0.75×", "1×"])
         self.speed_combo.setCurrentIndex(1)
         self.speed_combo.setMinimumWidth(86)
-        self.speed_combo.currentIndexChanged.connect(
-            self._set_playback_speed
-        )
+        self.speed_combo.currentIndexChanged.connect(self._set_playback_speed)
         controls.addWidget(self.speed_combo)
         controls.addStretch(1)
 
+        self.status_label = QLabel("")
+        self.status_label.setProperty("muted", True)
+        controls.addWidget(self.status_label)
         layout.addLayout(controls)
 
-        self.player = QMediaPlayer(self)
-        self.audio = QAudioOutput(self)
-        self.audio.setVolume(0.7)
-        self.player.setAudioOutput(self.audio)
-        self.player.setVideoOutput(self.video)
+        self.capture: cv2.VideoCapture | None = None
+        self.source_fps = 30.0
+        self.playback_rate = 0.75
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self._read_frame)
 
         path = Path(footage_path)
         if not path.is_file():
-            message = QLabel(
-                "The saved footage file is no longer available."
-            )
-            message.setProperty("muted", True)
-            message.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            layout.insertWidget(1, message, 1)
-            self.video.hide()
+            self.video.setText("The saved footage file is no longer available.")
             return
 
-        self.player.setSource(
-            QUrl.fromLocalFile(str(path.resolve()))
-        )
-        self.player.setPlaybackRate(0.75)
+        capture = cv2.VideoCapture(str(path.resolve()))
+        if capture is None or not capture.isOpened():
+            if capture is not None:
+                capture.release()
+            self.video.setText("CampusGuard could not decode this saved footage.")
+            return
 
-        # Clicking the video area closes the viewer as requested.
-        self.video.installEventFilter(self)
+        fps = float(capture.get(cv2.CAP_PROP_FPS) or 0.0)
+        if not 8.0 <= fps <= 60.0:
+            fps = 30.0
+        self.source_fps = fps
+        self.capture = capture
+        self._set_timer_interval()
+        self._read_frame()
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
         self.raise_()
         self.card.raise_()
-
-        if self.player.source().isValid():
-            self.player.play()
+        if self.capture is not None:
+            self._set_timer_interval()
+            self.timer.start()
 
     def eventFilter(self, watched, event) -> bool:
-        if (
-            watched is self.video
-            and event.type() == event.Type.MouseButtonPress
-        ):
+        if watched is self.video and event.type() == QEvent.Type.MouseButtonPress:
             self.close()
             return True
         return super().eventFilter(watched, event)
 
     def mousePressEvent(self, event) -> None:
-        # Clicking the dimmed area closes the viewer.
         if not self.card.geometry().contains(event.position().toPoint()):
             self.close()
             return
@@ -176,13 +173,46 @@ class FootagePlayerDialog(QWidget):
     def _set_playback_speed(self, index: int) -> None:
         rates = [0.5, 0.75, 1.0]
         if 0 <= index < len(rates):
-            self.player.setPlaybackRate(rates[index])
+            self.playback_rate = rates[index]
+            self._set_timer_interval()
+
+    def _set_timer_interval(self) -> None:
+        interval = max(10, int(round(1000.0 / self.source_fps / self.playback_rate)))
+        self.timer.setInterval(interval)
+
+    def _read_frame(self) -> None:
+        if self.capture is None:
+            self.timer.stop()
+            return
+        ok, frame = self.capture.read()
+        if not ok or frame is None or frame.size == 0:
+            self.timer.stop()
+            self.status_label.setText("End of footage")
+            return
+
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        image = QImage(
+            rgb.data,
+            rgb.shape[1],
+            rgb.shape[0],
+            int(rgb.strides[0]),
+            QImage.Format.Format_RGB888,
+        ).copy()
+        pixmap = QPixmap.fromImage(image)
+        self.video.setPixmap(
+            pixmap.scaled(
+                self.video.size(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        )
 
     def closeEvent(self, event) -> None:
-        self.player.stop()
+        self.timer.stop()
+        if self.capture is not None:
+            self.capture.release()
+            self.capture = None
         super().closeEvent(event)
-
-
 
 def _local_time(value: str) -> str:
     try:
