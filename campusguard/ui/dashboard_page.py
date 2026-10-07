@@ -486,108 +486,43 @@ class DashboardPage(QWidget):
             self._dashboard_content
         )
 
-        root.setContentsMargins(
-            24,
-            20,
-            24,
-            20,
-        )
-
-        root.setSpacing(16)
+        root.setContentsMargins(24, 24, 24, 24)
+        root.setSpacing(24)
 
         # --------------------------------------------------------------
-        # Main two-column dashboard
+        # Primary dashboard: 1/3 left, 2/3 right.
+        # Live Network is intentionally full-width below so the camera
+        # grid gets the largest uninterrupted visual area.
         # --------------------------------------------------------------
-
         main_row = QHBoxLayout()
-        main_row.setContentsMargins(
-            0,
-            0,
-            0,
-            0,
-        )
-        main_row.setSpacing(16)
-
-        # ==============================================================
-        # LEFT COLUMN
-        # ==============================================================
+        main_row.setContentsMargins(0, 0, 0, 0)
+        main_row.setSpacing(24)
 
         left_column = QVBoxLayout()
-        left_column.setContentsMargins(
-            0,
-            0,
-            0,
-            0,
-        )
-        left_column.setSpacing(16)
+        left_column.setContentsMargins(0, 0, 0, 0)
+        left_column.setSpacing(24)
 
-        self._engine_card = (
-            self._build_engine_card()
-        )
+        self._engine_card = self._build_engine_card()
+        self._stats_card = self._build_stats_card()
+        self._notifications_card = self._build_notifications_card()
+        self._network_card = self._build_network_card()
 
-        self._stats_card = (
-            self._build_stats_card()
-        )
-
-        self._notifications_card = (
-            self._build_notifications_card()
-        )
-
-        left_column.addWidget(
-            self._engine_card,
-            0,
-        )
-
-        left_column.addWidget(
-            self._stats_card,
-            0,
-        )
-
-        left_column.addWidget(
-            self._notifications_card,
-            1,
-        )
-
-        # ==============================================================
-        # RIGHT COLUMN
-        # ==============================================================
+        left_column.addWidget(self._engine_card, 0)
+        left_column.addWidget(self._stats_card, 0)
 
         right_column = QVBoxLayout()
-        right_column.setContentsMargins(
-            0,
-            0,
-            0,
-            0,
-        )
+        right_column.setContentsMargins(0, 0, 0, 0)
+        right_column.setSpacing(24)
+        right_column.addWidget(self._notifications_card, 1)
 
-        self._network_card = (
-            self._build_network_card()
-        )
+        main_row.addLayout(left_column, 1)
+        main_row.addLayout(right_column, 2)
+        root.addLayout(main_row, 0)
 
-        right_column.addWidget(
-            self._network_card,
-            1,
-        )
+        self._network_card.setMinimumHeight(360)
+        root.addWidget(self._network_card, 1)
 
-        main_row.addLayout(
-            left_column,
-            1,
-        )
-
-        main_row.addLayout(
-            right_column,
-            2,
-        )
-
-        root.addLayout(
-            main_row,
-            1,
-        )
-
-        outer.addWidget(
-            self._dashboard_content,
-            1,
-        )
+        outer.addWidget(self._dashboard_content, 1)
 
         # ==============================================================
         # DASHBOARD BLUR
@@ -725,8 +660,8 @@ class DashboardPage(QWidget):
 
     def _build_engine_card(self) -> QFrame:
         frame, layout = make_card("AI Engine", icon="cpu")
-        frame.setMinimumHeight(150)
-        frame.setMaximumHeight(150)
+        frame.setMinimumHeight(176)
+        frame.setMaximumHeight(176)
         frame.setCursor(Qt.CursorShape.PointingHandCursor)
         frame.installEventFilter(self)
         for child in frame.findChildren(QWidget):
@@ -758,8 +693,8 @@ class DashboardPage(QWidget):
 
     def _build_stats_card(self) -> QFrame:
         frame, layout = make_card("System Stats", icon="server")
-        frame.setMinimumHeight(104)
-        frame.setMaximumHeight(104)
+        frame.setMinimumHeight(128)
+        frame.setMaximumHeight(128)
         frame.setCursor(Qt.CursorShape.PointingHandCursor)
         frame.installEventFilter(self)
         for child in frame.findChildren(QWidget):
@@ -858,7 +793,7 @@ class DashboardPage(QWidget):
             QFrame.Shape.NoFrame
         )
 
-        scroll.setMinimumHeight(170)
+        scroll.setMinimumHeight(196)
 
         scroll.viewport().setAutoFillBackground(
             False
@@ -877,9 +812,7 @@ class DashboardPage(QWidget):
             0,
         )
 
-        self._notification_layout.setSpacing(
-            12
-        )
+        self._notification_layout.setSpacing(0)
 
         self._notification_layout.addStretch(
             1
@@ -953,9 +886,8 @@ class DashboardPage(QWidget):
             0,
         )
 
-        self._camera_grid.setSpacing(
-            12
-        )
+        self._camera_grid.setHorizontalSpacing(16)
+        self._camera_grid.setVerticalSpacing(16)
 
         self.feed_scroll.setWidget(
             self.feed_content
