@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
     QGraphicsBlurEffect,
+    QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -506,7 +507,7 @@ def _configure_table(
     )
 
     table.verticalHeader().hide()
-    table.verticalHeader().setDefaultSectionSize(58)
+    table.verticalHeader().setDefaultSectionSize(64)
 
     header = table.horizontalHeader()
     header.show()
@@ -514,8 +515,8 @@ def _configure_table(
         Qt.AlignmentFlag.AlignLeft
         | Qt.AlignmentFlag.AlignVCenter
     )
-    header.setMinimumHeight(38)
-    header.setFixedHeight(38)
+    header.setMinimumHeight(40)
+    header.setFixedHeight(40)
     header.setStretchLastSection(False)
 
     table.setWordWrap(False)
@@ -576,6 +577,12 @@ class _HistoryPopup(QWidget):
             True,
         )
 
+        shadow = QGraphicsDropShadowEffect(self.popup)
+        shadow.setBlurRadius(36)
+        shadow.setOffset(0, 12)
+        shadow.setColor(QColor(0, 0, 0, 110))
+        self.popup.setGraphicsEffect(shadow)
+
         self.popup.setStyleSheet(
             """
             QFrame#historyPopup {
@@ -586,12 +593,7 @@ class _HistoryPopup(QWidget):
 
         outer = QVBoxLayout(self)
 
-        outer.setContentsMargins(
-            20,
-            20,
-            20,
-            20,
-        )
+        outer.setContentsMargins(32, 32, 32, 32)
 
         outer.setAlignment(
             Qt.AlignmentFlag.AlignCenter
@@ -605,14 +607,9 @@ class _HistoryPopup(QWidget):
             self.popup
         )
 
-        popup_layout.setContentsMargins(
-            22,
-            20,
-            22,
-            18,
-        )
+        popup_layout.setContentsMargins(32, 24, 32, 24)
 
-        popup_layout.setSpacing(12)
+        popup_layout.setSpacing(16)
 
         # --------------------------------------------------------------
         # Popup heading
@@ -630,8 +627,8 @@ class _HistoryPopup(QWidget):
         title_label.setStyleSheet(
             """
             QLabel {
-                font-size: 18px;
-                font-weight: 850;
+                font-size: 17pt;
+                font-weight: 700;
             }
             """
         )
