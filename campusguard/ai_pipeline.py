@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass, field
+import copy
+import os
 from pathlib import Path
 from time import perf_counter
 from typing import Callable
@@ -155,7 +157,11 @@ class VisionPipeline:
     """YOLO person detection + ByteTrack + YOLO Pose + selectable temporal violence model."""
 
     def __init__(self, settings: AppSettings, status: ModelStatusCallback) -> None:
-        torch.set_num_threads(1)
+        # Keep CPU inference responsive when multiple camera workers run at once.
+        # Two threads per worker is a deliberate compromise between throughput and
+        # CPU oversubscription on typical Windows demo machines.
+        cpu_threads = max(1, min(2, (os.cpu_count() or 2) // 2))
+        torch.set_num_threads(cpu_threads)
         self.status = status
         self.settings = settings
         self.detector = None
@@ -182,6 +188,10 @@ class VisionPipeline:
         self.last_inference_ms = 0.0
         self.frame_index = 0
         self.last_diagnostics: list[dict[str, object]] = []
+        # Expensive detector/pose passes are decimated while the temporal MC3
+        # classifier still receives every analyzed frame. This keeps the UI live
+        # without removing temporal evidence from Spontim.
+        self.cached_people: list[TrackedPerson] = []
         self._load_models(settings)
 
     def configure(self, settings: AppSettings) -> None:
@@ -284,7 +294,7 @@ class VisionPipeline:
         self.last_state = "MODEL NOT LOADED"
         self.last_confidence = None
         self.last_involved_ids.clear()
-
+        self.cached_people.clear()
 
     def _load_yolo(self, component: str, model_path: str, task: str):
         path = Path(model_path).expanduser()
@@ -325,6 +335,7 @@ class VisionPipeline:
 
         if not ai_enabled:
             self._clear_involvement([])
+            self.cached_people.clear()
             self.decision.reset()
             self.last_state, self.last_confidence = "AI DISABLED", None
             self.last_process_fps = 1.0 / max(perf_counter() - process_started, 1e-6)
@@ -332,14 +343,27 @@ class VisionPipeline:
             return annotated, state, confidence, event
 
         people: list[TrackedPerson] = []
-        if settings.detection_enabled and self.detector is not None:
+        run_detector = (
+            settings.detection_enabled
+            and self.detector is not None
+            and (self.frame_index % 2 == 0 or not self.cached_people)
+        )
+        if run_detector:
             try:
                 people = self._detect_people(annotated, tracking_enabled, settings)
             except Exception as error:
                 self.detector = None
                 self.status("detector", f"MODEL ERROR — {error}")
+        elif self.cached_people:
+            people = copy.deepcopy(self.cached_people)
 
-        if settings.pose_enabled and pose_enabled and self.pose_model is not None:
+        run_pose = (
+            settings.pose_enabled
+            and pose_enabled
+            and self.pose_model is not None
+            and (self.frame_index % 4 == 0 or any(person.keypoints is None for person in people))
+        )
+        if run_pose and people:
             try:
                 self._attach_pose(frame, people, annotated, settings)
             except Exception as error:
@@ -638,6 +662,7 @@ class VisionPipeline:
         self.interactions.pair_history.clear()
         self.decision.reset()
         self.last_involved_ids.clear()
+        self.cached_people.clear()
 
     def _assign_fallback_track_ids(self, boxes: np.ndarray) -> list[int]:
         """Keep temporal ROI IDs stable when ByteTrack is disabled/unavailable."""
