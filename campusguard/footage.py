@@ -46,6 +46,10 @@ class FightFootageRecorder:
 
         # Keep a rolling lead-in so the saved evidence does not begin several
         # temporal predictions after the visible confrontation starts.
+        if source_fps and source_fps > 0:
+            target = max(16, min(180, int(round(self.PRE_EVENT_SECONDS * float(source_fps)))))
+            if self.prebuffer.maxlen != target:
+                self.prebuffer = deque(self.prebuffer, maxlen=target)
         if frame is not None and frame.size:
             self.prebuffer.append(frame.copy())
 
