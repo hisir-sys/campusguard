@@ -497,36 +497,34 @@ class DashboardPage(QWidget):
         root.setSpacing(24)
 
         # --------------------------------------------------------------
-        # Primary dashboard: 1/3 left, 2/3 right.
-        # Live Network is intentionally full-width below so the camera
-        # grid gets the largest uninterrupted visual area.
+        # Operations overview
+        #
+        # A single three-column status strip keeps the most important
+        # information visible at a glance. The camera wall sits underneath
+        # as the main visual surface.
         # --------------------------------------------------------------
         main_row = QHBoxLayout()
         main_row.setContentsMargins(0, 0, 0, 0)
-        main_row.setSpacing(24)
-
-        left_column = QVBoxLayout()
-        left_column.setContentsMargins(0, 0, 0, 0)
-        left_column.setSpacing(24)
+        main_row.setSpacing(18)
 
         self._engine_card = self._build_engine_card()
         self._stats_card = self._build_stats_card()
         self._notifications_card = self._build_notifications_card()
         self._network_card = self._build_network_card()
 
-        left_column.addWidget(self._engine_card, 0)
-        left_column.addWidget(self._stats_card, 0)
+        self._engine_card.setMinimumHeight(222)
+        self._engine_card.setMaximumHeight(222)
+        self._stats_card.setMinimumHeight(222)
+        self._stats_card.setMaximumHeight(222)
+        self._notifications_card.setMinimumHeight(222)
+        self._notifications_card.setMaximumHeight(222)
 
-        right_column = QVBoxLayout()
-        right_column.setContentsMargins(0, 0, 0, 0)
-        right_column.setSpacing(24)
-        right_column.addWidget(self._notifications_card, 1)
-
-        main_row.addLayout(left_column, 1)
-        main_row.addLayout(right_column, 2)
+        main_row.addWidget(self._engine_card, 11)
+        main_row.addWidget(self._stats_card, 11)
+        main_row.addWidget(self._notifications_card, 15)
         root.addLayout(main_row, 0)
 
-        self._network_card.setMinimumHeight(320)
+        self._network_card.setMinimumHeight(340)
         root.addWidget(self._network_card, 1)
 
         # Keep the dashboard workspace scrollable so the fixed bottom
@@ -683,8 +681,8 @@ class DashboardPage(QWidget):
 
     def _build_engine_card(self) -> QFrame:
         frame, layout = make_card("AI Engine", icon="cpu")
-        frame.setMinimumHeight(196)
-        frame.setMaximumHeight(196)
+        frame.setMinimumHeight(222)
+        frame.setMaximumHeight(222)
         frame.setCursor(Qt.CursorShape.PointingHandCursor)
         frame.installEventFilter(self)
         for child in frame.findChildren(QWidget):
@@ -716,8 +714,8 @@ class DashboardPage(QWidget):
 
     def _build_stats_card(self) -> QFrame:
         frame, layout = make_card("System Stats", icon="server")
-        frame.setMinimumHeight(128)
-        frame.setMaximumHeight(128)
+        frame.setMinimumHeight(222)
+        frame.setMaximumHeight(222)
         frame.setCursor(Qt.CursorShape.PointingHandCursor)
         frame.installEventFilter(self)
         for child in frame.findChildren(QWidget):
@@ -816,7 +814,7 @@ class DashboardPage(QWidget):
             QFrame.Shape.NoFrame
         )
 
-        scroll.setMinimumHeight(196)
+        scroll.setMinimumHeight(160)
 
         scroll.viewport().setAutoFillBackground(
             False
@@ -1623,8 +1621,8 @@ class DashboardPage(QWidget):
                 self._tiles[
                     camera.camera_id
                 ],
-                index // 2,
-                index % 2,
+                index // 3,
+                index % 3,
             )
 
         count = len(
