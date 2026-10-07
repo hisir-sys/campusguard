@@ -228,6 +228,16 @@ class CameraCaptureThread(QThread):
 
                 backoff_seconds = 2
                 previously_connected = True
+
+                # Use the camera's declared media rate for evidence recording.
+                # Some capture backends can be read faster than real time, so
+                # using the raw read-loop speed can make saved footage play too fast.
+                declared_fps = float(capture.get(cv2.CAP_PROP_FPS) or 0.0)
+                if 8.0 <= declared_fps <= 60.0:
+                    self.options.set_source_fps(declared_fps)
+                else:
+                    self.options.set_source_fps(30.0)
+
                 frame_count = 0
                 stats_started = time.monotonic()
                 self.status_changed.emit("LIVE", "")
@@ -260,7 +270,9 @@ class CameraCaptureThread(QThread):
                     elapsed = time.monotonic() - stats_started
                     if elapsed >= 1.0:
                         measured_fps = frame_count / elapsed
-                        self.options.set_source_fps(measured_fps)
+                        # measured_fps is a diagnostics value only. It must not
+                        # become the MP4 playback rate because OpenCV may drain
+                        # buffered frames faster than the original camera clock.
                         self.stats_updated.emit(
                             measured_fps,
                             f"{width}x{height}",
