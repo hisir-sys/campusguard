@@ -13,7 +13,6 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMainWindow,
     QScrollArea,
-    QMessageBox,
     QPushButton,
     QSizePolicy,
     QStackedWidget,
@@ -240,6 +239,24 @@ class InAppOverlay(QFrame):
         self._clear_blur()
         self.hide()
         callback(value)
+    def show_notice(self, title: str, message: str) -> None:
+        self._clear_body()
+        self._title.setText(title)
+        self._body.setText(message)
+        self._body.setVisible(True)
+        self._body_layout.addWidget(self._body)
+        close = QPushButton("Close")
+        close.setProperty("secondaryButton", True)
+        close.clicked.connect(self._close_overlay)
+        row = QHBoxLayout()
+        row.addStretch(1)
+        row.addWidget(close)
+        self._body_layout.addLayout(row)
+        self._panel.setFixedSize(640, 300)
+        self._blur_background(True)
+        self.show()
+        self.raise_()
+        self._center()
     def show_camera(self, camera: CameraConfig, image=None, stats: CameraStats | None = None) -> None:
         self._clear_body()
         self._title.setText(camera.name)
@@ -894,7 +911,7 @@ class MainWindow(QMainWindow):
             self.vault.save(camera.camera_id, credentials)
         except Exception:
             self.repository.remove_camera(camera.camera_id)
-            QMessageBox.critical(
+            self._in_app_overlay.show_notice(
                 self,
                 "Credential vault unavailable",
                 "CampusGuard could not store the camera credentials securely, so the camera was not saved.\n\n"
