@@ -113,7 +113,27 @@ QWidget {
   font-size: 10pt;
 }
 QMainWindow { background: @bg1@; }
-QDialog { background: @popup@; }
+QDialog, QMessageBox, QInputDialog {
+  background: @popup@;
+  color: @text@;
+  border: 1px solid @glass_line@;
+  border-radius: 20px;
+}
+QDialog QLabel, QMessageBox QLabel, QInputDialog QLabel {
+  color: @text@;
+  background: transparent;
+}
+QDialog QPushButton, QMessageBox QPushButton, QInputDialog QPushButton {
+  background: @veil@;
+  color: @text@;
+  border: 1px solid @line@;
+  border-radius: 10px;
+  padding: 8px 16px;
+}
+QDialog QPushButton:hover, QMessageBox QPushButton:hover, QInputDialog QPushButton:hover {
+  background: @veil_hover@;
+  border-color: @accent_line@;
+}
 QStackedWidget, QScrollArea { background: transparent; border: none; }
 QScrollArea > QWidget > QWidget { background: transparent; }
 QStatusBar { background: transparent; color: @muted@; }
