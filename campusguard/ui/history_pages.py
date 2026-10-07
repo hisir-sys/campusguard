@@ -9,7 +9,6 @@ from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWidgets import (
     QComboBox,
-    QDialog,
     QFrame,
     QGraphicsBlurEffect,
     QGridLayout,
@@ -35,15 +34,19 @@ from campusguard.ui.common import make_page_title
 # FOOTAGE PLAYER
 # ============================================================================
 
-class FootagePlayerDialog(QDialog):
+class FootagePlayerDialog(QWidget):
     def __init__(self, footage_path: str, title: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle(f"CampusGuard — {title}")
-        self.resize(980, 620)
+        self.setObjectName("footageViewerOverlay")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(
+            "QWidget#footageViewerOverlay { background: rgba(0, 0, 0, 135); }"
+        )
+        self.setGeometry(parent.rect() if parent is not None else self.rect())
         self.setMinimumSize(760, 480)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setContentsMargins(30, 30, 30, 30)
         layout.setSpacing(10)
 
         self.video = QVideoWidget()
@@ -89,7 +92,6 @@ class FootagePlayerDialog(QDialog):
 
         self.player.setSource(QUrl.fromLocalFile(str(path.resolve())))
         self.player.setPlaybackRate(0.75)
-        self.player.play()
 
     def _set_playback_speed(self, index: int) -> None:
         rates = [0.5, 0.75, 1.0]
@@ -1607,7 +1609,10 @@ class IncidentsPage(QWidget):
         self._close_popup()
 
     def _open_footage(self, path: str, public_id: str) -> None:
-        FootagePlayerDialog(path, f"Incident {public_id}", self).exec()
+        viewer = FootagePlayerDialog(path, f"Incident {public_id}", self.window())
+        viewer.show()
+        viewer.raise_()
+
 
 
 
