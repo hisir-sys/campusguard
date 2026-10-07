@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from collections import deque
 from pathlib import Path
 
 import cv2
@@ -11,6 +12,7 @@ class FightFootageRecorder:
     """Records one complete latched detection into a single MP4 file."""
 
     NORMAL_RELEASE_FRAMES = 6
+    PRE_EVENT_SECONDS = 2.0
 
     def __init__(self, output_dir: Path) -> None:
         self.output_dir = output_dir
@@ -20,6 +22,7 @@ class FightFootageRecorder:
         self.normal_frames = 0
         self.frame_size: tuple[int, int] | None = None
         self.fps = 25.0
+        self.prebuffer: deque[np.ndarray] = deque(maxlen=60)
 
     @property
     def active(self) -> bool:
@@ -30,6 +33,7 @@ class FightFootageRecorder:
         self.path = None
         self.normal_frames = 0
         self.frame_size = None
+        self.prebuffer.clear()
 
     def update(
         self,
@@ -40,8 +44,17 @@ class FightFootageRecorder:
     ) -> Path | None:
         finished: Path | None = None
 
+        # Keep a rolling lead-in so the saved evidence does not begin several
+        # temporal predictions after the visible confrontation starts.
+        if frame is not None and frame.size:
+            self.prebuffer.append(frame.copy())
+
         if event_started and not self.active:
             self._start(frame, source_fps)
+            if self.active and self.writer is not None and self.frame_size == (frame.shape[1], frame.shape[0]):
+                for buffered in list(self.prebuffer)[:-1]:
+                    if buffered.shape[1] == self.frame_size[0] and buffered.shape[0] == self.frame_size[1]:
+                        self.writer.write(buffered)
 
         if self.active and self.writer is not None:
             if self.frame_size == (frame.shape[1], frame.shape[0]):
