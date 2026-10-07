@@ -689,13 +689,44 @@ class DashboardPage(QWidget):
             child.installEventFilter(self)
 
         self.engine_values = {}
+
+        # Active engine identity: visually stronger than a plain key/value row.
+        model_tile = QFrame()
+        model_tile.setObjectName("dashboardModelTile")
+        model_box = QVBoxLayout(model_tile)
+        model_box.setContentsMargins(14, 12, 14, 12)
+        model_box.setSpacing(5)
+
+        model_top = QHBoxLayout()
+        model_top.setContentsMargins(0, 0, 0, 0)
+        model_top.setSpacing(8)
+
+        model_label = QLabel("PRODUCTION ENGINE")
+        model_label.setProperty("eyebrow", True)
+        model_top.addWidget(model_label)
+        model_top.addStretch(1)
+
+        live = QLabel("ACTIVE")
+        live.setProperty("tone", "good")
+        live.setStyleSheet("font-size: 8pt; font-weight: 700;")
+        model_top.addWidget(live)
+        model_box.addLayout(model_top)
+
+        active_model = QLabel("Spontim 1.0")
+        active_model.setProperty("kvvalue", True)
+        active_model.setStyleSheet("font-size: 13pt; font-weight: 700;")
+        model_box.addWidget(active_model)
+        self.engine_values["violence_model"] = active_model
+        layout.addWidget(model_tile)
+
         rows = (
-            ("violence_model", "Active model"),
             ("status", "Engine status"),
             ("device", "Compute"),
         )
         for key, text in rows:
             row = QHBoxLayout()
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(10)
             label = QLabel(text)
             label.setProperty("kvlabel", True)
             value = QLabel("—")
@@ -706,6 +737,7 @@ class DashboardPage(QWidget):
             row.addWidget(value)
             layout.addLayout(row)
             self.engine_values[key] = value
+
         return frame
 
     # ==================================================================
@@ -721,11 +753,6 @@ class DashboardPage(QWidget):
         for child in frame.findChildren(QWidget):
             child.installEventFilter(self)
 
-        preview = QGridLayout()
-        preview.setContentsMargins(0, 0, 0, 0)
-        preview.setHorizontalSpacing(18)
-        preview.setVerticalSpacing(4)
-
         self.online_value = QLabel("0")
         self.online_value.setProperty("kvvalue", True)
         self.offline_value = QLabel("0")
@@ -734,25 +761,47 @@ class DashboardPage(QWidget):
         self.incident_value.setProperty("kvvalue", True)
         self.alert_value = QLabel("0")
         self.alert_value.setProperty("kvvalue", True)
-        values = (
+
+        stats = (
             ("video", "good", self.online_value, "Cameras"),
             ("file-warning", "warn", self.incident_value, "Open incidents"),
-            ("shield-alert", "bad", self.alert_value, "Alerts"),
+            ("shield-alert", "bad", self.alert_value, "Active alerts"),
         )
-        for index, (icon, tone, value, label_text) in enumerate(values):
-            cell = QHBoxLayout()
-            cell.setSpacing(6)
-            cell.addWidget(IconLabel(icon, 14, tone))
-            cell.addWidget(value)
+
+        grid = QGridLayout()
+        grid.setContentsMargins(0, 2, 0, 0)
+        grid.setHorizontalSpacing(10)
+        grid.setVerticalSpacing(10)
+
+        for index, (icon, tone, value, label_text) in enumerate(stats):
+            tile = QFrame()
+            tile.setObjectName("dashboardStatTile")
+            box = QVBoxLayout(tile)
+            box.setContentsMargins(12, 11, 12, 10)
+            box.setSpacing(3)
+
+            top = QHBoxLayout()
+            top.setContentsMargins(0, 0, 0, 0)
+            top.addWidget(IconLabel(icon, 16, tone))
+            top.addStretch(1)
+            box.addLayout(top)
+
+            box.addWidget(value)
+
             label = QLabel(label_text)
             label.setProperty("muted", True)
-            cell.addWidget(label)
-            cell.addStretch(1)
-            wrapper = QWidget()
-            wrapper.setLayout(cell)
-            preview.addWidget(wrapper, index // 3, index % 3)
+            label.setStyleSheet("font-size: 8.5pt;")
+            box.addWidget(label)
 
-        layout.addLayout(preview)
+            grid.addWidget(tile, 0, index)
+
+        layout.addLayout(grid)
+
+        hint = QLabel("Click to open detailed system health")
+        hint.setProperty("muted", True)
+        hint.setStyleSheet("font-size: 8pt;")
+        layout.addWidget(hint)
+
         return frame
 
     # ==================================================================
