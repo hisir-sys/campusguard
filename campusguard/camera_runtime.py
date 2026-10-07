@@ -382,6 +382,9 @@ class FrameAnalysisThread(QThread):
 
     def run(self) -> None:
         latest_sequence = 0
+        analysis_frame_index = 0
+        last_state = "MODEL NOT LOADED"
+        last_confidence = None
 
         def report_model_status(component: str, message: str) -> None:
             self.model_status.emit(component, message)
@@ -403,18 +406,35 @@ class FrameAnalysisThread(QThread):
             settings, camera_ai_enabled = self.options.snapshot()
 
             try:
+                analysis_frame_index += 1
+                should_analyze = (
+                    pipeline is not None
+                    and (analysis_frame_index == 1 or analysis_frame_index % 2 == 0)
+                )
+
                 if pipeline is None:
                     processed = frame.copy()
                     state = "MODEL NOT LOADED"
                     confidence = None
                     event = None
-                else:
+                elif should_analyze:
                     processed, state, confidence, event = pipeline.process(
                         frame,
                         settings,
                         camera_ai_enabled,
                         settings.tracking_enabled,
                         settings.pose_enabled,
+                    )
+                    last_state = state
+                    last_confidence = confidence
+                else:
+                    state = last_state
+                    confidence = last_confidence
+                    event = None
+                    processed = pipeline.render_cached(
+                        frame,
+                        state,
+                        confidence,
                     )
 
                 rgb = cv2.cvtColor(processed, cv2.COLOR_BGR2RGB)
