@@ -20,7 +20,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from campusguard.camera_runtime import CameraManager
 from campusguard.footage import clear_footage
 from campusguard.credentials import CredentialVault
 from campusguard.settings import (
@@ -274,9 +273,9 @@ class MainWindow(QMainWindow):
         # Pick the icon/palette theme before any widget is built so nothing flashes.
         set_icon_theme(self.settings.theme)
 
-        self.camera_manager = CameraManager(self.vault, self.repository.footage_dir, self)
-        self.camera_manager.set_settings(self.settings)
-        self._connect_camera_manager()
+        # CameraManager imports PyTorch/Ultralytics. Keep that heavy AI stack out
+        # of initial window construction so the desktop UI appears immediately.
+        self.camera_manager = None
         self._build_ui()
         apply_theme(self, self.settings.theme)
         self.top_bar.set_theme(self.settings.theme)
@@ -295,7 +294,7 @@ class MainWindow(QMainWindow):
         # Starting them after the event loop begins guarantees the Dashboard
         # can render immediately, even when a camera or AI model takes time
         # to initialize.
-        QTimer.singleShot(0, self._start_cameras)
+        QTimer.singleShot(0, self._initialize_camera_engine)
 
         self._add_shortcut("Ctrl+1", lambda: self.navigate("dashboard"))
         self._add_shortcut("Ctrl+2", lambda: self.navigate("cameras"))
@@ -304,7 +303,22 @@ class MainWindow(QMainWindow):
         self._add_shortcut("Ctrl+5", lambda: self.navigate("settings"))
         self._add_shortcut("Ctrl+K", self.top_bar.focus_search)
 
+    def _initialize_camera_engine(self) -> None:
+        try:
+            from campusguard.camera_runtime import CameraManager
+
+            self.camera_manager = CameraManager(self.vault, self.repository.footage_dir, self)
+            self.camera_manager.set_settings(self.settings)
+            self._connect_camera_manager()
+            self._start_cameras()
+        except Exception as error:
+            self.statusBar().showMessage(f"AI engine initialization failed: {error}", 12000)
+            for camera in self.cameras.values():
+                self._set_camera_status(camera.camera_id, "ERROR", f"AI engine unavailable: {error}")
+
     def _start_cameras(self) -> None:
+        if self.camera_manager is None:
+            return
         for camera in self.cameras.values():
             try:
                 self.camera_manager.start_camera(camera)
@@ -825,6 +839,9 @@ class MainWindow(QMainWindow):
         self.cameras[camera.camera_id] = camera
         self.camera_stats[camera.camera_id] = CameraStats()
         self._previous_camera_status[camera.camera_id] = "CONNECTING"
+        if self.camera_manager is None:
+            self.statusBar().showMessage("Camera engine is still initializing; please try again in a moment.", 3000)
+            return
         try:
             self.camera_manager.start_camera(camera)
         except Exception as error:
@@ -850,7 +867,8 @@ class MainWindow(QMainWindow):
         camera = self.cameras.get(camera_id)
         if camera is None:
             return
-        self.camera_manager.stop_camera(camera_id)
+        if self.camera_manager is not None:
+            self.camera_manager.stop_camera(camera_id)
         self.repository.remove_camera(camera_id)
         try:
             self.vault.delete(camera_id)
@@ -874,6 +892,9 @@ class MainWindow(QMainWindow):
         if camera is None:
             return
         self.camera_stats[camera_id] = CameraStats(status="CONNECTING")
+        if self.camera_manager is None:
+            self.statusBar().showMessage("Camera engine is still initializing; please try again in a moment.", 3000)
+            return
         self.camera_manager.reconnect(camera_id, camera)
         self._sync_cameras()
 
@@ -884,7 +905,8 @@ class MainWindow(QMainWindow):
         updated = replace(camera, ai_enabled=enabled)
         self.cameras[camera_id] = updated
         self.repository.set_camera_ai(camera_id, enabled)
-        self.camera_manager.set_camera_ai(camera_id, enabled)
+        if self.camera_manager is not None:
+            self.camera_manager.set_camera_ai(camera_id, enabled)
         self._sync_cameras()
 
     # ------------------------------------------------------------------
@@ -895,7 +917,8 @@ class MainWindow(QMainWindow):
         # checkbox/dropdown click was causing the settings UI to feel laggy.
         self.settings = AppSettings.from_dict(settings.to_dict())
         self.repository.save_settings(self.settings)
-        self.camera_manager.set_settings(self.settings)
+        if self.camera_manager is not None:
+            self.camera_manager.set_settings(self.settings)
         apply_theme(self, self.settings.theme)
         self.top_bar.set_theme(self.settings.theme)
         self.dashboard.update_model_configuration(self.settings)
@@ -912,7 +935,8 @@ class MainWindow(QMainWindow):
         updated = AppSettings.from_dict(values)
         self.settings = updated
         self.repository.save_settings(updated)
-        self.camera_manager.set_settings(updated)
+        if self.camera_manager is not None:
+            self.camera_manager.set_settings(updated)
         self.dashboard.update_model_configuration(updated)
         self.settings_page.set_saved()
         self.statusBar().showMessage(
@@ -1155,5 +1179,6 @@ class MainWindow(QMainWindow):
         self._update_alert_badge()
 
     def closeEvent(self, event) -> None:
-        self.camera_manager.stop_all(timeout_ms=5000)
+        if self.camera_manager is not None:
+            self.camera_manager.stop_all(timeout_ms=5000)
         event.accept()
