@@ -178,7 +178,7 @@ class InAppOverlay(QFrame):
         buttons.addStretch(1)
         cancel = QPushButton("Cancel")
         cancel.setProperty("secondaryButton", True)
-        cancel.clicked.connect(self.hide)
+        cancel.clicked.connect(self._close_overlay)
         confirm = QPushButton("Confirm")
         confirm.setProperty("danger", True)
         confirm.clicked.connect(self._confirm)
@@ -275,7 +275,7 @@ class InAppOverlay(QFrame):
 
         close = QPushButton("Close")
         close.setProperty("secondaryButton", True)
-        close.clicked.connect(self.hide)
+        close.clicked.connect(self._close_overlay)
         row = QHBoxLayout()
         row.addStretch(1)
         row.addWidget(close)
