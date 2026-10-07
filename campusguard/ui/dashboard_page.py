@@ -968,9 +968,9 @@ class DashboardPage(QWidget):
 
         self._popup.prepare_for_display()
 
-        self._dashboard_blur.setBlurRadius(
-            13
-        )
+        self._dashboard_blur = QGraphicsBlurEffect(self)
+        self._dashboard_blur.setBlurRadius(13)
+        self._dashboard_content.setGraphicsEffect(self._dashboard_blur)
 
         self._popup.show()
         self._popup.raise_()
@@ -986,9 +986,10 @@ class DashboardPage(QWidget):
         self._popup.hide()
         self._popup_overlay.hide()
 
-        self._dashboard_blur.setBlurRadius(
-            0
-        )
+        if self._dashboard_blur is not None:
+            self._dashboard_content.setGraphicsEffect(None)
+            self._dashboard_blur.deleteLater()
+            self._dashboard_blur = None
 
         self._dashboard_content.update()
 
