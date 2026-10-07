@@ -2005,7 +2005,7 @@ class AlertsPage(QWidget):
         )
 
         popup = _HistoryPopup(
-            self,
+            self.window(),
             title,
             subtitle,
         )
