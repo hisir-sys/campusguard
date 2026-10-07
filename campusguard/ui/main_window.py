@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QFileDialog,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QScrollArea,
     QMessageBox,
@@ -201,6 +202,44 @@ class InAppOverlay(QFrame):
             callback()
         self.confirmed.emit()
 
+    def show_text_input(self, title: str, message: str, callback, placeholder: str = "") -> None:
+        self._clear_body()
+        self._title.setText(title)
+        self._body.setText(message)
+        self._body.setVisible(True)
+        self._body_layout.addWidget(self._body)
+
+        field = QLineEdit()
+        field.setPlaceholderText(placeholder)
+        field.setMinimumHeight(42)
+        self._body_layout.addWidget(field)
+
+        row = QHBoxLayout()
+        row.addStretch(1)
+        cancel = QPushButton("Cancel")
+        cancel.setProperty("secondaryButton", True)
+        cancel.clicked.connect(self._close_overlay)
+        save = QPushButton("Continue")
+        save.setProperty("primary", True)
+        save.clicked.connect(lambda: self._submit_text(field, callback))
+        row.addWidget(cancel)
+        row.addWidget(save)
+        self._body_layout.addLayout(row)
+
+        self._panel.setFixedSize(640, 310)
+        self._blur_background(True)
+        self.show()
+        self.raise_()
+        self._center()
+        field.setFocus()
+
+    def _submit_text(self, field: QLineEdit, callback) -> None:
+        value = field.text().strip()
+        if not value:
+            return
+        self._clear_blur()
+        self.hide()
+        callback(value)
     def show_camera(self, camera: CameraConfig, image=None, stats: CameraStats | None = None) -> None:
         self._clear_body()
         self._title.setText(camera.name)
@@ -1006,14 +1045,16 @@ class MainWindow(QMainWindow):
             self.operator_name = None
             self._update_operator_button()
             return
-        name, accepted = QInputDialog.getText(
-            self,
+        self._in_app_overlay.show_text_input(
             "Local operator session",
-            "Operator display name:",
+            "Enter the display name for this local CampusGuard session.",
+            self._set_operator_name,
+            "Operator display name",
         )
-        if accepted and name.strip():
-            self.operator_name = name.strip()
-            self._update_operator_button()
+
+    def _set_operator_name(self, name: str) -> None:
+        self.operator_name = name.strip()
+        self._update_operator_button()
 
     def _update_operator_button(self) -> None:
         self.top_bar.set_operator(self.operator_name)
