@@ -518,8 +518,8 @@ class SearchControl(QWidget):
 
     submitted = Signal(str)
 
-    COLLAPSED_WIDTH = 34
-    EXPANDED_WIDTH = 280
+    COLLAPSED_WIDTH = 40
+    EXPANDED_WIDTH = 190
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
