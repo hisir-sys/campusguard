@@ -1095,7 +1095,7 @@ class DashboardPage(QWidget):
             ("Person detection", "YOLO"),
             ("Tracking", "ByteTrack"),
             ("Pose analysis", "YOLO Pose"),
-            ("Temporal classifier", "Spontim 1.0"),
+            ("Temporal classifier", model_names.get(current_key, "Spontim 1.0")),
             ("Event gate", "4-frame trigger / 6-frame release"),
         )
         for label_text, value_text in stages:
