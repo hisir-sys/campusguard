@@ -429,6 +429,24 @@ class VisionPipeline:
         self.last_process_fps = 1.0 / max(perf_counter() - process_started, 1e-6)
         return annotated, state, confidence, event
 
+    def render_cached(
+        self,
+        frame: np.ndarray,
+        state: str | None = None,
+        confidence: float | None = None,
+    ) -> np.ndarray:
+        """Render the latest detector/pose state onto a fresh live frame."""
+        annotated = frame.copy()
+        people = copy.deepcopy(self.cached_people)
+        self._draw_people(annotated, people)
+        self._draw_status(
+            annotated,
+            state or self.last_state,
+            confidence if confidence is not None else self.last_confidence,
+            self.settings.violence_model,
+        )
+        return annotated
+
     def _selected_model(self, key: str):
         if key == "enhanced":
             return None
