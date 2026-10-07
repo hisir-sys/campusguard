@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from campusguard.camera_runtime import CameraTestThread, build_capture_source
+from campusguard.camera_runtime import (\n    CameraTestThread,\n    build_capture_source,\n    enumerate_local_cameras,\n)
 from campusguard.settings import CameraConfig, CameraCredentials, CameraStats
 from campusguard.ui.icons import IconLabel, set_icon_theme
 from campusguard.ui.theme import build_qss, get_palette, set_current
@@ -241,10 +241,31 @@ class CameraFormDialog(QDialog):
         self.password_input.setPlaceholderText("Stored in the OS credential vault")
         form.addRow("Camera name", self.name_input)
         form.addRow("Source type", self.type_input)
+
+        self.detected_widget = QWidget()
+        detected_layout = QHBoxLayout(self.detected_widget)
+        detected_layout.setContentsMargins(0, 0, 0, 0)
+        detected_layout.setSpacing(8)
+
+        self.detected_input = QComboBox()
+        self.detected_input.setMinimumWidth(250)
+        self.detected_input.addItem("Press Refresh Cameras to scan", None)
+
+        self.refresh_cameras_button = QPushButton("Refresh Cameras")
+        self.refresh_cameras_button.clicked.connect(self._refresh_local_cameras)
+
+        detected_layout.addWidget(self.detected_input, 1)
+        detected_layout.addWidget(self.refresh_cameras_button)
+        form.addRow("Detected cameras", self.detected_widget)
+
         form.addRow("Source address", self.address_input)
         form.addRow("Username", self.username_input)
         form.addRow("Password", self.password_input)
         root.addLayout(form)
+
+        self.detected_input.currentIndexChanged.connect(
+            self._select_detected_camera
+        )
 
         self.test_status = QLabel("Connection has not been tested.")
         self.test_status.setProperty("muted", True)
@@ -265,6 +286,7 @@ class CameraFormDialog(QDialog):
         self.cancel_button.clicked.connect(self.reject)
         self.type_input.currentTextChanged.connect(self._update_placeholder)
         self._update_placeholder(self.type_input.currentText())
+        self._update_usb_controls(self.type_input.currentText())
 
     @property
     def form_data(self) -> dict[str, str] | None:
@@ -279,6 +301,57 @@ class CameraFormDialog(QDialog):
             "IP": "192.168.1.50:8080/video or a full URL",
         }
         self.address_input.setPlaceholderText(placeholders.get(source_type, ""))
+        self._update_usb_controls(source_type)
+
+    def _update_usb_controls(self, source_type: str) -> None:
+        is_usb = source_type.upper() == "USB"
+        self.detected_widget.setVisible(is_usb)
+        if is_usb:
+            self.username_input.clear()
+            self.password_input.clear()
+            self.username_input.setEnabled(False)
+            self.password_input.setEnabled(False)
+            self._refresh_local_cameras()
+        else:
+            self.username_input.setEnabled(True)
+            self.password_input.setEnabled(True)
+
+    def _refresh_local_cameras(self) -> None:
+        if self.type_input.currentText().upper() != "USB":
+            return
+
+        self.detected_input.blockSignals(True)
+        self.detected_input.clear()
+        self.detected_input.addItem("Scanning local camera devices...", None)
+        self.detected_input.blockSignals(False)
+        self.refresh_cameras_button.setEnabled(False)
+
+        cameras = enumerate_local_cameras(max_devices=8)
+
+        self.detected_input.blockSignals(True)
+        self.detected_input.clear()
+
+        if cameras:
+            for camera in cameras:
+                self.detected_input.addItem(
+                    str(camera["label"]),
+                    int(camera["index"]),
+                )
+            self.detected_input.setCurrentIndex(0)
+            self.address_input.setText(str(cameras[0]["index"]))
+        else:
+            self.detected_input.addItem(
+                "No local camera found - check DroidCam/Windows first",
+                None,
+            )
+
+        self.detected_input.blockSignals(False)
+        self.refresh_cameras_button.setEnabled(True)
+
+    def _select_detected_camera(self, index: int) -> None:
+        device_index = self.detected_input.itemData(index)
+        if device_index is not None:
+            self.address_input.setText(str(int(device_index)))
 
     def _values(self) -> dict[str, str]:
         return {
@@ -292,7 +365,7 @@ class CameraFormDialog(QDialog):
     def _test_connection(self) -> None:
         values = self._values()
         if not values["source_address"]:
-            QMessageBox.warning(self, "Source address required", "Enter a camera source address.")
+            QMessageBox.warning(self, "Source address required", "Select a detected camera or enter its device index.")
             return
         credentials = CameraCredentials(values["username"], values["password"])
         self._test_thread = CameraTestThread(
