@@ -51,7 +51,21 @@ class FootagePlayerDialog(QDialog):
         layout.addWidget(self.video, 1)
 
         controls = QHBoxLayout()
+        controls.setSpacing(8)
+
+        speed_label = QLabel("Playback")
+        speed_label.setProperty("muted", True)
+        controls.addWidget(speed_label)
+
+        self.speed_combo = QComboBox()
+        self.speed_combo.addItems(["0.5×", "0.75×", "1×"])
+        self.speed_combo.setCurrentIndex(1)
+        self.speed_combo.setMinimumWidth(86)
+        self.speed_combo.currentIndexChanged.connect(self._set_playback_speed)
+        controls.addWidget(self.speed_combo)
+
         controls.addStretch(1)
+
         close_button = QPushButton("Close")
         close_button.setProperty("secondaryButton", True)
         close_button.clicked.connect(self.close)
@@ -74,7 +88,13 @@ class FootagePlayerDialog(QDialog):
             return
 
         self.player.setSource(QUrl.fromLocalFile(str(path.resolve())))
+        self.player.setPlaybackRate(0.75)
         self.player.play()
+
+    def _set_playback_speed(self, index: int) -> None:
+        rates = [0.5, 0.75, 1.0]
+        if 0 <= index < len(rates):
+            self.player.setPlaybackRate(rates[index])
 
     def closeEvent(self, event) -> None:
         self.player.stop()
