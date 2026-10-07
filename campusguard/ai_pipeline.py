@@ -346,7 +346,7 @@ class VisionPipeline:
         run_detector = (
             settings.detection_enabled
             and self.detector is not None
-            and (self.frame_index % 2 == 0 or not self.cached_people)
+            and (self.frame_index % 4 == 0 or not self.cached_people)
         )
         if run_detector:
             try:
@@ -361,7 +361,7 @@ class VisionPipeline:
             settings.pose_enabled
             and pose_enabled
             and self.pose_model is not None
-            and (self.frame_index % 4 == 0 or any(person.keypoints is None for person in people))
+            and (self.frame_index % 8 == 0 or any(person.keypoints is None for person in people))
         )
         if run_pose and people:
             try:
