@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QComboBox,
     QScrollArea,
     QVBoxLayout,
     QWidget,
@@ -84,8 +85,8 @@ class GlassPopup(QFrame):
 
         # A wider, lower glass panel keeps normal status information readable
         # without forcing the operator through a long scroll.
-        self.setMinimumHeight(360)
-        self.setMaximumHeight(590)
+        self.setMinimumHeight(430)
+        self.setMaximumHeight(760)
 
         self._apply_palette()
 
@@ -174,17 +175,6 @@ class GlassPopup(QFrame):
         # The popup itself stays bounded while the body scrolls.
         # --------------------------------------------------------------
 
-        self.scroll = QScrollArea()
-        self.scroll.setObjectName("popupScroll")
-        self.scroll.setWidgetResizable(True)
-        self.scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self.scroll.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
-        self.scroll.setVerticalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAsNeeded
-        )
-
         self.body_widget = QWidget()
 
         self.body = QVBoxLayout(
@@ -193,17 +183,13 @@ class GlassPopup(QFrame):
         self.body.setContentsMargins(
             0,
             0,
-            5,
+            0,
             0,
         )
         self.body.setSpacing(12)
 
-        self.scroll.setWidget(
-            self.body_widget
-        )
-
         root.addWidget(
-            self.scroll,
+            self.body_widget,
             1,
         )
 
@@ -417,12 +403,11 @@ class GlassPopup(QFrame):
         Reset scroll position whenever a popup is opened.
         """
 
-        self.scroll.verticalScrollBar().setValue(0)
-        self.scroll.horizontalScrollBar().setValue(0)
 
 
 class DashboardPage(QWidget):
     camera_selected = Signal(str)
+    model_switch_requested = Signal(str)
     view_alerts_requested = Signal()
     clear_notifications_requested = Signal()
 
@@ -524,32 +509,13 @@ class DashboardPage(QWidget):
         main_row.addWidget(self._notifications_card, 15)
         root.addLayout(main_row, 0)
 
-        self._network_card.setMinimumHeight(340)
+        self._network_card.setMinimumHeight(300)
         root.addWidget(self._network_card, 1)
 
         # Keep the dashboard workspace scrollable so the fixed bottom
         # navigation can never overlap the camera network on smaller
         # laptop/window sizes.
-        self._dashboard_scroll = QScrollArea()
-        self._dashboard_scroll.setObjectName("dashboardScroll")
-        self._dashboard_scroll.setWidgetResizable(True)
-        self._dashboard_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self._dashboard_scroll.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
-        self._dashboard_scroll.setVerticalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAsNeeded
-        )
-        self._dashboard_scroll.setAlignment(
-            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter
-        )
-        self._dashboard_scroll.viewport().setAutoFillBackground(False)
-        self._dashboard_content.setSizePolicy(
-            self._dashboard_content.sizePolicy().horizontalPolicy(),
-            self._dashboard_content.sizePolicy().verticalPolicy(),
-        )
-        self._dashboard_scroll.setWidget(self._dashboard_content)
-        outer.addWidget(self._dashboard_scroll, 1)
+        outer.addWidget(self._dashboard_content, 1)
 
         # ==============================================================
         # DASHBOARD BLUR
@@ -622,7 +588,7 @@ class DashboardPage(QWidget):
         # Never allow the popup to become excessively tall.
         maximum_height = min(
             maximum_height,
-            590,
+            760,
         )
 
         self._popup.setMaximumHeight(
@@ -797,11 +763,6 @@ class DashboardPage(QWidget):
 
         layout.addLayout(grid)
 
-        hint = QLabel("Click to open detailed system health")
-        hint.setProperty("muted", True)
-        hint.setStyleSheet("font-size: 8pt;")
-        layout.addWidget(hint)
-
         return frame
 
     # ==================================================================
@@ -877,9 +838,9 @@ class DashboardPage(QWidget):
 
         self._notification_layout.setContentsMargins(
             0,
-            0,
-            4,
-            0,
+            2,
+            8,
+            14,
         )
 
         self._notification_layout.setSpacing(0)
@@ -1084,13 +1045,38 @@ class DashboardPage(QWidget):
         title.setObjectName("popupSectionTitle")
         ml.addWidget(title)
 
+        model_row = QHBoxLayout()
+        model_row.setContentsMargins(0, 0, 0, 0)
+        model_row.setSpacing(14)
+
         active = QLabel("Spontim 1.0")
         active.setObjectName("popupMetricValue")
-        set_tone(active, "warn")
-        ml.addWidget(active)
+        set_tone(active, "good")
+        model_row.addWidget(active, 1)
 
-        desc = QLabel("Temporal fight detection · 16-frame sequence analysis")
+        selector = QComboBox()
+        selector.setObjectName("modelSelector")
+        options = (
+            ("Spontim 1.0", "fdsc_mc3"),
+            ("CampusGuard MC3-18", "mc3"),
+            ("X3D-M", "x3d"),
+        )
+        current_key = getattr(self._settings, "violence_model", "fdsc_mc3") if self._settings else "fdsc_mc3"
+        current_index = 0
+        for index, (label_text, key) in enumerate(options):
+            selector.addItem(label_text, key)
+            if key == current_key:
+                current_index = index
+        selector.setCurrentIndex(current_index)
+        selector.currentIndexChanged.connect(
+            lambda index: self.model_switch_requested.emit(str(selector.itemData(index)))
+        )
+        model_row.addWidget(selector, 0)
+        ml.addLayout(model_row)
+
+        desc = QLabel("Select the production temporal classifier used by live camera workers.")
         desc.setProperty("muted", True)
+        desc.setWordWrap(True)
         ml.addWidget(desc)
         self._popup.body.addWidget(model)
 
@@ -1439,10 +1425,6 @@ class DashboardPage(QWidget):
 
         self._popup.body.addStretch(1)
 
-        # Reset to the top whenever System Stats opens.
-        self._popup.scroll.verticalScrollBar().setValue(
-            0
-        )
 
     # ==================================================================
     # POPUP HELPERS
