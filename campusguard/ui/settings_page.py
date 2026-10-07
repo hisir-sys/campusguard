@@ -28,8 +28,8 @@ class SettingsSection(QFrame):
         self.setProperty("card", True)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 16, 18, 16)
-        layout.setSpacing(12)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(16)
 
         heading = QLabel(title)
         heading.setStyleSheet("font-size: 13px; font-weight: 800; letter-spacing: 0.5px;")
@@ -56,8 +56,8 @@ class SettingsPage(QWidget):
         self._initial_settings = settings
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(20, 16, 20, 16)
-        root.setSpacing(13)
+        root.setContentsMargins(24, 24, 24, 24)
+        root.setSpacing(24)
 
         header = QHBoxLayout()
         header.setSpacing(16)
@@ -107,8 +107,9 @@ class SettingsPage(QWidget):
         )
 
         form = QFormLayout()
-        form.setHorizontalSpacing(18)
-        form.setVerticalSpacing(11)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        form.setHorizontalSpacing(24)
+        form.setVerticalSpacing(16)
 
         self.threshold_input = QDoubleSpinBox()
         self.threshold_input.setRange(0.05, 0.99)
@@ -154,6 +155,15 @@ class SettingsPage(QWidget):
         form.addRow("Compute device", self.device_input)
         form.addRow("", self.device_status)
 
+        for row in range(form.rowCount()):
+            label_item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+            label_widget = label_item.widget() if label_item is not None else None
+            if label_widget is not None:
+                label_widget.setMinimumWidth(168)
+                label_widget.setProperty("settingsLabel", True)
+                label_widget.style().unpolish(label_widget)
+                label_widget.style().polish(label_widget)
+
         ai_section.body.addLayout(form)
         content_layout.addWidget(ai_section)
 
@@ -166,10 +176,10 @@ class SettingsPage(QWidget):
         )
 
         theme_row = QHBoxLayout()
-        theme_row.setSpacing(10)
+        theme_row.setSpacing(16)
 
         theme_label = QLabel("Interface theme")
-        theme_label.setMinimumWidth(130)
+        theme_label.setMinimumWidth(168)
 
         self.theme_input = QComboBox()
         self.theme_input.addItem("Dark", "dark")
@@ -251,8 +261,8 @@ class SettingsPage(QWidget):
         frame.setProperty("card", True)
 
         layout = QVBoxLayout(frame)
-        layout.setContentsMargins(13, 12, 13, 12)
-        layout.setSpacing(7)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(8)
 
         title_label = QLabel(title)
         title_label.setStyleSheet("font-size: 10px; font-weight: 800; letter-spacing: 0.7px;")
@@ -275,8 +285,8 @@ class SettingsPage(QWidget):
         frame.setProperty("card", True)
 
         layout = QVBoxLayout(frame)
-        layout.setContentsMargins(12, 11, 12, 11)
-        layout.setSpacing(5)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(8)
 
         title_label = QLabel(title)
         title_label.setProperty("muted", True)
