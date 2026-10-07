@@ -11,7 +11,6 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
     QGraphicsBlurEffect,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -416,49 +415,6 @@ def _apply_table_palette(table: QTableWidget) -> None:
     """Keep table colors owned by the active application theme."""
     table.style().unpolish(table)
     table.style().polish(table)
-
-
-def _popup_header(
-    columns: list[str],
-) -> QWidget:
-    widget = QWidget()
-
-    layout = QGridLayout(widget)
-
-    layout.setContentsMargins(
-        8,
-        0,
-        8,
-        4,
-    )
-
-    layout.setHorizontalSpacing(8)
-
-    for index, text in enumerate(columns):
-        label = QLabel(text)
-
-        label.setProperty(
-            "muted",
-            True,
-        )
-
-        label.setStyleSheet(
-            """
-            QLabel {
-                font-size: 9px;
-                font-weight: 800;
-                letter-spacing: 0.7px;
-            }
-            """
-        )
-
-        layout.addWidget(
-            label,
-            0,
-            index,
-        )
-
-    return widget
 
 
 # ============================================================================
@@ -1331,7 +1287,12 @@ class IncidentsPage(QWidget):
                 )
             )
         else:
-            headers = _popup_header(
+            table = QTableWidget(
+                len(rows),
+                8,
+            )
+
+            table.setHorizontalHeaderLabels(
                 [
                     "ID",
                     "CAMERA",
@@ -1342,15 +1303,6 @@ class IncidentsPage(QWidget):
                     "TIME",
                     "ACTIONS",
                 ]
-            )
-
-            layout.addWidget(
-                headers
-            )
-
-            table = QTableWidget(
-                len(rows),
-                8,
             )
 
             _configure_table(
@@ -1971,6 +1923,18 @@ class AlertsPage(QWidget):
             table = QTableWidget(
                 len(rows),
                 table_columns,
+            )
+
+            table.setHorizontalHeaderLabels(
+                [
+                    "CAMERA",
+                    "EVENT",
+                    "CONFIDENCE",
+                    "SEVERITY",
+                    "TIME",
+                    "INCIDENT",
+                    "FOOTAGE",
+                ]
             )
 
             _configure_table(
