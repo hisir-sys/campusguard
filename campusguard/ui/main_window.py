@@ -6,8 +6,8 @@ from PySide6.QtGui import QAction, QKeySequence, QPixmap
 from PySide6.QtCore import QTimer, Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
+    QGraphicsBlurEffect,
     QHBoxLayout,
-    QInputDialog,
     QFileDialog,
     QLabel,
     QMainWindow,
@@ -97,7 +97,8 @@ class InAppOverlay(QFrame):
         self._close = QPushButton("×")
         self._close.setObjectName("overlayClose")
         self._close.setFixedSize(32, 32)
-        self._close.clicked.connect(self.hide)
+        self._close.clicked.connect(self._close_overlay)
+        self._blur_effects = []
 
         self._content = QVBoxLayout(self._panel)
         self._content.setContentsMargins(24, 20, 24, 22)
@@ -117,6 +118,29 @@ class InAppOverlay(QFrame):
         self._confirm_callback = None
         self.hide()
 
+    def _blur_background(self, enabled: bool) -> None:
+        window = self.window()
+        self._clear_blur()
+        if not enabled:
+            return
+        for name in ("stack", "top_bar", "bottom_bar"):
+            widget = getattr(window, name, None)
+            if isinstance(widget, QWidget):
+                effect = QGraphicsBlurEffect(widget)
+                effect.setBlurRadius(14)
+                widget.setGraphicsEffect(effect)
+                self._blur_effects.append((widget, effect))
+
+    def _clear_blur(self) -> None:
+        for widget, effect in self._blur_effects:
+            if widget.graphicsEffect() is effect:
+                widget.setGraphicsEffect(None)
+            effect.deleteLater()
+        self._blur_effects.clear()
+
+    def _close_overlay(self) -> None:
+        self._clear_blur()
+        self.hide()
     def _clear_body(self) -> None:
         while self._body_layout.count():
             item = self._body_layout.takeAt(0)
@@ -163,6 +187,7 @@ class InAppOverlay(QFrame):
         self._body_layout.addLayout(buttons)
 
         self._panel.setFixedSize(640, 290)
+        self._blur_background(True)
         self.show()
         self.raise_()
         self._center()
@@ -170,6 +195,7 @@ class InAppOverlay(QFrame):
     def _confirm(self) -> None:
         callback = self._confirm_callback
         self._confirm_callback = None
+        self._clear_blur()
         self.hide()
         if callback is not None:
             callback()
@@ -208,6 +234,7 @@ class InAppOverlay(QFrame):
             self.set_camera_frame(image, "LIVE", None)
         else:
             self._render_camera_info()
+        self._blur_background(True)
         self.show()
         self.raise_()
         self._center()
