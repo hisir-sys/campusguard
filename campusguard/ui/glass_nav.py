@@ -659,7 +659,7 @@ class _Logo(QWidget):
         row = QHBoxLayout(self)
         row.setContentsMargins(10, 0, 10, 0)
         row.setSpacing(10)
-        self.icon = IconLabel("shield", 24, "accent")
+        self.icon = IconLabel("eye", 24, "accent")
         self.label = QLabel("CampusGuard")
         self.label.setStyleSheet("font-size: 12.5pt; font-weight: 750;")
         row.addWidget(self.icon)
