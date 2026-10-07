@@ -135,6 +135,21 @@ QFrame[tile="true"] {
   border: 1px solid @line_soft@;
   border-radius: 10px;
 }
+QFrame[dashboardModelTile="true"] {
+  background: @veil@;
+  border: 1px solid @line_soft@;
+  border-radius: 11px;
+}
+QFrame[dashboardStatTile="true"] {
+  background: @veil@;
+  border: 1px solid @line_soft@;
+  border-radius: 11px;
+}
+QFrame[dashboardStatTile="true"]:hover,
+QFrame[dashboardModelTile="true"]:hover {
+  border-color: @accent_line@;
+  background: @veil_hover@;
+}
 
 QLabel { background: transparent; }
 QLabel[muted="true"] { color: @muted@; }
