@@ -70,6 +70,55 @@ def build_capture_source(
     return urlunsplit(parsed)
 
 
+
+def enumerate_local_cameras(max_devices: int = 10) -> list[dict[str, object]]:
+    """Probe Windows camera device indexes that CampusGuard can actually open.
+
+    OpenCV does not expose friendly Windows device names, so the UI uses the
+    stable device index plus the capture backend that successfully opened it.
+    This is useful for virtual cameras such as DroidCam, which may be exposed
+    through DirectShow or Media Foundation.
+    """
+    if max_devices < 1:
+        return []
+
+    found: list[dict[str, object]] = []
+    seen: set[int] = set()
+
+    for index in range(max_devices):
+        for backend_name, backend in (
+            ("DirectShow", cv2.CAP_DSHOW),
+            ("Media Foundation", cv2.CAP_MSMF),
+        ):
+            capture = None
+            try:
+                capture = cv2.VideoCapture(index, backend)
+                if not capture.isOpened():
+                    continue
+
+                ok, frame = capture.read()
+                if not ok or frame is None or frame.size == 0:
+                    continue
+
+                height, width = frame.shape[:2]
+                found.append(
+                    {
+                        "index": index,
+                        "label": f"Camera {index}  ·  {backend_name}",
+                        "backend": backend_name,
+                        "resolution": f"{width}x{height}",
+                    }
+                )
+                seen.add(index)
+                break
+            except Exception:
+                continue
+            finally:
+                if capture is not None:
+                    capture.release()
+
+    return found
+
 def _open_capture(source: int | str) -> cv2.VideoCapture:
     """Open a camera with Windows-friendly backends and a tiny capture buffer."""
     if isinstance(source, int):
