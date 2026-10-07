@@ -51,7 +51,7 @@ DARK = Palette(
     "#FFFFFF", 7,
     "#141B22", 238,
     "#0F151B", 240,
-    "#5B7CFA", 255,  # edge
+    "#5B7CFA",  # edge
     10,
     "#151C24",
 )
@@ -68,7 +68,7 @@ LIGHT = Palette(
     "#17212B", 5,
     "#FFFFFF", 246,
     "#F7F9FB", 255,
-    "#526FD6", 255,
+    "#526FD6",  # edge
     24,
     "#FFFFFF",
 )
