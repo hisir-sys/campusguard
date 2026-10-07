@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QUrl, Qt, Signal
-from PySide6.QtGui import QColor, QPalette
+from PySide6.QtGui import QColor
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWidgets import (
@@ -378,131 +378,44 @@ def _action_button(
 def _configure_table(
     table: QTableWidget,
 ) -> None:
-    """
-    Intentionally hides the native Qt header.
-
-    This prevents the default white/header-block appearance.
-    Popup tables use a custom header row instead.
-    """
-
-    table.setColumnCount(
-        table.columnCount()
-    )
-
-    table.horizontalHeader().hide()
+    """Configure the history tables as compact, theme-aware data grids."""
 
     table.setAlternatingRowColors(True)
-
     table.setShowGrid(False)
-
     table.setEditTriggers(
         QTableWidget.EditTrigger.NoEditTriggers
     )
-
     table.setSelectionBehavior(
         QTableWidget.SelectionBehavior.SelectRows
     )
-
     table.setSelectionMode(
         QTableWidget.SelectionMode.SingleSelection
     )
-
     table.setFocusPolicy(
         Qt.FocusPolicy.NoFocus
     )
 
     table.verticalHeader().hide()
+    table.verticalHeader().setDefaultSectionSize(58)
 
-    table.verticalHeader().setDefaultSectionSize(
-        64
+    header = table.horizontalHeader()
+    header.show()
+    header.setDefaultAlignment(
+        Qt.AlignmentFlag.AlignLeft
+        | Qt.AlignmentFlag.AlignVCenter
     )
+    header.setMinimumHeight(34)
+    header.setFixedHeight(34)
+    header.setStretchLastSection(False)
+
     table.setWordWrap(False)
     table.setTextElideMode(Qt.TextElideMode.ElideRight)
 
 
-def _apply_table_palette(
-    table: QTableWidget,
-) -> None:
-    """
-    Uses the current application palette rather than hard-coded white.
-
-    This keeps popup tables compatible with both dark and light themes.
-    """
-
-    palette = table.palette()
-
-    base = palette.color(
-        QPalette.ColorRole.Base
-    )
-
-    alternate = palette.color(
-        QPalette.ColorRole.AlternateBase
-    )
-
-    text = palette.color(
-        QPalette.ColorRole.Text
-    )
-
-    border = palette.color(
-        QPalette.ColorRole.Mid
-    )
-
-    table.setStyleSheet(
-        f"""
-        QTableWidget {{
-            background: rgba(
-                {base.red()},
-                {base.green()},
-                {base.blue()},
-                205
-            );
-
-            alternate-background-color:
-                rgba(
-                    {alternate.red()},
-                    {alternate.green()},
-                    {alternate.blue()},
-                    105
-                );
-
-            color: rgb(
-                {text.red()},
-                {text.green()},
-                {text.blue()}
-            );
-
-            border: none;
-            outline: none;
-        }}
-
-        QTableWidget::item {{
-            border-bottom: 1px solid rgba(
-                {border.red()},
-                {border.green()},
-                {border.blue()},
-                35
-            );
-
-            padding-left: 8px;
-            padding-right: 8px;
-        }}
-
-        QTableWidget::item:selected {{
-            background: rgba(
-                {text.red()},
-                {text.green()},
-                {text.blue()},
-                18
-            );
-
-            color: rgb(
-                {text.red()},
-                {text.green()},
-                {text.blue()}
-            );
-        }}
-        """
-    )
+def _apply_table_palette(table: QTableWidget) -> None:
+    """Keep table colors owned by the active application theme."""
+    table.style().unpolish(table)
+    table.style().polish(table)
 
 
 def _popup_header(
@@ -2052,12 +1965,6 @@ class AlertsPage(QWidget):
                 "INCIDENT",
                 "FOOTAGE",
             ]
-
-            layout.addWidget(
-                _popup_header(
-                    columns
-                )
-            )
 
             table_columns = 7
 
