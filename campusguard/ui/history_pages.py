@@ -1422,8 +1422,7 @@ class IncidentsPage(QWidget):
                     "SEVERITY",
                     "STATUS",
                     "TIME",
-                    "FOOTAGE",
-                    "ACTION",
+                    "ACTIONS",
                 ]
             )
 
@@ -1433,7 +1432,7 @@ class IncidentsPage(QWidget):
 
             table = QTableWidget(
                 len(rows),
-                9,
+                8,
             )
 
             _configure_table(
@@ -1479,11 +1478,6 @@ class IncidentsPage(QWidget):
 
             header.setSectionResizeMode(
                 7,
-                header.ResizeMode.ResizeToContents,
-            )
-
-            header.setSectionResizeMode(
-                8,
                 header.ResizeMode.ResizeToContents,
             )
 
@@ -1545,16 +1539,15 @@ class IncidentsPage(QWidget):
                     ),
                 )
 
-                self._set_footage_cell(table, index, 7, row)
                 self._set_incident_action_cell(
                     table,
                     index,
-                    8,
+                    7,
                     row,
                     allow_resolve=(row["status"] != "RESOLVED"),
                 )
 
-            table.setRowHeight(index, 64)
+                table.setRowHeight(index, 64)
 
             layout.addWidget(
                 table,
@@ -1580,12 +1573,24 @@ class IncidentsPage(QWidget):
         action_layout.setContentsMargins(4, 4, 4, 4)
         action_layout.setSpacing(7)
 
+        path = str(row.get("footage_path") or "")
+        available = Path(path).is_file()
+
+        view_button = _action_button(
+            "View" if available else "Unavailable",
+            "view",
+        )
+        view_button.setEnabled(available)
+        if available:
+            view_button.clicked.connect(
+                lambda checked=False, p=path, public_id=row["public_id"]:
+                self._open_footage(p, public_id)
+            )
+        action_layout.addWidget(view_button)
+
         if allow_resolve:
-            ok_button = QPushButton("OK")
-            ok_button.setProperty("minimalAction", True)
-            ok_button.setProperty("action", "resolve")
+            ok_button = _action_button("OK", "resolve")
             ok_button.setCursor(Qt.CursorShape.PointingHandCursor)
-            ok_button.setMinimumHeight(32)
             ok_button.clicked.connect(
                 lambda checked=False, public_id=row["public_id"]:
                 self._resolve_incident(public_id)
@@ -1597,22 +1602,6 @@ class IncidentsPage(QWidget):
     def _resolve_incident(self, public_id: str) -> None:
         self.status_change_requested.emit(public_id, "RESOLVED")
         self._close_popup()
-
-    def _set_footage_cell(self, table: QTableWidget, row_index: int, column: int, row: dict) -> None:
-        path = str(row.get("footage_path") or "")
-        available = Path(path).is_file()
-        button = _action_button("View" if available else "Unavailable", "view")
-        button.setEnabled(available)
-        if available:
-            button.clicked.connect(
-                lambda checked=False, p=path, public_id=row["public_id"]:
-                self._open_footage(p, public_id)
-            )
-        actions = QWidget()
-        action_layout = QHBoxLayout(actions)
-        action_layout.setContentsMargins(3, 2, 3, 2)
-        action_layout.addWidget(button)
-        table.setCellWidget(row_index, column, actions)
 
     def _open_footage(self, path: str, public_id: str) -> None:
         FootagePlayerDialog(path, f"Incident {public_id}", self).exec()
