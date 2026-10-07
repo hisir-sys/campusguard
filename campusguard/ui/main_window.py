@@ -741,6 +741,7 @@ class MainWindow(QMainWindow):
 
         self.dashboard.camera_selected.connect(self.open_camera)
         self.dashboard.view_alerts_requested.connect(lambda: self.navigate("alerts"))
+        self.dashboard.model_switch_requested.connect(self._switch_violence_model)
         self.camera_page.add_requested.connect(self._add_camera)
         self.camera_page.local_test_requested.connect(self._open_local_file_test)
         self.camera_page.remove_requested.connect(self._remove_camera)
@@ -890,16 +891,42 @@ class MainWindow(QMainWindow):
     # Settings, theme, operator, search
     # ------------------------------------------------------------------
     def _save_settings(self, settings: AppSettings) -> None:
+        # Apply settings in-place. Rebuilding the information pages on every
+        # checkbox/dropdown click was causing the settings UI to feel laggy.
         self.settings = AppSettings.from_dict(settings.to_dict())
         self.repository.save_settings(self.settings)
         self.camera_manager.set_settings(self.settings)
         apply_theme(self, self.settings.theme)
         self.top_bar.set_theme(self.settings.theme)
-        self._rebuild_information_pages()
         self.dashboard.update_model_configuration(self.settings)
         self.settings_page.set_theme(self.settings.theme)
         self.settings_page.set_saved()
-        self.statusBar().showMessage("Settings saved and applied to camera workers.", 3000)
+        self.statusBar().showMessage("Settings saved and applied to camera workers.", 1800)
+
+    def _switch_violence_model(self, model_key: str) -> None:
+        allowed = {"fdsc_mc3", "mc3", "x3d"}
+        if model_key not in allowed:
+            return
+        values = self.settings.to_dict()
+        values["violence_model"] = model_key
+        updated = AppSettings.from_dict(values)
+        self.settings = updated
+        self.repository.save_settings(updated)
+        self.camera_manager.set_settings(updated)
+        self.dashboard.update_model_configuration(updated)
+        self.settings_page.set_saved()
+        self.statusBar().showMessage(
+            f"AI engine switched to {self._model_display_name(model_key)}.",
+            3000,
+        )
+
+    @staticmethod
+    def _model_display_name(model_key: str) -> str:
+        return {
+            "fdsc_mc3": "Spontim 1.0",
+            "mc3": "CampusGuard MC3-18",
+            "x3d": "X3D-M",
+        }.get(model_key, model_key)
 
     def _rebuild_information_pages(self) -> None:
         current_key = None
