@@ -1717,12 +1717,14 @@ class DashboardPage(QWidget):
             cameras
         ):
 
+            # CampusGuard's primary dashboard is a four-camera 2×2
+            # security wall. Additional cameras continue onto later rows.
             self._camera_grid.addWidget(
                 self._tiles[
                     camera.camera_id
                 ],
-                index // 3,
-                index % 3,
+                index // 2,
+                index % 2,
             )
 
         count = len(
