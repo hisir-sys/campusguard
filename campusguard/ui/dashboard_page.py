@@ -255,6 +255,26 @@ class GlassPopup(QFrame):
                 border-radius: 16px;
             }}
 
+            QPushButton[modelChoice="true"] {{
+                color: {palette.text};
+                background: {rgba(palette.veil, 14)};
+                border: 1px solid {rgba(palette.line, palette.line_alpha)};
+                border-radius: 12px;
+                padding: 8px 12px;
+                text-align: left;
+            }}
+
+            QPushButton[modelChoice="true"]:hover {{
+                background: {rgba(palette.veil, 26)};
+                border-color: {rgba(palette.line, min(255, int(palette.line_alpha * 1.8)))};
+            }}
+
+            QPushButton[modelChoice="true"]:checked {{
+                background: {rgba(palette.veil, 34)};
+                border-color: {rgba(palette.line, min(255, int(palette.line_alpha * 2.2)))};
+                font-weight: 700;
+            }}
+
             QLabel#popupSectionTitle {{
                 color: {palette.text_dim};
                 font-size: 9pt;
@@ -1751,31 +1771,8 @@ class DashboardPage(QWidget):
             f"{'' if count == 1 else 's'}"
         )
 
-        if not cameras:
-
-            self._empty_label = QLabel(
-                "No cameras configured. Add an external USB, RTSP, "
-                "HTTP/MJPEG, or IP camera from the Cameras page."
-            )
-
-            self._empty_label.setWordWrap(
-                True
-            )
-
-            self._empty_label.setAlignment(
-                Qt.AlignmentFlag.AlignCenter
-            )
-
-            self._empty_label.setProperty(
-                "muted",
-                True,
-            )
-
-            self._camera_grid.addWidget(
-                self._empty_label,
-                0,
-                0,
-            )
+        # The two default panes are the empty state, so no third empty
+        # message is inserted into the camera grid.
 
     def _build_offline_tile(self, slot: int) -> QFrame:
         tile = QFrame()
