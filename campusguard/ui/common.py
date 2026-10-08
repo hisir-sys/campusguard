@@ -210,6 +210,10 @@ class CameraPreview(QFrame):
         elif self._source_pixmap is None:
             self.video_label.setText("Waiting for camera frames")
 
+    def set_model_status(self, message: str) -> None:
+        if message:
+            self.ai_state_label.setText(f"AI: {message}")
+
     def set_frame(
         self,
         pixmap: QPixmap,
