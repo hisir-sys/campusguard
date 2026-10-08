@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -46,14 +47,26 @@ def check_for_update() -> dict | None:
     if _version_number(remote_version) <= _version_number(BUILD_VERSION):
         return None
 
+    exe_url = None
+    checksum_url = None
     for asset in release.get("assets", []):
-        if asset.get("name") == "CampusGuard.exe" and asset.get("browser_download_url"):
-            return {"version": remote_version, "url": asset["browser_download_url"]}
-    return None
+        if asset.get("name") == "CampusGuard.exe":
+            exe_url = asset.get("browser_download_url")
+        elif asset.get("name") == "checksum.txt":
+            checksum_url = asset.get("browser_download_url")
+
+    if not exe_url or not checksum_url:
+        return None
+    return {"version": remote_version, "url": exe_url, "checksum_url": checksum_url}
 
 
-def _download(url: str) -> Path | None:
+def _download(url: str, checksum_url: str) -> Path | None:
     try:
+        with _request(checksum_url) as response:
+            checksum_text = response.read().decode("utf-8").strip()
+        expected = checksum_text.split()[0].lower()
+        if len(expected) != 64:
+            return None
         folder = Path(tempfile.gettempdir()) / "CampusGuardUpdate"
         folder.mkdir(parents=True, exist_ok=True)
         target = folder / "CampusGuard.exe.new"
@@ -62,6 +75,15 @@ def _download(url: str) -> Path | None:
         if target.stat().st_size < 1_000_000:
             target.unlink(missing_ok=True)
             return None
+
+        digest = hashlib.sha256()
+        with target.open("rb") as source:
+            for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                digest.update(chunk)
+        if digest.hexdigest().lower() != expected:
+            target.unlink(missing_ok=True)
+            return None
+
         return target
     except Exception:
         return None
@@ -104,7 +126,7 @@ def maybe_update() -> bool:
     if not latest:
         return False
 
-    downloaded = _download(latest["url"])
+    downloaded = _download(latest["url"], latest["checksum_url"])
     if not downloaded:
         return False
 
