@@ -145,6 +145,11 @@ class CameraRow(QFrame):
 
 
 class LocalVideoTestDialog(QDialog):
+    """Local video tester that runs the production AI and exposes detections."""
+
+    event_detected = Signal(str, float, str)
+    footage_saved = Signal(str)
+
     """One-shot local video tester that never adds the file to the camera network."""
 
     def __init__(
@@ -243,6 +248,8 @@ class LocalVideoTestDialog(QDialog):
         self._thread.frame_ready.connect(self._on_frame)
         self._thread.status_changed.connect(self._on_status)
         self._thread.model_status.connect(self._on_model_status)
+        self._thread.event_detected.connect(self.event_detected.emit)
+        self._thread.footage_saved.connect(self.footage_saved.emit)
         self._thread.finished.connect(self._on_finished)
         self._thread.start()
 
