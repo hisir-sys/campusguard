@@ -520,8 +520,8 @@ class DashboardPage(QWidget):
             self._dashboard_content
         )
 
-        root.setContentsMargins(24, 20, 24, 84)
-        root.setSpacing(18)
+        root.setContentsMargins(24, 16, 24, 78)
+        root.setSpacing(14)
 
         # --------------------------------------------------------------
         # Operations overview
@@ -539,19 +539,19 @@ class DashboardPage(QWidget):
         self._notifications_card = self._build_notifications_card()
         self._network_card = self._build_network_card()
 
-        self._engine_card.setMinimumHeight(190)
-        self._engine_card.setMaximumHeight(190)
-        self._stats_card.setMinimumHeight(190)
-        self._stats_card.setMaximumHeight(190)
-        self._notifications_card.setMinimumHeight(190)
-        self._notifications_card.setMaximumHeight(190)
+        self._engine_card.setMinimumHeight(170)
+        self._engine_card.setMaximumHeight(170)
+        self._stats_card.setMinimumHeight(170)
+        self._stats_card.setMaximumHeight(170)
+        self._notifications_card.setMinimumHeight(170)
+        self._notifications_card.setMaximumHeight(170)
 
         main_row.addWidget(self._engine_card, 11)
         main_row.addWidget(self._stats_card, 11)
         main_row.addWidget(self._notifications_card, 15)
         root.addLayout(main_row, 0)
 
-        self._network_card.setMinimumHeight(360)
+        self._network_card.setMinimumHeight(410)
         root.addWidget(self._network_card, 1)
 
         # Keep the dashboard workspace scrollable so the fixed bottom
@@ -706,35 +706,23 @@ class DashboardPage(QWidget):
 
         self.engine_values = {}
 
-        # Keep the dashboard model display simple. Model switching belongs
-        # inside the AI Engine popup rather than in a boxed dropdown.
-        model_label = QLabel("PRODUCTION ENGINE")
-        model_label.setProperty("eyebrow", True)
-        layout.addWidget(model_label)
-
+        # Compact dashboard summary: only the three useful values remain.
+        # Detailed model switching/configuration is inside the popup.
         active_model = QLabel("Spontim 1.0")
         active_model.setProperty("kvvalue", True)
         active_model.setStyleSheet(
             "font-size: 13pt; font-weight: 700; letter-spacing: -0.2px;"
         )
         layout.addWidget(active_model)
-
-        model_caption = QLabel("Temporal violence classification")
-        model_caption.setProperty("muted", True)
-        model_caption.setStyleSheet("font-size: 8pt;")
-        layout.addWidget(model_caption)
-
-        online = QLabel("ONLINE")
-        online.setProperty("muted", True)
-        online.setStyleSheet(
-            "font-size: 8pt; font-weight: 700; letter-spacing: 0.6px;"
-        )
-        layout.addWidget(online)
-
         self.engine_values["violence_model"] = active_model
 
         rows = (
-            ("status", "Engine status"),
+            ("status", "Status"),
+            ("device", "Compute"),
+        )
+
+        rows = (
+            ("status", "Status"),
             ("device", "Compute"),
         )
         for key, text in rows:
@@ -872,7 +860,7 @@ class DashboardPage(QWidget):
             QFrame.Shape.NoFrame
         )
 
-        scroll.setMinimumHeight(166)
+        scroll.setMinimumHeight(150)
         scroll.setContentsMargins(0, 0, 0, 6)
 
         scroll.viewport().setAutoFillBackground(
@@ -889,7 +877,7 @@ class DashboardPage(QWidget):
             0,
             4,
             8,
-            24,
+            34,
         )
 
         self._notification_layout.setSpacing(0)
@@ -1572,45 +1560,42 @@ class DashboardPage(QWidget):
         tile.setObjectName("offlineCameraTile")
         tile.setMinimumHeight(238)
 
-        outer = QVBoxLayout(tile)
-        outer.setContentsMargins(16, 16, 16, 16)
-        outer.setSpacing(10)
-
-        header = QHBoxLayout()
-        labels = QVBoxLayout()
-        labels.setSpacing(1)
-
-        name = QLabel(f"Camera {slot}")
-        name.setStyleSheet("font-weight: 700;")
-        labels.addWidget(name)
-
-        source = QLabel("No camera source configured")
-        source.setProperty("muted", True)
-        labels.addWidget(source)
-
-        status = QLabel("OFFLINE")
-        status.setProperty("statusBadge", True)
-
-        header.addLayout(labels, 1)
-        header.addWidget(status, 0, Qt.AlignmentFlag.AlignTop)
-        outer.addLayout(header)
-
         surface = QLabel("OFFLINE")
         surface.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        surface.setMinimumHeight(130)
         surface.setProperty("videoSurface", True)
         surface.setStyleSheet(
-            "border-radius: 12px; font-size: 10pt; font-weight: 700;"
+            "border-radius: 14px; font-size: 10pt; font-weight: 700;"
         )
+
+        name = QLabel(f"Camera {slot}", tile)
+        name.setStyleSheet(
+            "background: rgba(5, 9, 12, 190); color: white; "
+            "border-radius: 9px; padding: 5px 9px; font-weight: 700;"
+        )
+        status = QLabel("OFFLINE", tile)
+        status.setStyleSheet(
+            "background: rgba(5, 9, 12, 190); color: white; "
+            "border-radius: 9px; padding: 5px 9px; font-size: 8pt; font-weight: 700;"
+        )
+
+        outer = QVBoxLayout(tile)
+        outer.setContentsMargins(8, 8, 8, 8)
+        outer.setSpacing(0)
         outer.addWidget(surface, 1)
 
-        meta = QLabel("Add a camera source from the Cameras page")
-        meta.setProperty("muted", True)
-        meta.setStyleSheet("font-size: 8pt;")
-        outer.addWidget(meta)
+        def position():
+            rect = surface.geometry()
+            name.adjustSize()
+            status.adjustSize()
+            y = rect.bottom() - max(name.height(), status.height()) - 10
+            name.move(rect.left() + 12, max(rect.top() + 8, y))
+            status.move(max(rect.left() + 12, rect.right() - status.width() - 12), max(rect.top() + 8, y))
+            name.raise_()
+            status.raise_()
 
-        self._offline_tiles.append(tile)
+        tile.resizeEvent = lambda event: (QFrame.resizeEvent(tile, event), position())
         return tile
+
 
     def update_camera_stats(
         self,
