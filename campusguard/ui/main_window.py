@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import threading
 
 from PySide6.QtGui import QAction, QKeySequence, QPixmap
 from PySide6.QtCore import QTimer, Qt, Signal
@@ -359,6 +360,9 @@ class MainWindow(QMainWindow):
         # CameraManager imports PyTorch/Ultralytics. Keep that heavy AI stack out
         # of initial window construction so the desktop UI appears immediately.
         self.camera_manager = None
+        self._camera_engine_module = None
+        self._camera_engine_error = None
+        self._camera_engine_importing = True
         self._build_ui()
         apply_theme(self, self.settings.theme)
         self.top_bar.set_theme(self.settings.theme)
@@ -377,7 +381,7 @@ class MainWindow(QMainWindow):
         # Starting them after the event loop begins guarantees the Dashboard
         # can render immediately, even when a camera or AI model takes time
         # to initialize.
-        QTimer.singleShot(0, self._initialize_camera_engine)
+        self._begin_camera_engine_import()
 
         self._add_shortcut("Ctrl+1", lambda: self.navigate("dashboard"))
         self._add_shortcut("Ctrl+2", lambda: self.navigate("cameras"))
@@ -386,18 +390,61 @@ class MainWindow(QMainWindow):
         self._add_shortcut("Ctrl+5", lambda: self.navigate("settings"))
         self._add_shortcut("Ctrl+K", self.top_bar.focus_search)
 
-    def _initialize_camera_engine(self) -> None:
-        try:
-            from campusguard.camera_runtime import CameraManager
+    def _begin_camera_engine_import(self) -> None:
+        """Import the heavy AI stack off the Qt UI thread."""
+        def load_module() -> None:
+            try:
+                from campusguard import camera_runtime
+                self._camera_engine_module = camera_runtime
+            except Exception as error:
+                self._camera_engine_error = error
+            finally:
+                self._camera_engine_importing = False
 
-            self.camera_manager = CameraManager(self.vault, self.repository.footage_dir, self)
+        threading.Thread(
+            target=load_module,
+            name="CampusGuard-AI-Import",
+            daemon=True,
+        ).start()
+        self._camera_engine_poll = QTimer(self)
+        self._camera_engine_poll.setInterval(50)
+        self._camera_engine_poll.timeout.connect(self._finish_camera_engine_import)
+        self._camera_engine_poll.start()
+
+    def _finish_camera_engine_import(self) -> None:
+        if self._camera_engine_importing:
+            return
+        self._camera_engine_poll.stop()
+
+        if self._camera_engine_error is not None:
+            error = self._camera_engine_error
+            self.statusBar().showMessage(f"AI engine initialization failed: {error}", 12000)
+            for camera in self.cameras.values():
+                self._set_camera_status(
+                    camera.camera_id,
+                    "ERROR",
+                    f"AI engine unavailable: {error}",
+                )
+            return
+
+        try:
+            CameraManager = self._camera_engine_module.CameraManager
+            self.camera_manager = CameraManager(
+                self.vault,
+                self.repository.footage_dir,
+                self,
+            )
             self.camera_manager.set_settings(self.settings)
             self._connect_camera_manager()
             self._start_cameras()
         except Exception as error:
             self.statusBar().showMessage(f"AI engine initialization failed: {error}", 12000)
             for camera in self.cameras.values():
-                self._set_camera_status(camera.camera_id, "ERROR", f"AI engine unavailable: {error}")
+                self._set_camera_status(
+                    camera.camera_id,
+                    "ERROR",
+                    f"AI engine unavailable: {error}",
+                )
 
     def _start_cameras(self) -> None:
         if self.camera_manager is None:
@@ -466,7 +513,7 @@ class MainWindow(QMainWindow):
         dock_row = QHBoxLayout()
         dock_row.setContentsMargins(0, 0, 0, 4)
         dock_row.setSpacing(0)
-        dock_row.setMinimumHeight(82)
+        dock_row.addSpacing(82)
         dock_row.addStretch(1)
         self.bottom_bar = BottomBar()
         dock_row.addWidget(self.bottom_bar, 0, Qt.AlignmentFlag.AlignCenter)
