@@ -104,6 +104,7 @@ class InAppOverlay(QFrame):
         self._blur_effects = []
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_NoMouseReplay, True)
         app = QApplication.instance()
         if app is not None:
             app.installEventFilter(self)
@@ -182,7 +183,10 @@ class InAppOverlay(QFrame):
                 local = self.mapFromGlobal(point)
                 if not self._panel.geometry().contains(local):
                     self._close_overlay()
-                    return False
+                    # The click that dismissed the glass layer must NOT be
+                    # replayed into the dashboard underneath it. Otherwise a
+                    # camera-card click can immediately reopen the camera.
+                    return True
             except AttributeError:
                 pass
         return super().eventFilter(watched, event)
