@@ -89,7 +89,10 @@ class InAppOverlay(QFrame):
             """        )
         self._panel = QFrame(self)
         self._panel.setObjectName("inAppPanel")
-        self._panel.setFixedSize(820, 560)
+        self._panel.setMinimumWidth(480)
+        self._panel.setMaximumWidth(760)
+        self._panel.setMinimumHeight(0)
+        self._panel.setMaximumHeight(620)
 
         self._title = QLabel()
         self._title.setObjectName("overlayTitle")
@@ -223,6 +226,9 @@ class InAppOverlay(QFrame):
 
     def _center(self) -> None:
         self._panel.adjustSize()
+        width = min(760, max(480, self._panel.sizeHint().width()))
+        height = min(620, max(0, self._panel.sizeHint().height()))
+        self._panel.resize(width, height)
         self._panel.move(
             max(18, (self.width() - self._panel.width()) // 2),
             max(18, (self.height() - self._panel.height()) // 2),
@@ -263,7 +269,10 @@ class InAppOverlay(QFrame):
         buttons.addWidget(confirm)
         self._body_layout.addLayout(buttons)
 
-        self._panel.setFixedSize(640, 290)
+        self._panel.setMinimumWidth(480)
+        self._panel.setMaximumWidth(760)
+        self._panel.setMinimumHeight(0)
+        self._panel.setMaximumHeight(360)
         self._blur_background(True)
         self.show()
         self.raise_()
@@ -303,7 +312,10 @@ class InAppOverlay(QFrame):
         row.addWidget(save)
         self._body_layout.addLayout(row)
 
-        self._panel.setFixedSize(640, 310)
+        self._panel.setMinimumWidth(480)
+        self._panel.setMaximumWidth(760)
+        self._panel.setMinimumHeight(0)
+        self._panel.setMaximumHeight(390)
         self._blur_background(True)
         self.show()
         self.raise_()
@@ -331,7 +343,10 @@ class InAppOverlay(QFrame):
         row.addStretch(1)
         row.addWidget(close)
         self._body_layout.addLayout(row)
-        self._panel.setFixedSize(640, 300)
+        self._panel.setMinimumWidth(480)
+        self._panel.setMaximumWidth(760)
+        self._panel.setMinimumHeight(0)
+        self._panel.setMaximumHeight(390)
         self._blur_background(True)
         self.show()
         self.raise_()
