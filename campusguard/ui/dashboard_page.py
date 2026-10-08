@@ -200,7 +200,7 @@ class GlassPopup(QFrame):
         self.setStyleSheet(
             f"""
             QFrame#glassPopup {{
-                background: {rgba(palette.glass, palette.glass_alpha)};
+                background: {rgba(palette.glass, max(48, int(palette.glass_alpha * 7)))};
                 color: {palette.text};
                 border: 1px solid {rgba(palette.line, min(255, int(palette.line_alpha * 1.6)))};
                 border-radius: 26px;
@@ -479,7 +479,7 @@ class DashboardPage(QWidget):
             self._dashboard_content
         )
 
-        root.setContentsMargins(24, 24, 24, 24)
+        root.setContentsMargins(24, 24, 24, 104)
         root.setSpacing(24)
 
         # --------------------------------------------------------------
