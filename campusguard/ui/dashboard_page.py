@@ -1834,6 +1834,12 @@ class DashboardPage(QWidget):
                 component
             ] = message
 
+            # Surface failures directly on the live camera tile instead of
+            # leaving the operator with a raw video and no explanation.
+            tile = self._tiles.get(camera_id)
+            if tile is not None:
+                tile.set_model_status(message)
+
         elif component == "device":
 
             self._device_text = message
