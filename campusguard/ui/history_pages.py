@@ -50,6 +50,7 @@ class FootagePlayerDialog(QWidget):
         super().__init__(parent)
         self.setObjectName("footageViewerOverlay")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setStyleSheet(
             """
             QWidget#footageViewerOverlay {
@@ -170,6 +171,13 @@ class FootagePlayerDialog(QWidget):
             self.close()
             return
         super().mousePressEvent(event)
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() == Qt.Key.Key_Escape:
+            self.close()
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     def _set_playback_speed(self, index: int) -> None:
         rates = [0.5, 0.75, 1.0]
@@ -763,6 +771,21 @@ class _HistoryPopup(QWidget):
         self.show()
         self.raise_()
         self.popup.raise_()
+        self.setFocus()
+
+    def mousePressEvent(self, event) -> None:
+        if not self.popup.geometry().contains(event.position().toPoint()):
+            self.close_popup()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() == Qt.Key.Key_Escape:
+            self.close_popup()
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     def close_popup(self) -> None:
         self.hide()
