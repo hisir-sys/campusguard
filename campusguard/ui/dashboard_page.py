@@ -199,10 +199,10 @@ class GlassPopup(QFrame):
         self.setStyleSheet(
             f"""
             QFrame#glassPopup {{
-                background: {rgba(palette.glass, max(48, int(palette.glass_alpha * 7)))};
+                background: {rgba(palette.glass, max(72, int(palette.glass_alpha * 8)))};
                 color: {palette.text};
-                border: 1px solid {rgba(palette.line, min(255, int(palette.line_alpha * 1.6)))};
-                border-radius: 26px;
+                border: 1px solid {rgba(palette.line, min(255, int(palette.line_alpha * 2.0)))};
+                border-radius: 28px;
             }}
 
             QLabel#popupTitle {{
@@ -234,14 +234,14 @@ class GlassPopup(QFrame):
             }}
 
             QFrame#popupSection {{
-                background: {rgba(palette.veil, max(1, int(palette.veil_alpha * 0.7)))};
+                background: {rgba(palette.veil, max(1, int(palette.veil_alpha * 0.82)))};
                 color: {palette.text};
                 border: 1px solid {rgba(palette.line, palette.line_alpha)};
                 border-radius: 17px;
             }}
 
             QFrame#popupMetric {{
-                background: {rgba(palette.veil, max(1, int(palette.veil_alpha * 0.6)))};
+                background: {rgba(palette.veil, max(1, int(palette.veil_alpha * 0.72)))};
                 color: {palette.text};
                 border: 1px solid {rgba(palette.line, max(1, int(palette.line_alpha * 0.8)))};
                 border-radius: 15px;
@@ -497,12 +497,12 @@ class DashboardPage(QWidget):
         self._notifications_card = self._build_notifications_card()
         self._network_card = self._build_network_card()
 
-        self._engine_card.setMinimumHeight(222)
-        self._engine_card.setMaximumHeight(222)
-        self._stats_card.setMinimumHeight(222)
-        self._stats_card.setMaximumHeight(222)
-        self._notifications_card.setMinimumHeight(222)
-        self._notifications_card.setMaximumHeight(222)
+        self._engine_card.setMinimumHeight(228)
+        self._engine_card.setMaximumHeight(228)
+        self._stats_card.setMinimumHeight(228)
+        self._stats_card.setMaximumHeight(228)
+        self._notifications_card.setMinimumHeight(228)
+        self._notifications_card.setMaximumHeight(228)
 
         main_row.addWidget(self._engine_card, 11)
         main_row.addWidget(self._stats_card, 11)
@@ -673,9 +673,9 @@ class DashboardPage(QWidget):
         model_top.addWidget(model_label)
         model_top.addStretch(1)
 
-        live = QLabel("ACTIVE")
-        live.setProperty("tone", "good")
-        live.setStyleSheet("font-size: 8pt; font-weight: 700;")
+        live = QLabel("ONLINE")
+        live.setProperty("muted", True)
+        live.setStyleSheet("font-size: 8pt; font-weight: 700; letter-spacing: 0.6px;")
         model_top.addWidget(live)
         model_box.addLayout(model_top)
 
@@ -689,7 +689,7 @@ class DashboardPage(QWidget):
 
         active_model = QLabel("Spontim 1.0")
         active_model.setProperty("kvvalue", True)
-        active_model.setStyleSheet("font-size: 13pt; font-weight: 700;")
+        active_model.setStyleSheet("font-size: 13pt; font-weight: 700; letter-spacing: -0.2px;")
         model_text.addWidget(active_model)
         self.engine_values["violence_model"] = active_model
 
@@ -742,9 +742,9 @@ class DashboardPage(QWidget):
         self.alert_value.setProperty("kvvalue", True)
 
         stats = (
-            ("video", "good", self.online_value, "Cameras"),
-            ("file-warning", "warn", self.incident_value, "Open incidents"),
-            ("shield-alert", "bad", self.alert_value, "Active alerts"),
+            ("video", "muted", self.online_value, "Cameras"),
+            ("file-warning", "muted", self.incident_value, "Open incidents"),
+            ("shield-alert", "muted", self.alert_value, "Active alerts"),
         )
 
         grid = QGridLayout()
@@ -837,7 +837,8 @@ class DashboardPage(QWidget):
             QFrame.Shape.NoFrame
         )
 
-        scroll.setMinimumHeight(160)
+        scroll.setMinimumHeight(166)
+        scroll.setContentsMargins(0, 0, 0, 6)
 
         scroll.viewport().setAutoFillBackground(
             False
@@ -851,9 +852,9 @@ class DashboardPage(QWidget):
 
         self._notification_layout.setContentsMargins(
             0,
-            2,
+            4,
             8,
-            14,
+            24,
         )
 
         self._notification_layout.setSpacing(0)
@@ -1096,7 +1097,6 @@ class DashboardPage(QWidget):
         current_key = getattr(self._settings, "violence_model", "fdsc_mc3") if self._settings else "fdsc_mc3"
         active = QLabel(model_names.get(current_key, "Spontim 1.0"))
         active.setObjectName("popupMetricValue")
-        set_tone(active, "good")
         model_row.addWidget(active, 1)
 
         selector = QComboBox()
