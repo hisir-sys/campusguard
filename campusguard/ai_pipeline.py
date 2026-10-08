@@ -98,8 +98,13 @@ class FightDecision:
     """
 
     NORMAL_RELEASE_PREDICTIONS = 6
-    TRIGGER_PREDICTIONS = 4
-    MIN_TRIGGER_CONFIDENCE = 0.75
+    # The temporal classifier already produced the user-visible FIGHT DETECTED
+    # state. Persist the incident on that first qualifying prediction instead
+    # of waiting for several later temporal-window updates.
+    TRIGGER_PREDICTIONS = 1
+    # Use the same configured confidence threshold as the visible state.
+    # Do not silently require a second, higher persistence threshold.
+    MIN_TRIGGER_CONFIDENCE = 0.0
 
     def __init__(self, threshold: float) -> None:
         self.threshold = threshold
