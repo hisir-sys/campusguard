@@ -85,10 +85,10 @@ class GlassPopup(QFrame):
 
         # Size from actual content. Only the available window height caps the
         # popup; compact text therefore produces a compact popup.
-        self.setMinimumWidth(420)
-        self.setMaximumWidth(780)
+        self.setMinimumWidth(500)
+        self.setMaximumWidth(700)
         self.setMinimumHeight(0)
-        self.setMaximumHeight(760)
+        self.setMaximumHeight(620)
         self.setSizePolicy(
             QSizePolicy.Policy.Preferred,
             QSizePolicy.Policy.Maximum,
@@ -107,8 +107,8 @@ class GlassPopup(QFrame):
         # --------------------------------------------------------------
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(32, 32, 32, 32)
-        root.setSpacing(16)
+        root.setContentsMargins(28, 26, 28, 26)
+        root.setSpacing(14)
 
         # --------------------------------------------------------------
         # TOP HEADER
