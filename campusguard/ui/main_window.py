@@ -4,7 +4,7 @@ from dataclasses import replace
 import threading
 
 from PySide6.QtGui import QAction, QKeySequence, QPixmap
-from PySide6.QtCore import QTimer, Qt, Signal
+from PySide6.QtCore import QEvent, QTimer, Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QGraphicsBlurEffect,
@@ -117,6 +117,7 @@ class InAppOverlay(QFrame):
         self._content.addWidget(self._body_widget, 1)
 
         self._confirm_callback = None
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.hide()
 
     def _blur_background(self, enabled: bool) -> None:
@@ -140,8 +141,35 @@ class InAppOverlay(QFrame):
         self._blur_effects.clear()
 
     def _close_overlay(self) -> None:
+        self._confirm_callback = None
         self._clear_blur()
         self.hide()
+        self.clearFocus()
+
+    def mousePressEvent(self, event) -> None:
+        if not self._panel.geometry().contains(event.position().toPoint()):
+            self._close_overlay()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() == Qt.Key.Key_Escape:
+            self._close_overlay()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def eventFilter(self, watched, event) -> bool:
+        if event.type() == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Escape:
+            self._close_overlay()
+            return True
+        return super().eventFilter(watched, event)
+
+    def hideEvent(self, event) -> None:
+        self._confirm_callback = None
+        self._clear_blur()
+        super().hideEvent(event)
     def _clear_body(self) -> None:
         while self._body_layout.count():
             item = self._body_layout.takeAt(0)
@@ -210,6 +238,7 @@ class InAppOverlay(QFrame):
         self._body_layout.addWidget(self._body)
 
         field = QLineEdit()
+        field.installEventFilter(self)
         field.setPlaceholderText(placeholder)
         field.setMinimumHeight(42)
         self._body_layout.addWidget(field)
@@ -960,7 +989,6 @@ class MainWindow(QMainWindow):
         except Exception:
             self.repository.remove_camera(camera.camera_id)
             self._in_app_overlay.show_notice(
-                self,
                 "Credential vault unavailable",
                 "CampusGuard could not store the camera credentials securely, so the camera was not saved.\n\n"
                 "Check that the Windows credential service is available and try again.",
