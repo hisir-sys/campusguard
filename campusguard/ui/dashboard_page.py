@@ -1054,12 +1054,21 @@ class DashboardPage(QWidget):
         self._popup_overlay.hide()
 
         if self._dashboard_blur is not None:
-            self._dashboard_content.setGraphicsEffect(None)
+            if self._dashboard_content.graphicsEffect() is self._dashboard_blur:
+                self._dashboard_content.setGraphicsEffect(None)
             self._dashboard_blur.deleteLater()
             self._dashboard_blur = None
-        self._clear_navigation_blur()
 
+        # Always clear navigation blur even if the popup was already hidden.
+        self._clear_navigation_blur()
         self._dashboard_content.update()
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() == Qt.Key.Key_Escape and self._popup_kind is not None:
+            self._close_popup()
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     # ==================================================================
     # AI ENGINE POPUP
