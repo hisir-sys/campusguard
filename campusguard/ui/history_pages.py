@@ -5,7 +5,7 @@ from pathlib import Path
 
 import cv2
 
-from PySide6.QtCore import QEvent, QTimer, Qt, Signal
+from PySide6.QtCore import QEvent, QEasingCurve, QPropertyAnimation, QRect, QTimer, Qt, Signal
 from PySide6.QtGui import QColor, QImage, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 
 from campusguard.storage import Repository
 from campusguard.ui.common import make_page_title
+from campusguard.ui.theme import get_palette, rgba
 
 
 # ============================================================================
@@ -226,7 +227,7 @@ class FootagePlayerDialog(QWidget):
             widget = getattr(window, name, None)
             if isinstance(widget, QWidget):
                 effect = QGraphicsBlurEffect(widget)
-                effect.setBlurRadius(14)
+                effect.setBlurRadius(16)
                 widget.setGraphicsEffect(effect)
                 self._background_blurs.append((widget, effect))
 
@@ -589,7 +590,7 @@ class _HistoryPopup(QWidget):
         self.setStyleSheet(
             """
             QWidget#historyPopupOverlay {
-                background: rgba(0, 0, 0, 105);
+                background: rgba(0, 0, 0, 125);
             }
             """
         )
@@ -614,13 +615,19 @@ class _HistoryPopup(QWidget):
         shadow.setColor(QColor(0, 0, 0, 110))
         self.popup.setGraphicsEffect(shadow)
 
+        palette = get_palette()
         self.popup.setStyleSheet(
-            """
-            QFrame#historyPopup {
-                border-radius: 18px;
-            }
+            f"""
+            QFrame#historyPopup {{
+                background: {rgba(palette.glass, min(220, max(178, int(palette.glass_alpha * 0.82))))};
+                border: 1px solid {rgba(palette.line, min(255, int(palette.line_alpha * 2.2)))};
+                border-radius: 28px;
+            }}
             """
         )
+        self._popup_animation = QPropertyAnimation(self.popup, b"geometry", self)
+        self._popup_animation.setDuration(220)
+        self._popup_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
 
         outer = QVBoxLayout(self)
 
@@ -796,6 +803,17 @@ class _HistoryPopup(QWidget):
         self.popup.raise_()
         self.setFocus()
 
+        target = QRect(self.popup.geometry())
+        start = QRect(target)
+        start.setWidth(max(500, int(target.width() * 0.965)))
+        start.setHeight(max(380, int(target.height() * 0.965)))
+        start.moveCenter(target.center())
+        self._popup_animation.stop()
+        self.popup.setGeometry(start)
+        self._popup_animation.setStartValue(start)
+        self._popup_animation.setEndValue(target)
+        self._popup_animation.start()
+
     def mousePressEvent(self, event) -> None:
         if not self.popup.geometry().contains(event.position().toPoint()):
             self.close_popup()
@@ -811,6 +829,7 @@ class _HistoryPopup(QWidget):
         super().keyPressEvent(event)
 
     def close_popup(self) -> None:
+        self._popup_animation.stop()
         self.hide()
         self.closed.emit()
 
