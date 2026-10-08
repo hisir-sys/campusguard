@@ -92,6 +92,7 @@ class FootagePlayerDialog(QWidget):
         close_button = QPushButton("Close")
         close_button.setProperty("secondaryButton", True)
         close_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         close_button.setMinimumHeight(32)
         close_button.clicked.connect(self.close)
         heading.addWidget(close_button, 0, Qt.AlignmentFlag.AlignTop)
@@ -233,7 +234,8 @@ class FootagePlayerDialog(QWidget):
         for widget, effect in self._background_blurs:
             if widget.graphicsEffect() is effect:
                 widget.setGraphicsEffect(None)
-            effect.deleteLater()
+            # setGraphicsEffect(None) can destroy the effect immediately;
+            # never delete the wrapper a second time.
         self._background_blurs.clear()
 
     def closeEvent(self, event) -> None:
