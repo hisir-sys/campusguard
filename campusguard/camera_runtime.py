@@ -120,17 +120,42 @@ def enumerate_local_cameras(max_devices: int = 10) -> list[dict[str, object]]:
     return found
 
 def _open_capture(source: int | str) -> cv2.VideoCapture:
-    """Open a camera with Windows-friendly backends and a tiny capture buffer."""
+    """Open a camera and reject backends that open but cannot deliver a frame."""
+    def _usable(capture: cv2.VideoCapture) -> bool:
+        if capture is None or not capture.isOpened():
+            return False
+        try:
+            capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        except (AttributeError, cv2.error):
+            pass
+
+        # A backend can report isOpened()=True while its first read is not
+        # actually producing frames (common with some Windows virtual-camera
+        # backends). Warm it up before declaring the camera LIVE.
+        for _ in range(3):
+            ok, frame = capture.read()
+            if ok and frame is not None and frame.size:
+                return True
+            time.sleep(0.08)
+        return False
+
     if isinstance(source, int):
-        # Virtual USB cameras such as DroidCam can expose themselves through
-        # different Windows capture APIs depending on driver/version.
+        # Try each Windows backend and keep only one that can really deliver
+        # a frame. This prevents a false LIVE state with "Waiting for frames".
         for backend in (cv2.CAP_DSHOW, cv2.CAP_MSMF, cv2.CAP_ANY):
-            capture = cv2.VideoCapture(source, backend)
-            if capture.isOpened():
-                capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-                return capture
-            capture.release()
-        return cv2.VideoCapture(source)
+            capture = None
+            try:
+                capture = cv2.VideoCapture(source, backend)
+                if _usable(capture):
+                    return capture
+            except Exception:
+                pass
+            finally:
+                if capture is not None and not capture.isOpened():
+                    capture.release()
+            if capture is not None and capture.isOpened():
+                capture.release()
+        return cv2.VideoCapture()
 
     capture = cv2.VideoCapture()
     timeout_parameters = [
@@ -146,7 +171,9 @@ def _open_capture(source: int | str) -> cv2.VideoCapture:
         capture = cv2.VideoCapture(source)
 
     if capture.isOpened():
-        capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        if not _usable(capture):
+            capture.release()
+            return cv2.VideoCapture()
     return capture
 
 
