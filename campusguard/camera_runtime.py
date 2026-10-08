@@ -488,7 +488,26 @@ class FrameAnalysisThread(QThread):
                     event_name, event_confidence, severity = event
                     self.event_detected.emit(event_name, event_confidence, severity)
             except Exception as error:
+                # Never let an AI/model failure hide a healthy live camera.
+                # Show the latest raw frame and surface the AI error separately.
                 self.model_status.emit("engine", f"Frame analysis error — {error}")
+                try:
+                    fallback = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    height, width = fallback.shape[:2]
+                    image = QImage(
+                        fallback.data,
+                        width,
+                        height,
+                        int(fallback.strides[0]),
+                        QImage.Format.Format_RGB888,
+                    ).copy()
+                    self.frame_ready.emit(
+                        image,
+                        "AI ERROR",
+                        None,
+                    )
+                except Exception:
+                    pass
 
         finished_footage = self.footage_recorder.stop()
         if finished_footage is not None:
