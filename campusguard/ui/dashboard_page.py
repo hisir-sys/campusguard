@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, Qt, Signal
+from PySide6.QtCore import QEvent, QEasingCurve, QPropertyAnimation, QRect, Qt, Signal
 from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
@@ -79,6 +79,9 @@ class GlassPopup(QFrame):
 
         self.setObjectName("glassPopup")
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self._geometry_animation = QPropertyAnimation(self, b"geometry", self)
+        self._geometry_animation.setDuration(220)
+        self._geometry_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
 
         self.setMinimumWidth(780)
         self.setMaximumWidth(920)
@@ -301,6 +304,19 @@ class GlassPopup(QFrame):
 
     def retint(self) -> None:
         self._apply_palette()
+
+    def animate_in(self, target: QRect) -> None:
+        # Restrained scale/settle motion; no flashy bounce.
+        self._geometry_animation.stop()
+        start = QRect(target)
+        start.setWidth(max(240, int(target.width() * 0.965)))
+        start.setHeight(max(220, int(target.height() * 0.965)))
+        start.moveCenter(target.center())
+        self.setGeometry(start)
+        self.show()
+        self._geometry_animation.setStartValue(start)
+        self._geometry_animation.setEndValue(target)
+        self._geometry_animation.start()
 
     def eventFilter(
         self,
@@ -1043,17 +1059,18 @@ class DashboardPage(QWidget):
         self._dashboard_content.setGraphicsEffect(self._dashboard_blur)
         self._blur_navigation(True)
 
-        self._popup.show()
+        self._center_popup()
+        target = QRect(self._popup.geometry())
+        self._popup.animate_in(target)
         self._popup.raise_()
         self._popup.setFocus()
-
-        self._center_popup()
 
     def _close_popup(
         self,
     ) -> None:
         self._popup_kind = None
 
+        self._popup._geometry_animation.stop()
         self._popup.hide()
         self._popup_overlay.hide()
 
