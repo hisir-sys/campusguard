@@ -54,7 +54,7 @@ class PopupLayer(QWidget):
         self.setStyleSheet(
             """
             QWidget#popupLayer {
-                background: rgba(0, 0, 0, 115);
+                background: rgba(0, 0, 0, 125);
             }
             """
         )
@@ -481,9 +481,9 @@ class DashboardPage(QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(
             0,
+            7,
             0,
-            0,
-            0,
+            7,
         )
         outer.setSpacing(0)
 
@@ -1016,7 +1016,7 @@ class DashboardPage(QWidget):
             widget = getattr(window, name, None)
             if isinstance(widget, QWidget):
                 effect = QGraphicsBlurEffect(widget)
-                effect.setBlurRadius(13)
+                effect.setBlurRadius(16)
                 widget.setGraphicsEffect(effect)
                 self._navigation_blurs.append((widget, effect))
 
@@ -1055,7 +1055,7 @@ class DashboardPage(QWidget):
         self._popup.prepare_for_display()
 
         self._dashboard_blur = QGraphicsBlurEffect(self)
-        self._dashboard_blur.setBlurRadius(13)
+        self._dashboard_blur.setBlurRadius(16)
         self._dashboard_content.setGraphicsEffect(self._dashboard_blur)
         self._blur_navigation(True)
 
@@ -2018,7 +2018,8 @@ class DashboardPage(QWidget):
         row: dict,
     ) -> QWidget:
 
-        widget = QWidget()
+        widget = QFrame()
+        widget.setObjectName("notificationRow")
 
         outer = QHBoxLayout(
             widget
