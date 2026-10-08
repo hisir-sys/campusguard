@@ -182,6 +182,11 @@ class CameraPreview(QFrame):
         self.meta_label.setStyleSheet("font-size: 8pt; letter-spacing: 0.15px;")
         outer.addWidget(self.meta_label)
 
+        self.ai_state_label = QLabel("AI: starting")
+        self.ai_state_label.setProperty("muted", True)
+        self.ai_state_label.setStyleSheet("font-size: 8pt; font-weight: 650; letter-spacing: 0.15px;")
+        outer.addWidget(self.ai_state_label)
+
     def set_camera(self, camera: CameraConfig) -> None:
         self.camera_id = camera.camera_id
         self.name_label.setText(camera.name)
@@ -201,11 +206,21 @@ class CameraPreview(QFrame):
                 stats.message
                 or ("Connecting to camera…" if stats.status == "CONNECTING" else "Waiting for camera frames")
             )
+            self.ai_state_label.setText("AI: waiting for live frames")
         elif self._source_pixmap is None:
             self.video_label.setText("Waiting for camera frames")
 
-    def set_frame(self, pixmap: QPixmap) -> None:
+    def set_frame(
+        self,
+        pixmap: QPixmap,
+        state: str = "NORMAL",
+        confidence: float | None = None,
+    ) -> None:
         self._source_pixmap = pixmap
+        if confidence is None:
+            self.ai_state_label.setText(f"AI: {state}")
+        else:
+            self.ai_state_label.setText(f"AI: {state}  ·  {confidence:.0%}")
         self._scale_pixmap()
 
     def resizeEvent(self, event) -> None:
