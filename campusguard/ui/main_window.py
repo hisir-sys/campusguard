@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from pathlib import Path
 import threading
 
 from PySide6.QtGui import QAction, QKeySequence, QPixmap
@@ -1029,7 +1030,23 @@ class MainWindow(QMainWindow):
         )
         if not path:
             return
+        local_camera = CameraConfig(
+            camera_id="LOCAL-TEST",
+            name=f"Local test · {Path(path).name}",
+            source_type="LOCAL FILE",
+            source_address=path,
+            ai_enabled=True,
+            created_at="",
+        )
         dialog = LocalVideoTestDialog(path, self.settings, self)
+        dialog.event_detected.connect(
+            lambda event, confidence, severity, camera=local_camera:
+            self._on_local_test_event(camera, event, confidence, severity)
+        )
+        dialog.footage_saved.connect(
+            lambda footage_path:
+            self._on_footage_saved("LOCAL-TEST", footage_path)
+        )
         dialog.exec()
 
     def _add_camera(self, values: dict) -> None:
@@ -1279,6 +1296,34 @@ class MainWindow(QMainWindow):
         self.dashboard.update_model_status(camera_id, component, message)
         if component == "device":
             self.settings_page.set_device_status(message)
+
+    def _on_local_test_event(
+        self,
+        camera: CameraConfig,
+        event: str,
+        confidence: float,
+        severity: str,
+    ) -> None:
+        incident = self.repository.create_incident(
+            camera,
+            event,
+            confidence,
+            severity,
+            self.settings.alert_cooldown_seconds,
+        )
+        if incident is None:
+            return
+        self._pending_footage_incidents["LOCAL-TEST"] = str(
+            incident["public_id"]
+        )
+        self.statusBar().showMessage(
+            f"{severity} alert: {event} in local test footage ({confidence:.0%}).",
+            12000,
+        )
+        self.incidents_page.refresh()
+        self.alerts_page.refresh()
+        self.dashboard.refresh_summary()
+        self._update_alert_badge()
 
     def _on_event(
         self,
