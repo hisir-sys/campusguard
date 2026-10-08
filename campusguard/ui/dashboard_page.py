@@ -12,8 +12,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QComboBox,
     QScrollArea,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -83,13 +83,16 @@ class GlassPopup(QFrame):
         self._geometry_animation.setDuration(220)
         self._geometry_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
 
-        self.setMinimumWidth(780)
-        self.setMaximumWidth(920)
-
-        # A wider, lower glass panel keeps normal status information readable
-        # without forcing the operator through a long scroll.
-        self.setMinimumHeight(430)
+        # Size from actual content. Only the available window height caps the
+        # popup; compact text therefore produces a compact popup.
+        self.setMinimumWidth(420)
+        self.setMaximumWidth(780)
+        self.setMinimumHeight(0)
         self.setMaximumHeight(760)
+        self.setSizePolicy(
+            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.Maximum,
+        )
 
         self._apply_palette()
 
@@ -195,7 +198,7 @@ class GlassPopup(QFrame):
 
         root.addWidget(
             self.body_widget,
-            1,
+            0,
         )
 
     def _apply_palette(self) -> None:
@@ -457,6 +460,7 @@ class DashboardPage(QWidget):
 
         self._empty_label: QLabel | None = None
         self._camera_grid: QGridLayout | None = None
+        self._offline_tiles: list[QFrame] = []
 
         self._runtime_loaded: dict[
             str,
@@ -600,7 +604,7 @@ class DashboardPage(QWidget):
         safe_margin = 28
 
         maximum_height = max(
-            260,
+            220,
             available_height - (safe_margin * 2),
         )
 
@@ -614,6 +618,13 @@ class DashboardPage(QWidget):
             maximum_height
         )
 
+        self._popup.adjustSize()
+
+        width = min(
+            780,
+            max(420, self._popup.sizeHint().width()),
+        )
+        self._popup.setFixedWidth(width)
         self._popup.adjustSize()
 
         width = self._popup.width()
@@ -675,50 +686,32 @@ class DashboardPage(QWidget):
 
         self.engine_values = {}
 
-        # Active engine identity: visually stronger than a plain key/value row.
-        model_tile = QFrame()
-        model_tile.setObjectName("dashboardModelTile")
-        model_box = QVBoxLayout(model_tile)
-        model_box.setContentsMargins(14, 12, 14, 12)
-        model_box.setSpacing(4)
-
-        model_top = QHBoxLayout()
-        model_top.setContentsMargins(0, 0, 0, 0)
-        model_top.setSpacing(8)
-
+        # Keep the dashboard model display simple. Model switching belongs
+        # inside the AI Engine popup rather than in a boxed dropdown.
         model_label = QLabel("PRODUCTION ENGINE")
         model_label.setProperty("eyebrow", True)
-        model_top.addWidget(model_label)
-        model_top.addStretch(1)
-
-        live = QLabel("ONLINE")
-        live.setProperty("muted", True)
-        live.setStyleSheet("font-size: 8pt; font-weight: 700; letter-spacing: 0.6px;")
-        model_top.addWidget(live)
-        model_box.addLayout(model_top)
-
-        model_content = QHBoxLayout()
-        model_content.setContentsMargins(0, 0, 0, 0)
-        model_content.setSpacing(10)
-
-        model_text = QVBoxLayout()
-        model_text.setContentsMargins(0, 0, 0, 0)
-        model_text.setSpacing(2)
+        layout.addWidget(model_label)
 
         active_model = QLabel("Spontim 1.0")
         active_model.setProperty("kvvalue", True)
-        active_model.setStyleSheet("font-size: 13pt; font-weight: 700; letter-spacing: -0.2px;")
-        model_text.addWidget(active_model)
+        active_model.setStyleSheet(
+            "font-size: 13pt; font-weight: 700; letter-spacing: -0.2px;"
+        )
+        layout.addWidget(active_model)
+
         model_caption = QLabel("Temporal violence classification")
         model_caption.setProperty("muted", True)
         model_caption.setStyleSheet("font-size: 8pt;")
-        model_text.addWidget(model_caption)
+        layout.addWidget(model_caption)
+
+        online = QLabel("ONLINE")
+        online.setProperty("muted", True)
+        online.setStyleSheet(
+            "font-size: 8pt; font-weight: 700; letter-spacing: 0.6px;"
+        )
+        layout.addWidget(online)
+
         self.engine_values["violence_model"] = active_model
-
-        model_content.addLayout(model_text, 1)
-        model_box.addLayout(model_content)
-
-        layout.addWidget(model_tile)
 
         rows = (
             ("status", "Engine status"),
@@ -949,6 +942,8 @@ class DashboardPage(QWidget):
 
         self._camera_grid.setHorizontalSpacing(16)
         self._camera_grid.setVerticalSpacing(16)
+        self._camera_grid.setColumnStretch(0, 1)
+        self._camera_grid.setColumnStretch(1, 1)
 
         self.feed_scroll.setWidget(
             self.feed_content
@@ -1101,8 +1096,8 @@ class DashboardPage(QWidget):
         model = QFrame()
         model.setObjectName("popupSection")
         ml = QVBoxLayout(model)
-        ml.setContentsMargins(24, 24, 24, 24)
-        ml.setSpacing(16)
+        ml.setContentsMargins(18, 16, 18, 16)
+        ml.setSpacing(10)
 
         title = QLabel("ACTIVE MODEL")
         title.setObjectName("popupSectionTitle")
@@ -1118,23 +1113,26 @@ class DashboardPage(QWidget):
         active.setObjectName("popupMetricValue")
         model_row.addWidget(active, 1)
 
-        selector = QComboBox()
-        selector.setObjectName("modelSelector")
         options = (
             ("Spontim 1.0", "fdsc_mc3"),
             ("CampusGuard MC3-18", "mc3"),
             ("X3D-M", "x3d"),
         )
-        current_index = 0
-        for index, (label_text, key) in enumerate(options):
-            selector.addItem(label_text, key)
-            if key == current_key:
-                current_index = index
-        selector.setCurrentIndex(current_index)
-        selector.currentIndexChanged.connect(
-            lambda index: self.model_switch_requested.emit(str(selector.itemData(index)))
-        )
-        model_row.addWidget(selector, 0)
+        choices = QVBoxLayout()
+        choices.setSpacing(6)
+        for label_text, key in options:
+            choice = QPushButton(label_text)
+            choice.setCheckable(True)
+            choice.setChecked(key == current_key)
+            choice.setCursor(Qt.CursorShape.PointingHandCursor)
+            choice.setMinimumHeight(38)
+            choice.setProperty("modelChoice", True)
+            choice.clicked.connect(
+                lambda _checked=False, selected_key=key:
+                self.model_switch_requested.emit(selected_key)
+            )
+            choices.addWidget(choice)
+        model_row.addLayout(choices, 1)
         ml.addLayout(model_row)
 
         desc = QLabel("Select the production temporal classifier used by live camera workers.")
@@ -1146,8 +1144,8 @@ class DashboardPage(QWidget):
         pipeline = QFrame()
         pipeline.setObjectName("popupSection")
         pl = QVBoxLayout(pipeline)
-        pl.setContentsMargins(24, 24, 24, 24)
-        pl.setSpacing(16)
+        pl.setContentsMargins(18, 16, 18, 16)
+        pl.setSpacing(8)
 
         ptitle = QLabel("PIPELINE")
         ptitle.setObjectName("popupSectionTitle")
@@ -1167,8 +1165,8 @@ class DashboardPage(QWidget):
         runtime = QFrame()
         runtime.setObjectName("popupSection")
         rl = QVBoxLayout(runtime)
-        rl.setContentsMargins(18, 16, 18, 16)
-        rl.setSpacing(8)
+        rl.setContentsMargins(18, 14, 18, 14)
+        rl.setSpacing(6)
 
         rtitle = QLabel("RUNTIME")
         rtitle.setObjectName("popupSectionTitle")
@@ -1707,14 +1705,23 @@ class DashboardPage(QWidget):
                         None
                     )
 
-        # The normal dashboard state is a compact two-camera wall:
-        # camera 1 on the left and camera 2 on the right. It remains
-        # non-scrollable while there are only two cameras. Once more than
-        # two cameras exist, the same two-column wall becomes vertically
-        # scrollable and naturally forms a 2×2, 2×N security grid.
-        for index, camera in enumerate(cameras):
+        # Always render two equal panes in the default wall. A missing
+        # source is shown as an OFFLINE pane only; it is not a fake camera
+        # configuration and does not start any capture worker.
+        self._offline_tiles.clear()
+        display_widgets: list[QWidget] = [
+            self._tiles[camera.camera_id] for camera in cameras
+        ]
+
+        if len(cameras) <= 2:
+            while len(display_widgets) < 2:
+                display_widgets.append(
+                    self._build_offline_tile(len(display_widgets) + 1)
+                )
+
+        for index, widget in enumerate(display_widgets):
             self._camera_grid.addWidget(
-                self._tiles[camera.camera_id],
+                widget,
                 index // 2,
                 index % 2,
             )
@@ -1769,6 +1776,52 @@ class DashboardPage(QWidget):
                 0,
                 0,
             )
+
+    def _build_offline_tile(self, slot: int) -> QFrame:
+        tile = QFrame()
+        tile.setProperty("card", True)
+        tile.setObjectName("offlineCameraTile")
+        tile.setMinimumHeight(238)
+
+        outer = QVBoxLayout(tile)
+        outer.setContentsMargins(16, 16, 16, 16)
+        outer.setSpacing(10)
+
+        header = QHBoxLayout()
+        labels = QVBoxLayout()
+        labels.setSpacing(1)
+
+        name = QLabel(f"Camera {slot}")
+        name.setStyleSheet("font-weight: 700;")
+        labels.addWidget(name)
+
+        source = QLabel("No camera source configured")
+        source.setProperty("muted", True)
+        labels.addWidget(source)
+
+        status = QLabel("OFFLINE")
+        status.setProperty("statusBadge", True)
+
+        header.addLayout(labels, 1)
+        header.addWidget(status, 0, Qt.AlignmentFlag.AlignTop)
+        outer.addLayout(header)
+
+        surface = QLabel("OFFLINE")
+        surface.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        surface.setMinimumHeight(130)
+        surface.setProperty("videoSurface", True)
+        surface.setStyleSheet(
+            "border-radius: 12px; font-size: 10pt; font-weight: 700;"
+        )
+        outer.addWidget(surface, 1)
+
+        meta = QLabel("Add a camera source from the Cameras page")
+        meta.setProperty("muted", True)
+        meta.setStyleSheet("font-size: 8pt;")
+        outer.addWidget(meta)
+
+        self._offline_tiles.append(tile)
+        return tile
 
     def update_camera_stats(
         self,
