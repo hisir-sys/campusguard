@@ -363,7 +363,7 @@ class VisionPipeline:
             settings.pose_enabled
             and pose_enabled
             and self.pose_model is not None
-            and (self.frame_index % 8 == 0 or any(person.keypoints is None for person in people))
+            and (self.frame_index == 1 or self.frame_index % 8 == 0)
         )
         if run_pose and people:
             try:
@@ -371,6 +371,12 @@ class VisionPipeline:
             except Exception as error:
                 self.pose_model = None
                 self.status("pose", f"MODEL ERROR — {error}")
+
+        # Keep the latest detector/pose result so expensive YOLO passes are
+        # actually decimated. The temporal classifier still receives every
+        # analyzed frame.
+        if people:
+            self.cached_people = copy.deepcopy(people)
 
         pair_ids = self.interactions.update(people)
         model_key = settings.violence_model if settings.violence_model != "enhanced" else "fdsc_mc3"
