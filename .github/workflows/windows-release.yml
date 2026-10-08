@@ -1,0 +1,79 @@
+name: CampusGuard Windows Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller
+
+      - name: Prepare YOLO runtime weights
+        shell: pwsh
+        run: |
+          python -c "from ultralytics import YOLO; YOLO('yolo11n.pt'); YOLO('yolo11n-pose.pt')"
+          New-Item -ItemType Directory -Force models | Out-Null
+          Copy-Item yolo11n.pt models/yolo11n.pt -Force
+          Copy-Item yolo11n-pose.pt models/yolo11n-pose.pt -Force
+
+      - name: Prepare release number
+        shell: pwsh
+        env:
+          CAMPUSGUARD_VERSION: ${{ github.run_number }}
+        run: |
+          Set-Content version.txt $env:CAMPUSGUARD_VERSION
+
+      - name: Build CampusGuard.exe
+        shell: pwsh
+        env:
+          CAMPUSGUARD_VERSION: ${{ github.run_number }}
+        run: |
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name CampusGuard --collect-all PySide6 --collect-all cv2 --collect-all torch --collect-all torchvision --collect-all ultralytics --collect-all pytorchvideo --collect-all keyring --add-data "models;models" main.py
+
+      - name: Verify executable
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "dist\CampusGuard.exe")) { throw "CampusGuard.exe was not produced." }
+          $size = (Get-Item "dist\CampusGuard.exe").Length
+          Write-Host "CampusGuard.exe size: $size bytes"
+          if ($size -lt 1000000) { throw "Executable is unexpectedly small." }
+
+      - name: Publish rolling latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          gh release delete latest --yes 2>$null
+          git push origin --delete latest 2>$null
+          gh release create latest "dist/CampusGuard.exe" "version.txt" --target "${{ github.sha }}" --title "CampusGuard Latest" --notes "${{ github.run_number }}"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CampusGuard-Windows
+          path: |
+            dist/CampusGuard.exe
+            version.txt
