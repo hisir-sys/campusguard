@@ -201,9 +201,9 @@ class GlassPopup(QFrame):
         self.setStyleSheet(
             f"""
             QFrame#glassPopup {{
-                background: {rgba(palette.glass, max(72, int(palette.glass_alpha * 8)))};
+                background: {rgba(palette.glass, min(225, max(185, int(palette.glass_alpha * 0.86))))};
                 color: {palette.text};
-                border: 1px solid {rgba(palette.line, min(255, int(palette.line_alpha * 2.0)))};
+                border: 1px solid {rgba(palette.line, min(255, int(palette.line_alpha * 2.2)))};
                 border-radius: 28px;
             }}
 
@@ -236,17 +236,17 @@ class GlassPopup(QFrame):
             }}
 
             QFrame#popupSection {{
-                background: {rgba(palette.veil, max(1, int(palette.veil_alpha * 0.82)))};
+                background: {rgba(palette.veil, 18)};
                 color: {palette.text};
-                border: 1px solid {rgba(palette.line, palette.line_alpha)};
-                border-radius: 17px;
+                border: 1px solid {rgba(palette.line, min(255, int(palette.line_alpha * 1.5)))};
+                border-radius: 19px;
             }}
 
             QFrame#popupMetric {{
-                background: {rgba(palette.veil, max(1, int(palette.veil_alpha * 0.72)))};
+                background: {rgba(palette.veil, 14)};
                 color: {palette.text};
-                border: 1px solid {rgba(palette.line, max(1, int(palette.line_alpha * 0.8)))};
-                border-radius: 15px;
+                border: 1px solid {rgba(palette.line, palette.line_alpha)};
+                border-radius: 16px;
             }}
 
             QLabel#popupSectionTitle {{
@@ -664,7 +664,7 @@ class DashboardPage(QWidget):
         model_tile.setObjectName("dashboardModelTile")
         model_box = QVBoxLayout(model_tile)
         model_box.setContentsMargins(14, 12, 14, 12)
-        model_box.setSpacing(5)
+        model_box.setSpacing(4)
 
         model_top = QHBoxLayout()
         model_top.setContentsMargins(0, 0, 0, 0)
@@ -693,6 +693,10 @@ class DashboardPage(QWidget):
         active_model.setProperty("kvvalue", True)
         active_model.setStyleSheet("font-size: 13pt; font-weight: 700; letter-spacing: -0.2px;")
         model_text.addWidget(active_model)
+        model_caption = QLabel("Temporal violence classification")
+        model_caption.setProperty("muted", True)
+        model_caption.setStyleSheet("font-size: 8pt;")
+        model_text.addWidget(model_caption)
         self.engine_values["violence_model"] = active_model
 
         model_content.addLayout(model_text, 1)
@@ -1233,7 +1237,7 @@ class DashboardPage(QWidget):
         online_tile, online_value = (
             self._stat_tile(
                 "video",
-                "good",
+                "muted",
                 "Cameras Online",
             )
         )
@@ -1249,7 +1253,7 @@ class DashboardPage(QWidget):
         incident_tile, incident_value = (
             self._stat_tile(
                 "file-warning",
-                "warn",
+                "muted",
                 "Open Incidents",
             )
         )
@@ -1257,7 +1261,7 @@ class DashboardPage(QWidget):
         alert_tile, alert_value = (
             self._stat_tile(
                 "shield-alert",
-                "bad",
+                "muted",
                 "Active Alerts",
             )
         )
