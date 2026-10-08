@@ -167,7 +167,7 @@ QFrame#dashboardStatTile {
 }
 QFrame#dashboardStatTile:hover,
 QFrame#dashboardModelTile:hover {
-  border-color: @accent_line@;
+  border-color: @line_soft@;
   background: @veil_hover@;
 }
 
@@ -200,8 +200,8 @@ QPushButton:hover {
 }
 QPushButton:pressed { background: @veil_press@; }
 QPushButton:focus {
-  border: 2px solid @accent_line@;
-  padding: 7px 13px;
+  border: 1px solid @line@;
+  padding: 8px 14px;
 }
 QPushButton:disabled { color: @muted@; }
 QPushButton[primary="true"] {
@@ -227,7 +227,7 @@ QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover {
   border-color: @line_strong@;
 }
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {
-  border: 2px solid @accent_line@; padding: 7px 8px;
+  border: 1px solid @line_strong@; padding: 8px 9px;
 }
 QComboBox QAbstractItemView {
   background: @popup@; color: @text@;
