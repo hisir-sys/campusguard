@@ -100,6 +100,7 @@ class InAppOverlay(QFrame):
         self._close.setFixedSize(32, 32)
         self._close.clicked.connect(self._close_overlay)
         self._blur_effects = []
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         self._content = QVBoxLayout(self._panel)
         self._content.setContentsMargins(24, 20, 24, 22)
@@ -145,6 +146,9 @@ class InAppOverlay(QFrame):
         self._clear_blur()
         self.hide()
         self.clearFocus()
+        # Make the close operation deterministic even when the overlay was
+        # opened from a live camera callback.
+        self.update()
 
     def mousePressEvent(self, event) -> None:
         if not self._panel.geometry().contains(event.position().toPoint()):
@@ -321,8 +325,10 @@ class InAppOverlay(QFrame):
         else:
             self._render_camera_info()
         self._blur_background(True)
+        self.setGeometry(self.parentWidget().rect())
         self.show()
         self.raise_()
+        self.activateWindow()
         self._center()
 
     def set_camera_frame(self, image, state: str, confidence: float | None) -> None:
