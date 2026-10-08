@@ -141,7 +141,7 @@ class InAppOverlay(QFrame):
             widget = getattr(window, name, None)
             if isinstance(widget, QWidget):
                 effect = QGraphicsBlurEffect(widget)
-                effect.setBlurRadius(14)
+                effect.setBlurRadius(18)
                 widget.setGraphicsEffect(effect)
                 self._blur_effects.append((widget, effect))
 
