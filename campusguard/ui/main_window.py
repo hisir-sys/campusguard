@@ -100,6 +100,7 @@ class InAppOverlay(QFrame):
         self._close = QPushButton("×")
         self._close.setObjectName("overlayClose")
         self._close.setFixedSize(32, 32)
+        self._close.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._close.clicked.connect(self._close_overlay)
         self._blur_effects = []
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -145,7 +146,9 @@ class InAppOverlay(QFrame):
         for widget, effect in self._blur_effects:
             if widget.graphicsEffect() is effect:
                 widget.setGraphicsEffect(None)
-            effect.deleteLater()
+            # QGraphicsEffect ownership is transferred to the widget by
+            # setGraphicsEffect(). Clearing it can destroy the effect immediately,
+            # so never call deleteLater() on the old Python wrapper here.
         self._blur_effects.clear()
 
     def _close_overlay(self) -> None:
@@ -302,6 +305,7 @@ class InAppOverlay(QFrame):
         self._body_layout.addWidget(self._body)
         close = QPushButton("Close")
         close.setProperty("secondaryButton", True)
+        close.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         close.clicked.connect(self._close_overlay)
         row = QHBoxLayout()
         row.addStretch(1)
