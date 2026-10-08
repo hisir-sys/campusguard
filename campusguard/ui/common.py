@@ -415,10 +415,12 @@ class CameraFormDialog(QDialog):
     def _save(self) -> None:
         values = self._values()
         if not values["name"]:
-            QMessageBox.warning(self, "Camera name required", "Enter a name for this camera.")
+            self.validation_status.setText("Camera name required — enter a name before saving.")
+            self.validation_status.show()
             return
         if not values["source_address"]:
-            QMessageBox.warning(self, "Source address required", "Enter a camera source address.")
+            self.validation_status.setText("Source address required — enter a camera source address.")
+            self.validation_status.show()
             return
         try:
             build_capture_source(
@@ -427,7 +429,8 @@ class CameraFormDialog(QDialog):
                 CameraCredentials(values["username"], values["password"]),
             )
         except ValueError as error:
-            QMessageBox.warning(self, "Invalid camera source", str(error))
+            self.validation_status.setText(str(error))
+            self.validation_status.show()
             return
         self._form_data = values
         self.accept()
