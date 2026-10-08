@@ -1797,7 +1797,9 @@ class DashboardPage(QWidget):
         ].set_frame(
             QPixmap.fromImage(
                 image
-            )
+            ),
+            state,
+            confidence,
         )
 
     # ==================================================================
