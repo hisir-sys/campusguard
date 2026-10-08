@@ -53,13 +53,13 @@ class InAppOverlay(QFrame):
         self.setStyleSheet(
             f"""
             QFrame#inAppOverlay {{
-                background: rgba(0, 0, 0, 115);
+                background: rgba(0, 0, 0, 128);
                 border: none;
             }}
             QFrame#inAppPanel {{
-                background: {rgba(palette.glass, palette.glass_alpha)};
+                background: {rgba(palette.glass, min(225, max(185, int(palette.glass_alpha * 0.86))))};
                 border: 1px solid {rgba(palette.line, min(255, int(palette.line_alpha * 1.6)))};
-                border-radius: 26px;
+                border-radius: 28px;
             }}
             QLabel#overlayTitle {{
                 font-size: 16pt;
