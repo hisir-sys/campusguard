@@ -165,6 +165,11 @@ QFrame#dashboardStatTile {
   border: 1px solid @line_soft@;
   border-radius: 11px;
 }
+QFrame#notificationRow {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid @line_soft@;
+}
 QFrame#cameraPreview {
   background: @glass@;
   border: 1px solid @glass_line@;
