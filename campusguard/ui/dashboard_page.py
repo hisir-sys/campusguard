@@ -481,9 +481,9 @@ class DashboardPage(QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(
             0,
-            7,
             0,
-            7,
+            0,
+            0,
         )
         outer.setSpacing(0)
 
@@ -2027,9 +2027,9 @@ class DashboardPage(QWidget):
 
         outer.setContentsMargins(
             0,
+            7,
             0,
-            0,
-            0,
+            7,
         )
 
         outer.setSpacing(
