@@ -228,7 +228,9 @@ class InAppOverlay(QFrame):
         )
 
     def _present(self) -> None:
-        self._present()
+        self.show()
+        self.raise_()
+        self._center()
         target = QRect(self._panel.geometry())
         start = QRect(target)
         start.setWidth(max(240, int(target.width() * 0.965)))
