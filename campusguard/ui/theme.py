@@ -165,6 +165,19 @@ QFrame#dashboardStatTile {
   border: 1px solid @line_soft@;
   border-radius: 11px;
 }
+QFrame#cameraPreview {
+  background: @glass@;
+  border: 1px solid @glass_line@;
+  border-radius: 18px;
+}
+QLabel[videoSurface="true"] {
+  background: @field@;
+  border: 1px solid @line_soft@;
+  color: @muted@;
+}
+QFrame#cameraPreview:hover {
+  border-color: @line_strong@;
+}
 QFrame#dashboardStatTile:hover,
 QFrame#dashboardModelTile:hover {
   border-color: @line_soft@;
