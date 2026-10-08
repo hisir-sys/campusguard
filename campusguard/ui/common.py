@@ -98,9 +98,9 @@ def make_card(
     layout.setSpacing(16)
 
     shadow = QGraphicsDropShadowEffect(frame)
-    shadow.setBlurRadius(28)
-    shadow.setOffset(0, 8)
-    shadow.setColor(QColor(0, 0, 0, 72))
+    shadow.setBlurRadius(34)
+    shadow.setOffset(0, 10)
+    shadow.setColor(QColor(0, 0, 0, 88))
     frame.setGraphicsEffect(shadow)
 
     header = QHBoxLayout()
@@ -126,8 +126,16 @@ def set_status_label(label: QLabel, status: str) -> None:
         "ERROR": palette.bad,
     }
     color = colors.get(status, palette.muted)
+    label.setProperty("statusPill", True)
+    label.setProperty("tone", status.lower())
     label.setText(f"●  {status}")
-    label.setStyleSheet(f"color: {color}; font-size: 8pt; font-weight: 700;")
+    label.setStyleSheet(
+        f"color: {color}; "
+        f"background: {color}18; "
+        f"border: 1px solid {color}38; "
+        "padding: 4px 9px; border-radius: 9px; "
+        "font-size: 8pt; font-weight: 700; letter-spacing: 0.35px;"
+    )
 
 
 class CameraPreview(QFrame):
@@ -139,11 +147,12 @@ class CameraPreview(QFrame):
         self._source_pixmap: QPixmap | None = None
         self.setProperty("card", True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setMinimumHeight(230)
+        self.setMinimumHeight(238)
+        self.setObjectName("cameraPreview")
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(16, 16, 16, 16)
-        outer.setSpacing(8)
+        outer.setSpacing(10)
         header = QHBoxLayout()
         labels = QVBoxLayout()
         labels.setSpacing(1)
@@ -164,13 +173,13 @@ class CameraPreview(QFrame):
         self.video_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.video_label.setMinimumHeight(130)
         self.video_label.setProperty("videoSurface", True)
-        self.video_label.setStyleSheet("border-radius: 10px; font-size: 9pt;")
+        self.video_label.setStyleSheet("border-radius: 12px; font-size: 9pt; padding: 1px;")
         self.video_label.setScaledContents(False)
         outer.addWidget(self.video_label, 1)
 
         self.meta_label = QLabel("FPS: N/A    Resolution: N/A    AI: starting")
         self.meta_label.setProperty("muted", True)
-        self.meta_label.setStyleSheet("font-size: 8pt;")
+        self.meta_label.setStyleSheet("font-size: 8pt; letter-spacing: 0.15px;")
         outer.addWidget(self.meta_label)
 
     def set_camera(self, camera: CameraConfig) -> None:
