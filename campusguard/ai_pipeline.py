@@ -326,7 +326,7 @@ class VisionPipeline:
         self.cached_people.clear()
 
     def _load_yolo(self, component: str, model_path: str, task: str):
-        path = Path(model_path).expanduser()
+        path = resolve_model_path(model_path)
         if not model_path.strip() or not path.is_file():
             self.status(component, f"MODEL NOT LOADED — file not found: {path}")
             return None
