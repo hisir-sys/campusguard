@@ -1510,6 +1510,9 @@ class DashboardPage(QWidget):
 
                     self._empty_label = None
 
+                elif widget.objectName() == "offlineCameraTile":
+                    widget.deleteLater()
+
                 else:
                     widget.setParent(
                         None
@@ -1518,7 +1521,6 @@ class DashboardPage(QWidget):
         # Always render two equal panes in the default wall. A missing
         # source is shown as an OFFLINE pane only; it is not a fake camera
         # configuration and does not start any capture worker.
-        self._offline_tiles.clear()
         display_widgets: list[QWidget] = [
             self._tiles[camera.camera_id] for camera in cameras
         ]
