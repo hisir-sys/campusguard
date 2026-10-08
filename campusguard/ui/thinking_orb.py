@@ -3,16 +3,15 @@ from __future__ import annotations
 import math
 
 from PySide6.QtCore import QPointF, QTimer, Qt
-from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 
 class ThinkingOrb(QWidget):
-    """Lightweight Qt port inspired by Jakub Antalik's thinking-orbs.
+    """Qt rendering inspired by the MIT-licensed thinking-orbs project.
 
-    CampusGuard uses its own Qt painter implementation rather than bringing a
-    browser/React runtime into the desktop app. The source project is MIT
-    licensed; this widget is an original Qt rendering adapted for CampusGuard.
+    CampusGuard uses an original painter implementation of the repository's
+    dotted-globe/searching visual so the desktop app stays dependency-light.
     """
 
     def __init__(self, parent: QWidget | None = None, size: int = 56) -> None:
@@ -28,42 +27,70 @@ class ThinkingOrb(QWidget):
         self._timer.start()
 
     def _tick(self) -> None:
-        self._phase = (self._phase + 0.055) % (math.tau)
+        self._phase = (self._phase + 0.038) % math.tau
         self.update()
 
     def paintEvent(self, event) -> None:
         del event
-        size = min(self.width(), self.height())
-        cx = self.width() / 2.0
-        cy = self.height() / 2.0
-        radius = size * 0.30
+
+        width = float(self.width())
+        height = float(self.height())
+        cx = width * 0.5
+        cy = height * 0.5
+        radius = min(width, height) * 0.34
 
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setPen(Qt.PenStyle.NoPen)
 
-        # A restrained monochrome orb that fits CampusGuard's indigo/slate UI.
-        accent = QColor("#6F8CFF")
-        soft = QColor("#AFC0FF")
+        # Monochrome dotted globe: latitude rings + a rotating longitude scan.
+        # This follows the visual language of the "searching" orb in
+        # Jakub Antalik's thinking-orbs project without embedding its web code.
+        ink = QColor("#E3E9F2")
+        soft = QColor("#AEB8C7")
 
-        for ring, count in enumerate((18, 24, 30)):
-            ring_phase = self._phase * (0.82 + ring * 0.12) + ring * 1.45
-            ring_radius = radius * (0.55 + ring * 0.22)
-            for index in range(count):
-                angle = math.tau * index / count + ring_phase
-                wobble = 1.0 + 0.10 * math.sin(self._phase * 1.7 + index * 0.55 + ring)
-                x = cx + math.cos(angle) * ring_radius * wobble
-                y = cy + math.sin(angle) * ring_radius * 0.62 * wobble
+        latitudes = (-0.82, -0.52, -0.22, 0.10, 0.40, 0.68)
+        columns = 30
 
-                depth = (math.sin(angle) + 1.0) * 0.5
-                dot = 1.0 + depth * 1.15
-                alpha = int(70 + depth * 145)
-                color = QColor(accent if ring != 1 else soft)
+        for row, latitude in enumerate(latitudes):
+            y = cy + latitude * radius * 0.86
+            ring_scale = math.sqrt(max(0.05, 1.0 - latitude * latitude))
+            row_phase = self._phase * (0.20 + row * 0.018)
+
+            for index in range(columns):
+                angle = math.tau * index / columns + row_phase
+                x = cx + math.sin(angle) * radius * ring_scale
+                z = math.cos(angle) * ring_scale
+                depth = (z + 1.0) * 0.5
+                dot = 0.75 + depth * 0.95
+                alpha = int(48 + depth * 150)
+
+                color = QColor(ink if row % 2 else soft)
                 color.setAlpha(alpha)
-
-                painter.setPen(Qt.PenStyle.NoPen)
                 painter.setBrush(color)
                 painter.drawEllipse(QPointF(x, y), dot, dot)
 
+        # A brighter dotted meridian sweeps around the sphere.
+        scan = self._phase * 1.35
+        for index in range(34):
+            t = index / 33.0
+            latitude = -0.95 + t * 1.9
+            y = cy + latitude * radius * 0.86
+            ring_scale = math.sqrt(max(0.04, 1.0 - min(1.0, latitude * latitude)))
+            angle = scan + latitude * 0.9
+            x = cx + math.sin(angle) * radius * ring_scale
+            depth = (math.cos(angle) + 1.0) * 0.5
+
+            color = QColor("#F2F5FA")
+            color.setAlpha(int(90 + depth * 150))
+            dot = 0.9 + depth * 1.15
+            painter.setBrush(color)
+            painter.drawEllipse(QPointF(x, y), dot, dot)
+
+        center = QColor("#F5F7FB")
+        center.setAlpha(205)
+        painter.setBrush(center)
+        painter.drawEllipse(QPointF(cx, cy), 1.8, 1.8)
         painter.end()
 
     def stop(self) -> None:
