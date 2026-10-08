@@ -16,7 +16,7 @@ class StartupWindow(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("CampusGuard")
-        self.setFixedSize(460, 360)
+        self.setFixedSize(360, 360)
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowStaysOnTopHint
@@ -24,61 +24,25 @@ class StartupWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
 
         panel = QFrame(self)
-        panel.setGeometry(0, 0, 460, 360)
+        panel.setGeometry(0, 0, 360, 360)
         panel.setStyleSheet(
             """
             QFrame {
                 background: #0C1116;
-                border: 1px solid rgba(255,255,255,0.10);
-                border-radius: 24px;
-            }
-            QLabel#brand {
-                color: #F3F6FA;
-                font-size: 19pt;
-                font-weight: 700;
-                background: transparent;
-                border: none;
-            }
-            QLabel#status {
-                color: #778391;
-                font-size: 9pt;
-                background: transparent;
-                border: none;
-            }
-            QLabel#hint {
-                color: #526FD6;
-                font-size: 8pt;
-                font-weight: 600;
-                background: transparent;
-                border: none;
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 28px;
             }
             """
         )
 
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(32, 28, 32, 28)
-        layout.setSpacing(8)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        orb = ThinkingOrb(size=112)
-        orb.setToolTip("CampusGuard AI engine")
+        orb = ThinkingOrb(size=154)
+        orb.setAccessibleName("CampusGuard startup animation")
         layout.addWidget(orb, 0, Qt.AlignmentFlag.AlignCenter)
-
-        brand = QLabel("CampusGuard")
-        brand.setObjectName("brand")
-        brand.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(brand)
-
-        status = QLabel("Initializing security operations")
-        status.setObjectName("status")
-        status.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(status)
-
-        hint = QLabel("AI ENGINE  •  READYING")
-        hint.setObjectName("hint")
-        hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(hint)
-
         self.orb = orb
 
     def closeEvent(self, event) -> None:
