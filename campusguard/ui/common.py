@@ -150,69 +150,59 @@ class CameraPreview(QFrame):
         self.setMinimumHeight(238)
         self.setObjectName("cameraPreview")
 
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(16, 16, 16, 16)
-        outer.setSpacing(10)
-        header = QHBoxLayout()
-        labels = QVBoxLayout()
-        labels.setSpacing(1)
-        self.name_label = QLabel(camera.name)
-        self.name_label.setStyleSheet("font-weight: 700;")
-        self.id_label = QLabel(camera.camera_id)
-        self.id_label.setProperty("muted", True)
-        labels.addWidget(self.name_label)
-        labels.addWidget(self.id_label)
-        self.status_label = QLabel()
-        set_status_label(self.status_label, "CONNECTING")
-        header.addLayout(labels)
-        header.addStretch(1)
-        header.addWidget(self.status_label)
-        outer.addLayout(header)
-
+        # The dashboard tile is now a clean footage surface. Camera identity
+        # lives inside the footage instead of consuming a separate header row.
         self.video_label = QLabel("Waiting for camera frames")
         self.video_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.video_label.setMinimumHeight(130)
         self.video_label.setProperty("videoSurface", True)
-        self.video_label.setStyleSheet("border-radius: 12px; font-size: 9pt; padding: 1px;")
+        self.video_label.setStyleSheet(
+            "border-radius: 14px; font-size: 9pt; padding: 1px;"
+        )
         self.video_label.setScaledContents(False)
+
+        self.name_overlay = QLabel(camera.name, self)
+        self.name_overlay.setStyleSheet(
+            "background: rgba(5, 9, 12, 190); color: white; "
+            "border-radius: 9px; padding: 5px 9px; font-weight: 700;"
+        )
+        self.name_overlay.raise_()
+
+        self.status_overlay = QLabel("CONNECTING", self)
+        self.status_overlay.setStyleSheet(
+            "background: rgba(5, 9, 12, 190); color: white; "
+            "border-radius: 9px; padding: 5px 9px; font-size: 8pt; font-weight: 700;"
+        )
+        self.status_overlay.raise_()
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(8, 8, 8, 8)
+        outer.setSpacing(0)
         outer.addWidget(self.video_label, 1)
-
-        self.meta_label = QLabel("FPS: N/A    Resolution: N/A    AI: starting")
-        self.meta_label.setProperty("muted", True)
-        self.meta_label.setStyleSheet("font-size: 8pt; letter-spacing: 0.15px;")
-        outer.addWidget(self.meta_label)
-
-        self.ai_state_label = QLabel("AI: starting")
-        self.ai_state_label.setProperty("muted", True)
-        self.ai_state_label.setStyleSheet("font-size: 8pt; font-weight: 650; letter-spacing: 0.15px;")
-        outer.addWidget(self.ai_state_label)
 
     def set_camera(self, camera: CameraConfig) -> None:
         self.camera_id = camera.camera_id
-        self.name_label.setText(camera.name)
-        self.id_label.setText(camera.camera_id)
+        self.name_overlay.setText(camera.name)
 
     def set_status(self, stats: CameraStats, ai_enabled: bool) -> None:
-        set_status_label(self.status_label, stats.status)
-        fps = f"{stats.fps:.1f}" if stats.fps is not None else "N/A"
-        ai_text = "enabled" if ai_enabled else "off"
-        self.meta_label.setText(
-            f"FPS: {fps}    Resolution: {stats.resolution}    AI: {ai_text}"
-        )
+        set_status_label(self.status_overlay, stats.status)
+        self.status_overlay.setText(stats.status or "OFFLINE")
         if stats.status != "LIVE":
             self._source_pixmap = None
             self.video_label.setPixmap(QPixmap())
             self.video_label.setText(
                 stats.message
-                or ("Connecting to camera…" if stats.status == "CONNECTING" else "Waiting for camera frames")
+                or (
+                    "CONNECTING…" if stats.status == "CONNECTING"
+                    else "OFFLINE"
+                )
             )
-            self.ai_state_label.setText("AI: waiting for live frames")
         elif self._source_pixmap is None:
             self.video_label.setText("Waiting for camera frames")
+        self._position_overlays()
 
     def set_model_status(self, message: str) -> None:
-        if message:
-            self.ai_state_label.setText(f"AI: {message}")
+        # AI diagnostics no longer occupy dashboard tile space.
+        return
 
     def set_frame(
         self,
@@ -221,20 +211,33 @@ class CameraPreview(QFrame):
         confidence: float | None = None,
     ) -> None:
         self._source_pixmap = pixmap
-        if confidence is None:
-            self.ai_state_label.setText(f"AI: {state}")
-        else:
-            self.ai_state_label.setText(f"AI: {state}  ·  {confidence:.0%}")
         self._scale_pixmap()
+        self._position_overlays()
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self._scale_pixmap()
+        self._position_overlays()
 
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
             self.selected.emit(self.camera_id)
         super().mousePressEvent(event)
+
+    def _position_overlays(self) -> None:
+        if not hasattr(self, "video_label"):
+            return
+        rect = self.video_label.geometry()
+        bottom = rect.bottom() - 10
+        self.name_overlay.adjustSize()
+        self.status_overlay.adjustSize()
+        self.name_overlay.move(rect.left() + 12, max(rect.top() + 8, bottom - self.name_overlay.height()))
+        self.status_overlay.move(
+            max(rect.left() + 12, rect.right() - self.status_overlay.width() - 12),
+            max(rect.top() + 8, bottom - self.status_overlay.height()),
+        )
+        self.name_overlay.raise_()
+        self.status_overlay.raise_()
 
     def _scale_pixmap(self) -> None:
         if self._source_pixmap is None:
