@@ -4,6 +4,7 @@ from collections import deque
 from dataclasses import dataclass, field
 import copy
 import os
+import sys
 from pathlib import Path
 from time import perf_counter
 from typing import Callable
@@ -17,6 +18,29 @@ from campusguard.settings import AppSettings
 
 ModelStatusCallback = Callable[[str, str], None]
 Event = tuple[str, float, str]
+
+
+def resolve_model_path(value: str) -> Path:
+    """Resolve bundled model paths independently of the process working directory."""
+    raw = Path(value).expanduser()
+    if raw.is_absolute():
+        return raw
+
+    # PyInstaller extracts bundled data below _MEIPASS at runtime.
+    bundle_root = getattr(sys, "_MEIPASS", None)
+    if bundle_root:
+        bundled = Path(bundle_root) / raw
+        if bundled.is_file():
+            return bundled
+
+    # Source checkout: resolve relative to the project root, not the user's
+    # current PowerShell/shortcut working directory.
+    project_root = Path(__file__).resolve().parents[1]
+    project_file = project_root / raw
+    if project_file.is_file():
+        return project_file
+
+    return raw
 
 # Detection confidence is deliberately independent from the 65% violence
 # decision threshold so lower-confidence people can still be tracked.
