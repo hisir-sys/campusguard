@@ -464,8 +464,9 @@ class MainWindow(QMainWindow):
         workspace.addWidget(self.stack, 1)
 
         dock_row = QHBoxLayout()
-        dock_row.setContentsMargins(0, 0, 0, 2)
+        dock_row.setContentsMargins(0, 0, 0, 4)
         dock_row.setSpacing(0)
+        dock_row.setMinimumHeight(82)
         dock_row.addStretch(1)
         self.bottom_bar = BottomBar()
         dock_row.addWidget(self.bottom_bar, 0, Qt.AlignmentFlag.AlignCenter)
