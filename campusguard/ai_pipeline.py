@@ -337,6 +337,8 @@ class VisionPipeline:
             self._clear_involvement([])
             self.cached_people.clear()
             self.decision.reset()
+            for classifier in self.classifiers.values():
+                classifier.reset()
             self.last_state, self.last_confidence = "AI DISABLED", None
             self.last_process_fps = 1.0 / max(perf_counter() - process_started, 1e-6)
             cv2.putText(annotated, "AI OFF", (18, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (180, 180, 180), 2, cv2.LINE_AA)
@@ -679,6 +681,11 @@ class VisionPipeline:
         self.person_scores.clear()
         self.interactions.pair_history.clear()
         self.decision.reset()
+        # A scene cut invalidates the temporal clip as well as tracking state.
+        # Never allow frames from the previous scene to contribute to the next
+        # violence prediction.
+        for classifier in self.classifiers.values():
+            classifier.reset()
         self.last_involved_ids.clear()
         self.cached_people.clear()
 
