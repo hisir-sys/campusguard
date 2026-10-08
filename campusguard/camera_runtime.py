@@ -514,16 +514,21 @@ class CameraTestThread(QThread):
 
 
 class LocalVideoTestThread(QThread):
-    """Play one local video through the production AI pipeline without creating camera records."""
+    """Play one local video through the production AI pipeline and expose events."""
 
     frame_ready = Signal(QImage, str, object)
     status_changed = Signal(str)
     model_status = Signal(str, str)
+    event_detected = Signal(str, float, str)
+    footage_saved = Signal(str)
 
     def __init__(self, video_path: str, settings: AppSettings) -> None:
         super().__init__()
         self.video_path = video_path
         self.settings = settings
+        self.footage_recorder = FightFootageRecorder(
+            application_data_dir() / "footage"
+        )
 
     def run(self) -> None:
         capture = None
@@ -560,7 +565,7 @@ class LocalVideoTestThread(QThread):
                 if not ok or frame is None or frame.size == 0:
                     break
 
-                processed, state, confidence, _ = pipeline.process(
+                processed, state, confidence, event = pipeline.process(
                     frame,
                     test_settings,
                     True,
@@ -579,6 +584,19 @@ class LocalVideoTestThread(QThread):
                 ).copy()
                 self.frame_ready.emit(image, state, confidence)
 
+                finished_footage = self.footage_recorder.update(
+                    frame,
+                    state,
+                    event_started=event is not None,
+                    source_fps=fps,
+                )
+                if finished_footage is not None:
+                    self.footage_saved.emit(str(finished_footage))
+
+                if event is not None:
+                    event_name, event_confidence, severity = event
+                    self.event_detected.emit(event_name, event_confidence, severity)
+
                 next_frame_time += frame_interval
                 delay = next_frame_time - time.monotonic()
                 if delay > 0:
@@ -593,6 +611,9 @@ class LocalVideoTestThread(QThread):
         except Exception as error:
             self.status_changed.emit(f"ERROR — {error}")
         finally:
+            finished_footage = self.footage_recorder.stop()
+            if finished_footage is not None:
+                self.footage_saved.emit(str(finished_footage))
             if capture is not None:
                 capture.release()
 
