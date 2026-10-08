@@ -954,7 +954,10 @@ class _DockButton(QAbstractButton):
 
         icon_size = 20
         color = mix_colors(QColor(pal.text_dim), QColor(pal.text), max(reveal, self._active * 0.55))
-        icon_x = (w - icon_size) / 2.0
+        # Keep the icon and label in separate horizontal zones while hovered.
+        # Previously the icon stayed centered even after the button widened,
+        # causing it to overlap the label.
+        icon_x = 18.0 if w > 90 else (w - icon_size) / 2.0
         painter.drawPixmap(QPointF(icon_x, (h - icon_size) / 2), icon_pixmap(self._icon, icon_size, color.name()))
 
         if w > 90:
