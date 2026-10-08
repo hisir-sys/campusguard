@@ -1055,9 +1055,9 @@ class DashboardPage(QWidget):
 
         if self._dashboard_blur is not None:
             self._dashboard_content.setGraphicsEffect(None)
-        self._clear_navigation_blur()
             self._dashboard_blur.deleteLater()
             self._dashboard_blur = None
+        self._clear_navigation_blur()
 
         self._dashboard_content.update()
 
