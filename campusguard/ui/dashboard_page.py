@@ -697,8 +697,8 @@ class DashboardPage(QWidget):
 
     def _build_engine_card(self) -> QFrame:
         frame, layout = make_card("AI Engine", icon="cpu")
-        frame.setMinimumHeight(222)
-        frame.setMaximumHeight(222)
+        frame.setMinimumHeight(170)
+        frame.setMaximumHeight(170)
         frame.setCursor(Qt.CursorShape.PointingHandCursor)
         frame.installEventFilter(self)
         for child in frame.findChildren(QWidget):
@@ -715,11 +715,6 @@ class DashboardPage(QWidget):
         )
         layout.addWidget(active_model)
         self.engine_values["violence_model"] = active_model
-
-        rows = (
-            ("status", "Status"),
-            ("device", "Compute"),
-        )
 
         rows = (
             ("status", "Status"),
