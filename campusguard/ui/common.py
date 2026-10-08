@@ -12,7 +12,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QMessageBox,
     QPushButton,
     QScrollArea,
     QVBoxLayout,
@@ -281,6 +280,12 @@ class CameraFormDialog(QDialog):
         self.test_status = QLabel("Connection has not been tested.")
         self.test_status.setProperty("muted", True)
         root.addWidget(self.test_status)
+
+        self.validation_status = QLabel()
+        self.validation_status.setProperty("tone", "bad")
+        self.validation_status.setWordWrap(True)
+        self.validation_status.hide()
+        root.addWidget(self.validation_status)
         buttons = QDialogButtonBox()
         self.test_button = buttons.addButton(
             "Test Connection", QDialogButtonBox.ButtonRole.ActionRole
@@ -376,8 +381,12 @@ class CameraFormDialog(QDialog):
     def _test_connection(self) -> None:
         values = self._values()
         if not values["source_address"]:
-            QMessageBox.warning(self, "Source address required", "Select a detected camera or enter its device index.")
+            self.validation_status.setText(
+                "Source address required — select a detected camera or enter its device index."
+            )
+            self.validation_status.show()
             return
+        self.validation_status.hide()
         credentials = CameraCredentials(values["username"], values["password"])
         self._test_thread = CameraTestThread(
             values["source_type"],
