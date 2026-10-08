@@ -42,6 +42,7 @@ from campusguard.ui.theme import get_palette, rgba
 
 class InAppOverlay(QFrame):
     confirmed = Signal()
+    closed = Signal()
 
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent)
@@ -142,12 +143,14 @@ class InAppOverlay(QFrame):
         self._blur_effects.clear()
 
     def _close_overlay(self) -> None:
+        # Centralize every dismissal path. A live camera popup must clear the
+        # camera-view state at the same moment the glass layer disappears.
         self._confirm_callback = None
+        self._camera_view_camera_id = None
         self._clear_blur()
         self.hide()
         self.clearFocus()
-        # Make the close operation deterministic even when the overlay was
-        # opened from a live camera callback.
+        self.closed.emit()
         self.update()
 
     def mousePressEvent(self, event) -> None:
@@ -559,6 +562,7 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(central)
         self._in_app_overlay = InAppOverlay(central)
+        self._in_app_overlay.closed.connect(self._on_overlay_closed)
         self._in_app_overlay.hide()
         self.statusBar().setSizeGripEnabled(False)
         self._connect_pages()
@@ -958,10 +962,16 @@ class MainWindow(QMainWindow):
         elif page == "cameras":
             self._sync_cameras()
 
+    def _on_overlay_closed(self) -> None:
+        # Keep MainWindow camera-view state synchronized with the overlay.
+        self._camera_view_camera_id = None
+
     def open_camera(self, camera_id: str) -> None:
         camera = self.cameras.get(camera_id)
         if camera is None:
             return
+        if self._in_app_overlay.isVisible():
+            self._in_app_overlay._close_overlay()
         self._camera_view_camera_id = camera_id
         self._in_app_overlay.show_camera(
             camera,
