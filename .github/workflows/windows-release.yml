@@ -61,6 +61,11 @@ jobs:
           Write-Host "CampusGuard.exe size: $size bytes"
           if ($size -lt 1000000) { throw "Executable is unexpectedly small." }
 
+      - name: Create executable checksum
+        shell: pwsh
+        run: |
+          (Get-FileHash "dist\\CampusGuard.exe" -Algorithm SHA256).Hash | Set-Content checksum.txt
+
       - name: Publish rolling latest release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -68,7 +73,7 @@ jobs:
         run: |
           gh release delete latest --yes 2>$null
           git push origin --delete latest 2>$null
-          gh release create latest "dist/CampusGuard.exe" "version.txt" --target "${{ github.sha }}" --title "CampusGuard Latest" --notes "${{ github.run_number }}"
+          gh release create latest "dist/CampusGuard.exe" "version.txt" "checksum.txt" --target "${{ github.sha }}" --title "CampusGuard Latest" --notes "${{ github.run_number }}"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -77,3 +82,4 @@ jobs:
           path: |
             dist/CampusGuard.exe
             version.txt
+            checksum.txt
