@@ -4,7 +4,7 @@ from dataclasses import replace
 import threading
 
 from PySide6.QtGui import QAction, QKeySequence, QPixmap
-from PySide6.QtCore import QEvent, QTimer, Qt, Signal
+from PySide6.QtCore import QEvent, QEasingCurve, QPropertyAnimation, QRect, QTimer, Qt, Signal
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -53,13 +53,13 @@ class InAppOverlay(QFrame):
         self.setStyleSheet(
             f"""
             QFrame#inAppOverlay {{
-                background: rgba(0, 0, 0, 128);
+                background: rgba(0, 0, 0, 140);
                 border: none;
             }}
             QFrame#inAppPanel {{
-                background: {rgba(palette.glass, min(225, max(185, int(palette.glass_alpha * 0.86))))};
-                border: 1px solid {rgba(palette.line, min(255, int(palette.line_alpha * 1.6)))};
-                border-radius: 28px;
+                background: {rgba(palette.glass, min(220, max(178, int(palette.glass_alpha * 0.82))))};
+                border: 1px solid {rgba(palette.line, min(255, int(palette.line_alpha * 2.3)))};
+                border-radius: 30px;
             }}
             QLabel#overlayTitle {{
                 font-size: 16pt;
@@ -103,6 +103,9 @@ class InAppOverlay(QFrame):
         self._close.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._close.clicked.connect(self._close_overlay)
         self._blur_effects = []
+        self._panel_animation = QPropertyAnimation(self._panel, b"geometry", self)
+        self._panel_animation.setDuration(210)
+        self._panel_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_NoMouseReplay, True)
@@ -155,6 +158,7 @@ class InAppOverlay(QFrame):
         # Centralize every dismissal path. A live camera popup must clear the
         # camera-view state at the same moment the glass layer disappears.
         self._confirm_callback = None
+        self._panel_animation.stop()
         self._clear_blur()
         self.hide()
         self.clearFocus()
@@ -222,6 +226,19 @@ class InAppOverlay(QFrame):
             max(18, (self.width() - self._panel.width()) // 2),
             max(18, (self.height() - self._panel.height()) // 2),
         )
+
+    def _present(self) -> None:
+        self._present()
+        target = QRect(self._panel.geometry())
+        start = QRect(target)
+        start.setWidth(max(240, int(target.width() * 0.965)))
+        start.setHeight(max(220, int(target.height() * 0.965)))
+        start.moveCenter(target.center())
+        self._panel_animation.stop()
+        self._panel.setGeometry(start)
+        self._panel_animation.setStartValue(start)
+        self._panel_animation.setEndValue(target)
+        self._panel_animation.start()
 
     def show_confirmation(self, title: str, message: str, callback) -> None:
         self._confirm_callback = callback
@@ -351,10 +368,8 @@ class InAppOverlay(QFrame):
             self._render_camera_info()
         self._blur_background(True)
         self.setGeometry(self.parentWidget().rect())
-        self.show()
-        self.raise_()
+        self._present()
         self.activateWindow()
-        self._center()
 
     def set_camera_frame(self, image, state: str, confidence: float | None) -> None:
         if not hasattr(self, "_camera_viewport") or not self.isVisible():
