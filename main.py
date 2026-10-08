@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 
+from campusguard.updater import handle_update_arguments, maybe_update
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication, QFrame, QLabel, QVBoxLayout, QWidget
@@ -86,6 +87,13 @@ class StartupWindow(QWidget):
 
 
 def main() -> int:
+    update_result = handle_update_arguments(sys.argv)
+    if update_result is not None:
+        return update_result
+
+    if getattr(sys, "frozen", False) and maybe_update():
+        return 0
+
     app = QApplication(sys.argv)
     app.setApplicationName("CampusGuard")
     app.setOrganizationName("CampusGuard")
