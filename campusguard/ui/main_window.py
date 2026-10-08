@@ -6,6 +6,7 @@ import threading
 from PySide6.QtGui import QAction, QKeySequence, QPixmap
 from PySide6.QtCore import QEvent, QTimer, Qt, Signal
 from PySide6.QtWidgets import (
+    QApplication,
     QFrame,
     QGraphicsBlurEffect,
     QHBoxLayout,
@@ -102,6 +103,10 @@ class InAppOverlay(QFrame):
         self._close.clicked.connect(self._close_overlay)
         self._blur_effects = []
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        app = QApplication.instance()
+        if app is not None:
+            app.installEventFilter(self)
 
         self._content = QVBoxLayout(self._panel)
         self._content.setContentsMargins(24, 20, 24, 22)
@@ -146,7 +151,6 @@ class InAppOverlay(QFrame):
         # Centralize every dismissal path. A live camera popup must clear the
         # camera-view state at the same moment the glass layer disappears.
         self._confirm_callback = None
-        self._camera_view_camera_id = None
         self._clear_blur()
         self.hide()
         self.clearFocus()
@@ -169,8 +173,18 @@ class InAppOverlay(QFrame):
 
     def eventFilter(self, watched, event) -> bool:
         if event.type() == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Escape:
-            self._close_overlay()
-            return True
+            if self.isVisible():
+                self._close_overlay()
+                return True
+        if event.type() == QEvent.Type.MouseButtonPress and self.isVisible():
+            try:
+                point = event.globalPosition().toPoint()
+                local = self.mapFromGlobal(point)
+                if not self._panel.geometry().contains(local):
+                    self._close_overlay()
+                    return False
+            except AttributeError:
+                pass
         return super().eventFilter(watched, event)
 
     def hideEvent(self, event) -> None:
