@@ -496,8 +496,8 @@ class DashboardPage(QWidget):
             self._dashboard_content
         )
 
-        root.setContentsMargins(24, 24, 24, 104)
-        root.setSpacing(24)
+        root.setContentsMargins(24, 20, 24, 84)
+        root.setSpacing(18)
 
         # --------------------------------------------------------------
         # Operations overview
@@ -515,19 +515,19 @@ class DashboardPage(QWidget):
         self._notifications_card = self._build_notifications_card()
         self._network_card = self._build_network_card()
 
-        self._engine_card.setMinimumHeight(228)
-        self._engine_card.setMaximumHeight(228)
-        self._stats_card.setMinimumHeight(228)
-        self._stats_card.setMaximumHeight(228)
-        self._notifications_card.setMinimumHeight(228)
-        self._notifications_card.setMaximumHeight(228)
+        self._engine_card.setMinimumHeight(190)
+        self._engine_card.setMaximumHeight(190)
+        self._stats_card.setMinimumHeight(190)
+        self._stats_card.setMaximumHeight(190)
+        self._notifications_card.setMinimumHeight(190)
+        self._notifications_card.setMaximumHeight(190)
 
         main_row.addWidget(self._engine_card, 11)
         main_row.addWidget(self._stats_card, 11)
         main_row.addWidget(self._notifications_card, 15)
         root.addLayout(main_row, 0)
 
-        self._network_card.setMinimumHeight(300)
+        self._network_card.setMinimumHeight(360)
         root.addWidget(self._network_card, 1)
 
         # Keep the dashboard workspace scrollable so the fixed bottom
@@ -927,18 +927,12 @@ class DashboardPage(QWidget):
         )
 
         self.feed_scroll = QScrollArea()
-
-        self.feed_scroll.setWidgetResizable(
-            True
-        )
-
-        self.feed_scroll.setFrameShape(
-            QFrame.Shape.NoFrame
-        )
-
-        self.feed_scroll.viewport().setAutoFillBackground(
-            False
-        )
+        self.feed_scroll.setObjectName("liveNetworkScroll")
+        self.feed_scroll.setWidgetResizable(True)
+        self.feed_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.feed_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.feed_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.feed_scroll.viewport().setAutoFillBackground(False)
 
         self.feed_content = QWidget()
 
@@ -1713,18 +1707,32 @@ class DashboardPage(QWidget):
                         None
                     )
 
-        for index, camera in enumerate(
-            cameras
-        ):
-
-            # CampusGuard's primary dashboard is a four-camera 2×2
-            # security wall. Additional cameras continue onto later rows.
+        # The normal dashboard state is a compact two-camera wall:
+        # camera 1 on the left and camera 2 on the right. It remains
+        # non-scrollable while there are only two cameras. Once more than
+        # two cameras exist, the same two-column wall becomes vertically
+        # scrollable and naturally forms a 2×2, 2×N security grid.
+        for index, camera in enumerate(cameras):
             self._camera_grid.addWidget(
-                self._tiles[
-                    camera.camera_id
-                ],
+                self._tiles[camera.camera_id],
                 index // 2,
                 index % 2,
+            )
+
+        if len(cameras) <= 2:
+            self.feed_scroll.setVerticalScrollBarPolicy(
+                Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            )
+            self.feed_content.setMinimumHeight(0)
+        else:
+            self.feed_scroll.setVerticalScrollBarPolicy(
+                Qt.ScrollBarPolicy.ScrollBarAsNeeded
+            )
+            self.feed_content.setMinimumHeight(
+                max(
+                    self.feed_scroll.viewport().height(),
+                    ((len(cameras) + 1) // 2) * 260,
+                )
             )
 
         count = len(
