@@ -602,7 +602,10 @@ class _HistoryPopup(QWidget):
         )
         self.popup.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
-        self.popup.setMinimumSize(920, 560)
+        self.popup.setMinimumWidth(720)
+        self.popup.setMaximumWidth(1180)
+        self.popup.setMinimumHeight(0)
+        self.popup.setMaximumHeight(720)
 
         self.popup.setProperty(
             "card",
@@ -793,10 +796,24 @@ class _HistoryPopup(QWidget):
 
     def show_popup(self) -> None:
         parent_rect = self.parentWidget().rect()
-        width = min(1320, max(920, int(parent_rect.width() * 0.88)))
-        height = min(760, max(560, int(parent_rect.height() * 0.78)))
         self.setGeometry(parent_rect)
-        self.popup.setFixedSize(width, height)
+
+        # Size from the actual content first. Large footage/history content
+        # may use more room, but ordinary text stays compact.
+        self.popup.adjustSize()
+        width = min(
+            1180,
+            max(720, self.popup.sizeHint().width()),
+        )
+        height = min(
+            720,
+            max(0, self.popup.sizeHint().height()),
+        )
+        self.popup.resize(width, height)
+        self.popup.move(
+            max(20, (parent_rect.width() - width) // 2),
+            max(20, (parent_rect.height() - height) // 2),
+        )
 
         self.show()
         self.raise_()
