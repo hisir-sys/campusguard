@@ -151,6 +151,8 @@ class GlassPopup(QFrame):
         self.close_button = QLabel("×")
         self.close_button.setObjectName("popupClose")
         self.close_button.setFixedSize(30, 30)
+        self.close_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.close_button.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.close_button.setAlignment(
             Qt.AlignmentFlag.AlignCenter
         )
@@ -1002,7 +1004,8 @@ class DashboardPage(QWidget):
         for widget, effect in self._navigation_blurs:
             if widget.graphicsEffect() is effect:
                 widget.setGraphicsEffect(None)
-            effect.deleteLater()
+            # setGraphicsEffect(None) may already destroy the effect;
+            # do not schedule a second deletion of its Python wrapper.
         self._navigation_blurs.clear()
     def _open_popup(
         self,
@@ -1053,7 +1056,8 @@ class DashboardPage(QWidget):
         if self._dashboard_blur is not None:
             if self._dashboard_content.graphicsEffect() is self._dashboard_blur:
                 self._dashboard_content.setGraphicsEffect(None)
-            self._dashboard_blur.deleteLater()
+            # Clearing the effect transfers/destroys its Qt ownership.
+            # Do not call deleteLater() on the wrapper afterwards.
             self._dashboard_blur = None
 
         # Always clear navigation blur even if the popup was already hidden.
