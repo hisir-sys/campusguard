@@ -870,11 +870,18 @@ class VisionPipeline:
             )
         }
 
-        # For scene-level MC3, the classifier decides whether the scene is violent;
-        # tracking/interaction only supplies optional visual attribution. Proximity
-        # is never treated as proof of violence on its own.
+        # For scene-level MC3/Spontim, the fight confidence belongs to the
+        # whole scene, not to an individual crop. When the scene classifier says
+        # FIGHT DETECTED, highlight the currently detected people so the operator
+        # can immediately see which boxes are part of the detected scene event.
+        # Most importantly, use the exact same scene confidence for those boxes
+        # that is shown in the main fight-detection HUD; never substitute the
+        # YOLO person-detection confidence (which caused misleading values such
+        # as 89% to appear repeatedly).
         if state in {"FIGHT DETECTED", "POSSIBLE ALTERCATION"}:
-            if not involved_ids and pair_ids:
+            if self.settings.violence_model in {"mc3", "fdsc_mc3"}:
+                involved_ids.update(person.track_id for person in people)
+            elif not involved_ids and pair_ids:
                 involved_ids.update(track_id for pair in pair_ids for track_id in pair)
             else:
                 for left, right in pair_ids:
@@ -885,8 +892,13 @@ class VisionPipeline:
         for person in people:
             person.involved = person.track_id in involved_ids
             if person.involved:
-                score = self.person_scores.get(person.track_id)
-                person.violence_confidence = score[1] if score else confidence
+                if self.settings.violence_model in {"mc3", "fdsc_mc3"}:
+                    # Scene-level Spontim confidence: exactly the same value
+                    # reported by the fight classifier/UI.
+                    person.violence_confidence = confidence
+                else:
+                    score = self.person_scores.get(person.track_id)
+                    person.violence_confidence = score[1] if score else confidence
             else:
                 person.violence_confidence = None
 
@@ -904,7 +916,9 @@ class VisionPipeline:
             if person.involved and person.violence_confidence is not None:
                 label += f"  {person.violence_confidence:.0%} VIOLENCE"
             else:
-                label += f"  {person.detection_confidence:.0%}"
+                # Do not display the YOLO person-detection confidence as if it
+                # were a violence/fight percentage.
+                label += "  PERSON"
 
             (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.48, 1)
             top = max(0, y1 - th - 10)
