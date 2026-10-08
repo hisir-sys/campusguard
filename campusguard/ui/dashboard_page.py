@@ -23,7 +23,6 @@ from campusguard.storage import Repository
 from campusguard.ui.common import CameraPreview, make_card, set_tone
 from campusguard.ui.icons import IconLabel
 from campusguard.ui.theme import get_palette, rgba
-from campusguard.ui.thinking_orb import ThinkingOrb
 
 
 NOTIFICATION_TONES = {
@@ -695,9 +694,6 @@ class DashboardPage(QWidget):
         self.engine_values["violence_model"] = active_model
 
         model_content.addLayout(model_text, 1)
-        self.engine_orb = ThinkingOrb(size=48)
-        self.engine_orb.setToolTip("CampusGuard AI engine is continuously active.")
-        model_content.addWidget(self.engine_orb, 0, Qt.AlignmentFlag.AlignCenter)
         model_box.addLayout(model_content)
 
         layout.addWidget(model_tile)
