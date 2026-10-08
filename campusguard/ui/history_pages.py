@@ -131,6 +131,7 @@ class FootagePlayerDialog(QWidget):
         self.playback_rate = 0.75
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._read_frame)
+        self._background_blurs: list[tuple[QWidget, QGraphicsBlurEffect]] = []
 
         path = Path(footage_path)
         if not path.is_file():
@@ -154,6 +155,7 @@ class FootagePlayerDialog(QWidget):
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
+        self._apply_background_blur()
         self.raise_()
         self.card.raise_()
         if self.capture is not None:
@@ -216,7 +218,26 @@ class FootagePlayerDialog(QWidget):
             )
         )
 
+    def _apply_background_blur(self) -> None:
+        self._clear_background_blur()
+        window = self.window()
+        for name in ("stack", "top_bar", "bottom_bar"):
+            widget = getattr(window, name, None)
+            if isinstance(widget, QWidget):
+                effect = QGraphicsBlurEffect(widget)
+                effect.setBlurRadius(14)
+                widget.setGraphicsEffect(effect)
+                self._background_blurs.append((widget, effect))
+
+    def _clear_background_blur(self) -> None:
+        for widget, effect in self._background_blurs:
+            if widget.graphicsEffect() is effect:
+                widget.setGraphicsEffect(None)
+            effect.deleteLater()
+        self._background_blurs.clear()
+
     def closeEvent(self, event) -> None:
+        self._clear_background_blur()
         self.timer.stop()
         if self.capture is not None:
             self.capture.release()
