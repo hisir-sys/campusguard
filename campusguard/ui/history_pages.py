@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QScrollArea,
+    QSlider,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -106,31 +107,76 @@ class FootagePlayerDialog(QWidget):
             "QLabel { background: #050505; border-radius: 12px; color: #AAB4C0; }"
         )
         self.video.installEventFilter(self)
+        self.video.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.video, 1)
+
+        self.capture: cv2.VideoCapture | None = None
+        self.source_fps = 30.0
+        self.playback_rate = 1.0
+        self.frame_count = 0
+        self.zoom_factor = 1.0
+        self._last_pixmap: QPixmap | None = None
+        self._seeking = False
+
+        # Timeline / seek bar.
+        self.timeline = QSlider(Qt.Orientation.Horizontal)
+        self.timeline.setObjectName("footageTimeline")
+        self.timeline.setRange(0, 0)
+        self.timeline.setSingleStep(1)
+        self.timeline.sliderPressed.connect(self._begin_seek)
+        self.timeline.sliderReleased.connect(self._finish_seek)
+        self.timeline.valueChanged.connect(self._timeline_changed)
+        layout.addWidget(self.timeline)
 
         controls = QHBoxLayout()
         controls.setSpacing(8)
+        self.play_button = QPushButton("▶ Play")
+        self.play_button.setProperty("secondaryButton", True)
+        self.play_button.clicked.connect(self._toggle_play)
+        controls.addWidget(self.play_button)
 
-        speed_label = QLabel("Playback")
+        self.rewind_button = QPushButton("↶ 5s")
+        self.rewind_button.setToolTip("Rewind five seconds")
+        self.rewind_button.clicked.connect(lambda: self._skip_seconds(-5))
+        controls.addWidget(self.rewind_button)
+
+        self.forward_button = QPushButton("5s ↷")
+        self.forward_button.setToolTip("Forward five seconds")
+        self.forward_button.clicked.connect(lambda: self._skip_seconds(5))
+        controls.addWidget(self.forward_button)
+
+        speed_label = QLabel("Speed")
         speed_label.setProperty("muted", True)
         controls.addWidget(speed_label)
-
         self.speed_combo = QComboBox()
-        self.speed_combo.addItems(["0.5×", "0.75×", "1×"])
-        self.speed_combo.setCurrentIndex(1)
-        self.speed_combo.setMinimumWidth(86)
+        self.speed_combo.addItems(["0.5×", "0.75×", "1×", "1.25×", "1.5×", "2×"])
+        self.speed_combo.setCurrentIndex(2)
+        self.speed_combo.setMinimumWidth(76)
         self.speed_combo.currentIndexChanged.connect(self._set_playback_speed)
         controls.addWidget(self.speed_combo)
-        controls.addStretch(1)
 
-        self.status_label = QLabel("")
+        controls.addWidget(QLabel("Zoom"))
+        self.zoom_out_button = QPushButton("−")
+        self.zoom_out_button.setToolTip("Zoom out")
+        self.zoom_out_button.setFixedWidth(36)
+        self.zoom_out_button.clicked.connect(lambda: self._change_zoom(-0.2))
+        controls.addWidget(self.zoom_out_button)
+        self.zoom_label = QLabel("100%")
+        self.zoom_label.setMinimumWidth(46)
+        self.zoom_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        controls.addWidget(self.zoom_label)
+        self.zoom_in_button = QPushButton("+")
+        self.zoom_in_button.setToolTip("Zoom in")
+        self.zoom_in_button.setFixedWidth(36)
+        self.zoom_in_button.clicked.connect(lambda: self._change_zoom(0.2))
+        controls.addWidget(self.zoom_in_button)
+
+        controls.addStretch(1)
+        self.status_label = QLabel("Ready")
         self.status_label.setProperty("muted", True)
         controls.addWidget(self.status_label)
         layout.addLayout(controls)
 
-        self.capture: cv2.VideoCapture | None = None
-        self.source_fps = 30.0
-        self.playback_rate = 0.75
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._read_frame)
         self._background_blurs: list[tuple[QWidget, QGraphicsBlurEffect]] = []
@@ -152,6 +198,9 @@ class FootagePlayerDialog(QWidget):
             fps = 30.0
         self.source_fps = fps
         self.capture = capture
+        self.frame_count = max(0, int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0))
+        self.timeline.setRange(0, max(0, self.frame_count - 1))
+        self.status_label.setText("00:00 / " + self._format_time(self._duration_seconds()))
         self._set_timer_interval()
         self._read_frame()
 
@@ -163,6 +212,7 @@ class FootagePlayerDialog(QWidget):
         if self.capture is not None:
             self._set_timer_interval()
             self.timer.start()
+            self.play_button.setText("Ⅱ Pause")
 
     def eventFilter(self, watched, event) -> bool:
         if watched is self.video and event.type() == QEvent.Type.MouseButtonPress:
@@ -183,8 +233,65 @@ class FootagePlayerDialog(QWidget):
             return
         super().keyPressEvent(event)
 
+    def _duration_seconds(self) -> float:
+        return self.frame_count / self.source_fps if self.frame_count > 0 else 0.0
+
+    @staticmethod
+    def _format_time(seconds: float) -> str:
+        total = max(0, int(seconds))
+        return f"{total // 60:02d}:{total % 60:02d}"
+
+    def _begin_seek(self) -> None:
+        self._seeking = True
+        self.timer.stop()
+
+    def _finish_seek(self) -> None:
+        if self.capture is not None:
+            self.capture.set(cv2.CAP_PROP_POS_FRAMES, self.timeline.value())
+            self._seeking = False
+            self._read_frame()
+            self.timer.start()
+
+    def _timeline_changed(self, frame_index: int) -> None:
+        if self.frame_count > 0:
+            current = frame_index / self.source_fps
+            self.status_label.setText(
+                f"{self._format_time(current)} / {self._format_time(self._duration_seconds())}"
+            )
+        if self._seeking and self.capture is not None:
+            self.capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+            self._read_frame()
+
+    def _toggle_play(self) -> None:
+        if self.capture is None:
+            return
+        if self.timer.isActive():
+            self.timer.stop()
+            self.play_button.setText("▶ Play")
+        else:
+            if self.frame_count and self.timeline.value() >= self.frame_count - 1:
+                self.capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                self.timeline.setValue(0)
+            self._set_timer_interval()
+            self.timer.start()
+            self.play_button.setText("Ⅱ Pause")
+
+    def _skip_seconds(self, seconds: float) -> None:
+        if self.capture is None:
+            return
+        target = int(self.capture.get(cv2.CAP_PROP_POS_FRAMES) + seconds * self.source_fps)
+        target = max(0, min(max(0, self.frame_count - 1), target))
+        self.capture.set(cv2.CAP_PROP_POS_FRAMES, target)
+        self.timeline.setValue(target)
+        self._read_frame()
+
+    def _change_zoom(self, delta: float) -> None:
+        self.zoom_factor = max(0.6, min(2.5, round(self.zoom_factor + delta, 2)))
+        self.zoom_label.setText(f"{int(self.zoom_factor * 100)}%")
+        self._display_frame()
+
     def _set_playback_speed(self, index: int) -> None:
-        rates = [0.5, 0.75, 1.0]
+        rates = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
         if 0 <= index < len(rates):
             self.playback_rate = rates[index]
             self._set_timer_interval()
@@ -193,6 +300,18 @@ class FootagePlayerDialog(QWidget):
         interval = max(10, int(round(1000.0 / self.source_fps / self.playback_rate)))
         self.timer.setInterval(interval)
 
+    def _display_frame(self) -> None:
+        if self._last_pixmap is None:
+            return
+        target = self.video.size() * self.zoom_factor
+        self.video.setPixmap(
+            self._last_pixmap.scaled(
+                target,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        )
+
     def _read_frame(self) -> None:
         if self.capture is None:
             self.timer.stop()
@@ -200,9 +319,19 @@ class FootagePlayerDialog(QWidget):
         ok, frame = self.capture.read()
         if not ok or frame is None or frame.size == 0:
             self.timer.stop()
+            self.play_button.setText("▶ Replay")
             self.status_label.setText("End of footage")
             return
 
+        frame_index = max(0, int(self.capture.get(cv2.CAP_PROP_POS_FRAMES)) - 1)
+        if not self._seeking:
+            self.timeline.blockSignals(True)
+            self.timeline.setValue(frame_index)
+            self.timeline.blockSignals(False)
+        current = frame_index / self.source_fps
+        self.status_label.setText(
+            f"{self._format_time(current)} / {self._format_time(self._duration_seconds())}"
+        )
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         image = QImage(
             rgb.data,
@@ -211,14 +340,8 @@ class FootagePlayerDialog(QWidget):
             int(rgb.strides[0]),
             QImage.Format.Format_RGB888,
         ).copy()
-        pixmap = QPixmap.fromImage(image)
-        self.video.setPixmap(
-            pixmap.scaled(
-                self.video.size(),
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-        )
+        self._last_pixmap = QPixmap.fromImage(image)
+        self._display_frame()
 
     def _apply_background_blur(self) -> None:
         self._clear_background_blur()
