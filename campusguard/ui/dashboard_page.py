@@ -664,7 +664,7 @@ class DashboardPage(QWidget):
         # Never allow the popup to become excessively tall.
         maximum_height = min(
             maximum_height,
-            840,
+            900,
         )
 
         self._popup.setMaximumHeight(
@@ -675,7 +675,7 @@ class DashboardPage(QWidget):
 
         width = min(
             max(520, self.width() - 40),
-            max(780, min(1040, self._popup.sizeHint().width())),
+            max(960, min(1240, self._popup.sizeHint().width())),
         )
         self._popup.setFixedWidth(width)
         self._popup.adjustSize()
