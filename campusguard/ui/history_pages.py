@@ -885,7 +885,7 @@ class IncidentsPage(QWidget):
             20,
             16,
             20,
-            16,
+            112,
         )
 
         root.setSpacing(14)
@@ -909,8 +909,17 @@ class IncidentsPage(QWidget):
 
         content_layout.setSpacing(14)
 
+        self.content_scroll = QScrollArea()
+        self.content_scroll.setObjectName("historyPageScroll")
+        self.content_scroll.setWidgetResizable(True)
+        self.content_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.content_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.content_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.content_scroll.viewport().setAutoFillBackground(False)
+        self.content_scroll.setWidget(self.main_content)
+
         root.addWidget(
-            self.main_content,
+            self.content_scroll,
             1,
         )
 
@@ -1733,7 +1742,7 @@ class AlertsPage(QWidget):
             20,
             16,
             20,
-            16,
+            112,
         )
 
         root.setSpacing(14)
@@ -1753,8 +1762,17 @@ class AlertsPage(QWidget):
 
         content_layout.setSpacing(14)
 
+        self.content_scroll = QScrollArea()
+        self.content_scroll.setObjectName("historyPageScroll")
+        self.content_scroll.setWidgetResizable(True)
+        self.content_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.content_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.content_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.content_scroll.viewport().setAutoFillBackground(False)
+        self.content_scroll.setWidget(self.main_content)
+
         root.addWidget(
-            self.main_content,
+            self.content_scroll,
             1,
         )
 
