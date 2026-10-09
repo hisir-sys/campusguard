@@ -793,7 +793,7 @@ class _HistoryPopup(QWidget):
         self.popup.setStyleSheet(
             f"""
             QFrame#historyPopup {{
-                background: {rgba(palette.glass, min(220, max(178, int(palette.glass_alpha * 0.82))))};
+                background: {rgba(palette.surface, 248)};
                 border: 1px solid {rgba(palette.line, min(255, int(palette.line_alpha * 2.2)))};
                 border-radius: 28px;
             }}
@@ -1580,27 +1580,25 @@ class IncidentsPage(QWidget):
             )
             return
 
-        lines: list[str] = []
-
+        palette = get_palette()
+        entries = []
         for row in rows[:4]:
-            confidence = (
-                float(row["confidence"]) * 100
+            confidence = float(row["confidence"]) * 100
+            camera = str(row.get("camera_name", "Unknown camera")).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            event = str(row.get("event", "Security event")).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            severity = str(row.get("severity", "LOW")).upper()
+            severity_color = "#F87171" if severity == "HIGH" else ("#FBBF24" if severity == "MEDIUM" else "#34D399")
+            entries.append(
+                f'<table width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 6px 0;">'
+                f'<tr><td style="padding:8px 10px;background:{rgba(palette.surface, 150)};border:1px solid {rgba(palette.line, 110)};border-radius:8px;">'
+                f'<span style="color:{palette.text};font-weight:600;">{event}</span>'
+                f'<span style="color:{severity_color};font-weight:700;"> &nbsp; {severity}</span><br/>'
+                f'<span style="color:{palette.text_dim};font-size:9pt;">{camera} &nbsp; · &nbsp; {confidence:.0f}% confidence</span>'
+                f'</td></tr></table>'
             )
-
-            lines.append(
-                f"{row['camera_name']}   ·   "
-                f"{row['event']}   ·   "
-                f"{confidence:.0f}%"
-            )
-
         if len(rows) > 4:
-            lines.append(
-                f"+ {len(rows) - 4} more incidents"
-            )
-
-        card.preview_label.setText(
-            "\n".join(lines)
-        )
+            entries.append(f'<p style="color:{palette.text_dim};">+ {len(rows) - 4} more incidents</p>')
+        card.preview_label.setText("<div>" + "".join(entries) + "</div>")
 
     # ----------------------------------------------------------------------
     # Incident popup
@@ -2228,28 +2226,25 @@ class AlertsPage(QWidget):
             )
             return
 
-        lines: list[str] = []
-
+        palette = get_palette()
+        entries = []
         for row in rows[:5]:
-            confidence = (
-                float(row["confidence"]) * 100
+            confidence = float(row["confidence"]) * 100
+            camera = str(row.get("camera_name", "Unknown camera")).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            event = str(row.get("event", "Security event")).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            severity = str(row.get("severity", "LOW")).upper()
+            severity_color = "#F87171" if severity == "HIGH" else ("#FBBF24" if severity == "MEDIUM" else "#34D399")
+            entries.append(
+                f'<table width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 6px 0;">'
+                f'<tr><td style="padding:8px 10px;background:{rgba(palette.surface, 150)};border:1px solid {rgba(palette.line, 110)};border-radius:8px;">'
+                f'<span style="color:{palette.text};font-weight:600;">{event}</span>'
+                f'<span style="color:{severity_color};font-weight:700;"> &nbsp; {severity}</span><br/>'
+                f'<span style="color:{palette.text_dim};font-size:9pt;">{camera} &nbsp; · &nbsp; {confidence:.0f}% confidence</span>'
+                f'</td></tr></table>'
             )
-
-            lines.append(
-                f"{row['camera_name']}   ·   "
-                f"{row['event']}   ·   "
-                f"{row['severity']}   ·   "
-                f"{confidence:.0f}%"
-            )
-
         if len(rows) > 5:
-            lines.append(
-                f"+ {len(rows) - 5} more alerts"
-            )
-
-        panel.preview_label.setText(
-            "\n".join(lines)
-        )
+            entries.append(f'<p style="color:{palette.text_dim};">+ {len(rows) - 5} more alerts</p>')
+        panel.preview_label.setText("<div>" + "".join(entries) + "</div>")
 
     # ----------------------------------------------------------------------
     # Alert popup
