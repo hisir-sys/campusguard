@@ -46,11 +46,11 @@ DARK = Palette(
     "#F3F6FA", "#B7C0CC", "#778391",
     "#5B7CFA", "#708DFF",
     "#43C78A", "#D7A844", "#E45E68",
-    "#141B22", 238,
-    "#FFFFFF", 18,
-    "#FFFFFF", 7,
-    "#141B22", 238,
-    "#0F151B", 240,
+    "#141B22", 154,
+    "#FFFFFF", 30,
+    "#FFFFFF", 38,
+    "#141B22", 154,
+    "#0F151B", 218,
     "#5B7CFA",  # edge
     10,
     "#151C24",
@@ -63,11 +63,11 @@ LIGHT = Palette(
     "#17212B", "#4E5B68", "#778391",
     "#526FD6", "#667FE1",
     "#197A55", "#986D0C", "#C74752",
-    "#FFFFFF", 248,
+    "#FFFFFF", 150,
+    "#17212B", 22,
     "#17212B", 18,
-    "#17212B", 5,
-    "#FFFFFF", 246,
-    "#F7F9FB", 255,
+    "#FFFFFF", 150,
+    "#F7F9FB", 220,
     "#526FD6",  # edge
     24,
     "#FFFFFF",
@@ -112,7 +112,7 @@ QWidget {
   font-family: "Segoe UI", "Inter", sans-serif;
   font-size: 10pt;
 }
-QMainWindow { background: @bg1@; }
+QMainWindow { background: @bg1@; }\nQWidget#centralContent { background: transparent; }
 QDialog, QMessageBox, QInputDialog {
   background: @popup@;
   color: @text@;
@@ -306,7 +306,7 @@ def build_qss(theme: str) -> str:
         "text": p.text, "text_dim": p.text_dim, "muted": p.muted,
         "accent": p.accent, "accent_hover": p.accent_hover,
         "good": p.good, "warn": p.warn, "bad": p.bad,
-        "bg1": p.bg1, "popup": p.popup,
+        "bg1": p.bg1, "popup": rgba(p.glass, 188 if p.name == "dark" else 196),
         "glass": rgba(p.glass, p.glass_alpha),
         "glass_line": rgba(p.line, 14),
         "line": rgba(p.line, 18),
