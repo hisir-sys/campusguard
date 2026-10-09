@@ -604,7 +604,9 @@ class MainWindow(QMainWindow):
         workspace.addWidget(self.stack, 1)
 
         dock_row = QHBoxLayout()
-        dock_row.setContentsMargins(0, 0, 0, 0)
+        # Keep the dock visually detached from the workspace and away from
+        # the window's lower edge; the page above it owns its own scrolling.
+        dock_row.setContentsMargins(0, 4, 0, 4)
         dock_row.setSpacing(0)
         dock_row.addStretch(1)
         self.bottom_bar = BottomBar()
@@ -619,7 +621,11 @@ class MainWindow(QMainWindow):
         self._in_app_overlay = InAppOverlay(central)
         self._in_app_overlay.closed.connect(self._on_overlay_closed)
         self._in_app_overlay.hide()
+        # This app uses the floating navigation dock instead of a status bar.
+        # Hiding the empty QMainWindow status bar removes the full-width gray
+        # strip that could appear beneath/behind the dock.
         self.statusBar().setSizeGripEnabled(False)
+        self.statusBar().hide()
         self._connect_pages()
 
     def resizeEvent(self, event) -> None:
