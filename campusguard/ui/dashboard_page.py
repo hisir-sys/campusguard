@@ -95,12 +95,12 @@ class GlassPopup(QFrame):
         self._geometry_animation.setDuration(220)
         self._geometry_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
 
-        # Size from actual content. Only the available window height caps the
-        # popup; compact text therefore produces a compact popup.
-        self.setMinimumWidth(780)
-        self.setMaximumWidth(1040)
-        self.setMinimumHeight(0)
-        self.setMaximumHeight(840)
+        # Give operational popups enough room to read their metrics and details.
+        # Final geometry is still capped by the available application window.
+        self.setMinimumWidth(960)
+        self.setMaximumWidth(1240)
+        self.setMinimumHeight(520)
+        self.setMaximumHeight(900)
         self.setSizePolicy(
             QSizePolicy.Policy.Preferred,
             QSizePolicy.Policy.Maximum,
@@ -216,7 +216,7 @@ class GlassPopup(QFrame):
         self.body_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.body_scroll.setWidget(self.body_widget)
         self.body_scroll.setMinimumHeight(0)
-        self.body_scroll.setMaximumHeight(690)
+        self.body_scroll.setMaximumHeight(760)
         root.addWidget(self.body_scroll, 1)
 
     def _apply_palette(self) -> None:
