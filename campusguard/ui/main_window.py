@@ -603,17 +603,13 @@ class MainWindow(QMainWindow):
 
         workspace.addWidget(self.stack, 1)
 
-        dock_row = QHBoxLayout()
-        # Keep the dock visually detached from the workspace and away from
-        # the window's lower edge; the page above it owns its own scrolling.
-        dock_row.setContentsMargins(0, 4, 0, 4)
-        dock_row.setSpacing(0)
-        dock_row.addStretch(1)
-        self.bottom_bar = BottomBar()
-        self.bottom_bar.setMinimumHeight(76)
-        dock_row.addWidget(self.bottom_bar, 0, Qt.AlignmentFlag.AlignCenter)
-        dock_row.addStretch(1)
-        workspace.addLayout(dock_row, 0)
+        # The dock is a true floating overlay on the canvas, not a row in
+        # the workspace layout. This leaves no full-width container/strip
+        # behind it and lets the canvas remain visible through the glass.
+        self.bottom_bar = BottomBar(central)
+        self.bottom_bar.setMinimumHeight(68)
+        self.bottom_bar.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.bottom_bar.setAutoFillBackground(False)
 
         outer.addLayout(workspace, 1)
 
@@ -632,6 +628,22 @@ class MainWindow(QMainWindow):
         super().resizeEvent(event)
         if hasattr(self, "_in_app_overlay"):
             self._in_app_overlay.setGeometry(self.centralWidget().rect())
+        self._position_bottom_bar()
+
+    def _position_bottom_bar(self) -> None:
+        """Keep the navigation dock floating above the canvas without a row behind it."""
+        if not hasattr(self, "bottom_bar") or not hasattr(self, "top_bar"):
+            return
+        canvas = self.centralWidget()
+        if canvas is None:
+            return
+        self.bottom_bar.adjustSize()
+        left = max(12, self.top_bar.geometry().right() + 12)
+        available_width = max(0, canvas.width() - left - 12)
+        x = left + max(0, (available_width - self.bottom_bar.width()) // 2)
+        y = max(12, canvas.height() - self.bottom_bar.height() - 22)
+        self.bottom_bar.move(x, y)
+        self.bottom_bar.raise_()
 
     # ------------------------------------------------------------------
     # Long-form technical information pages
