@@ -247,6 +247,15 @@ class FootagePlayerDialog(QWidget):
             self.capture = None
         super().closeEvent(event)
 
+def _newest_first(rows: list[dict], timestamp_key: str) -> list[dict]:
+    """Return a display-only copy of rows, newest event first."""
+    return sorted(
+        rows,
+        key=lambda row: str(row.get(timestamp_key, "") or ""),
+        reverse=True,
+    )
+
+
 def _local_time(value: str) -> str:
     try:
         return datetime.fromisoformat(value).astimezone().strftime(
@@ -1276,9 +1285,9 @@ class IncidentsPage(QWidget):
         status = self.status_filter.currentText()
         severity = self.severity_filter.currentText()
 
-        all_rows = (
-            self.repository
-            .list_incidents()
+        all_rows = _newest_first(
+            self.repository.list_incidents(),
+            "happened_at",
         )
 
         rows = [
@@ -1980,9 +1989,9 @@ class AlertsPage(QWidget):
     # ----------------------------------------------------------------------
 
     def refresh(self) -> None:
-        rows = (
-            self.repository
-            .list_alerts()
+        rows = _newest_first(
+            self.repository.list_alerts(),
+            "happened_at",
         )
 
         active = [
