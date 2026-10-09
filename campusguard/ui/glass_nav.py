@@ -1009,6 +1009,11 @@ class BottomBar(GlassBar):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("bottomBar")
+        # The dock paints only its own rounded glass pill; never let Qt fill
+        # its rectangular widget bounds with a full-width-looking backdrop.
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setAutoFillBackground(False)
+        self.setStyleSheet("background: transparent; border: none;")
         self.setFixedHeight(68)
         self.setMinimumWidth(360)
         self.setMaximumWidth(720)
