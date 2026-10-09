@@ -96,10 +96,10 @@ class GlassPopup(QFrame):
 
         # Size from actual content. Only the available window height caps the
         # popup; compact text therefore produces a compact popup.
-        self.setMinimumWidth(500)
-        self.setMaximumWidth(700)
+        self.setMinimumWidth(680)
+        self.setMaximumWidth(900)
         self.setMinimumHeight(0)
-        self.setMaximumHeight(620)
+        self.setMaximumHeight(760)
         self.setSizePolicy(
             QSizePolicy.Policy.Preferred,
             QSizePolicy.Policy.Maximum,
@@ -118,8 +118,8 @@ class GlassPopup(QFrame):
         # --------------------------------------------------------------
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(28, 26, 28, 26)
-        root.setSpacing(14)
+        root.setContentsMargins(32, 30, 32, 30)
+        root.setSpacing(17)
 
         # --------------------------------------------------------------
         # TOP HEADER
@@ -215,7 +215,7 @@ class GlassPopup(QFrame):
         self.body_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.body_scroll.setWidget(self.body_widget)
         self.body_scroll.setMinimumHeight(0)
-        self.body_scroll.setMaximumHeight(480)
+        self.body_scroll.setMaximumHeight(600)
         root.addWidget(self.body_scroll, 1)
 
     def _apply_palette(self) -> None:
@@ -459,7 +459,7 @@ class GlassPopup(QFrame):
     def prepare_for_display(self, kind: str = "notifications") -> None:
         """Fit compact popups to their content; reserve scrolling for notifications."""
         self.body_scroll.verticalScrollBar().setValue(0)
-        self.body_scroll.setMaximumHeight(480)
+        self.body_scroll.setMaximumHeight(600)
         self.body_scroll.setVerticalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAsNeeded
             if kind == "notifications"
@@ -654,7 +654,7 @@ class DashboardPage(QWidget):
         # Never allow the popup to become excessively tall.
         maximum_height = min(
             maximum_height,
-            620,
+            760,
         )
 
         self._popup.setMaximumHeight(
@@ -664,8 +664,8 @@ class DashboardPage(QWidget):
         self._popup.adjustSize()
 
         width = min(
-            700,
-            max(500, self._popup.sizeHint().width()),
+            900,
+            max(680, self._popup.sizeHint().width()),
         )
         self._popup.setFixedWidth(width)
         self._popup.adjustSize()
