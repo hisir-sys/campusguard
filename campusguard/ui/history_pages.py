@@ -1674,10 +1674,14 @@ class IncidentsPage(QWidget):
 
                 table.setRowHeight(index, 68)
 
-            layout.addWidget(
-                table,
-                1,
-            )
+            # Keep the table compact when only a few incidents exist.
+            # A stretched table creates a large empty rectangle beneath one row.
+            table_height = table.horizontalHeader().height() + sum(
+                table.rowHeight(row_index) for row_index in range(table.rowCount())
+            ) + 4
+            table.setMinimumHeight(table_height)
+            table.setMaximumHeight(table_height)
+            layout.addWidget(table, 0)
 
         popup.set_content(
             body
@@ -2321,10 +2325,14 @@ class AlertsPage(QWidget):
                 self._set_footage_cell(table, index, 6, row)
                 table.setRowHeight(index, 64)
 
-            layout.addWidget(
-                table,
-                1,
-            )
+            # Fit the table to its actual rows instead of stretching it
+            # across the full popup when the alert history is short.
+            table_height = table.horizontalHeader().height() + sum(
+                table.rowHeight(row_index) for row_index in range(table.rowCount())
+            ) + 4
+            table.setMinimumHeight(table_height)
+            table.setMaximumHeight(table_height)
+            layout.addWidget(table, 0)
 
         popup.set_content(
             body
