@@ -51,13 +51,24 @@ class PopupLayer(QWidget):
             True,
         )
 
+        self._apply_overlay_palette()
+
+    def _apply_overlay_palette(self) -> None:
+        palette = get_palette()
+        # Use a softer, palette-aware veil: the old fixed black layer made
+        # the light theme look like a dark rectangle behind the popup.
+        alpha = 72 if palette.name == "dark" else 30
         self.setStyleSheet(
-            """
-            QWidget#popupLayer {
-                background: rgba(0, 0, 0, 125);
-            }
+            f"""
+            QWidget#popupLayer {{
+                background: {rgba("#000000" if palette.name == "dark" else "#344154", alpha)};
+                border: none;
+            }}
             """
         )
+
+    def retint(self) -> None:
+        self._apply_overlay_palette()
 
     def mousePressEvent(self, event) -> None:
         self.outside_clicked.emit()
@@ -201,8 +212,9 @@ class GlassPopup(QFrame):
         self.body_scroll.setWidgetResizable(True)
         self.body_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.body_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.body_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.body_scroll.setWidget(self.body_widget)
-        self.body_scroll.setMinimumHeight(120)
+        self.body_scroll.setMinimumHeight(0)
         self.body_scroll.setMaximumHeight(480)
         root.addWidget(self.body_scroll, 1)
 
@@ -212,9 +224,9 @@ class GlassPopup(QFrame):
         self.setStyleSheet(
             f"""
             QFrame#glassPopup {{
-                background: {rgba(palette.glass, min(225, max(185, int(palette.glass_alpha * 0.86))))};
+                background: {rgba("#17212B" if palette.name == "dark" else "#FFFFFF", 232 if palette.name == "dark" else 226)};
                 color: {palette.text};
-                border: 1px solid {rgba(palette.line, min(255, int(palette.line_alpha * 2.2)))};
+                border: 1px solid {rgba(palette.line, 46 if palette.name == "dark" else 62)};
                 border-radius: 28px;
             }}
 
@@ -262,21 +274,21 @@ class GlassPopup(QFrame):
 
             QPushButton[modelChoice="true"] {{
                 color: {palette.text};
-                background: {rgba(palette.veil, 14)};
-                border: 1px solid {rgba(palette.line, palette.line_alpha)};
-                border-radius: 12px;
-                padding: 8px 12px;
-                text-align: left;
+                background: {rgba(palette.veil, 10 if palette.name == "dark" else 90)};
+                border: 1px solid {rgba(palette.line, 34 if palette.name == "dark" else 58)};
+                border-radius: 11px;
+                padding: 7px 8px;
+                text-align: center;
             }}
 
             QPushButton[modelChoice="true"]:hover {{
-                background: {rgba(palette.veil, 26)};
-                border-color: {rgba(palette.line, min(255, int(palette.line_alpha * 1.8)))};
+                background: {rgba(palette.veil, 22 if palette.name == "dark" else 135)};
+                border-color: {rgba(palette.edge, 100)};
             }}
 
             QPushButton[modelChoice="true"]:checked {{
-                background: {rgba(palette.veil, 34)};
-                border-color: {rgba(palette.line, min(255, int(palette.line_alpha * 2.2)))};
+                background: {rgba(palette.edge, 35 if palette.name == "dark" else 32)};
+                border-color: {rgba(palette.edge, 150)};
                 font-weight: 700;
             }}
 
@@ -444,10 +456,16 @@ class GlassPopup(QFrame):
                     if child_widget is not None:
                         child_widget.deleteLater()
 
-    def prepare_for_display(self) -> None:
-        """Reset the popup's scroll position before showing it."""
+    def prepare_for_display(self, kind: str = "notifications") -> None:
+        """Fit compact popups to their content; reserve scrolling for notifications."""
         self.body_scroll.verticalScrollBar().setValue(0)
         self.body_scroll.setMaximumHeight(480)
+        self.body_scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+            if kind == "notifications"
+            else Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.body_scroll.setMinimumHeight(0)
 
 
 
@@ -1014,7 +1032,7 @@ class DashboardPage(QWidget):
             widget = getattr(window, name, None)
             if isinstance(widget, QWidget):
                 effect = QGraphicsBlurEffect(widget)
-                effect.setBlurRadius(16)
+                effect.setBlurRadius(7)
                 widget.setGraphicsEffect(effect)
                 self._navigation_blurs.append((widget, effect))
 
@@ -1052,10 +1070,12 @@ class DashboardPage(QWidget):
         else:
             self._populate_notifications_popup()
 
-        self._popup.prepare_for_display()
+        self._popup.prepare_for_display(kind)
 
+        # A restrained blur keeps the background legible and avoids the
+        # heavy, dark-edged rectangle produced by a large blur radius.
         self._dashboard_blur = QGraphicsBlurEffect(self)
-        self._dashboard_blur.setBlurRadius(16)
+        self._dashboard_blur.setBlurRadius(9)
         self._dashboard_content.setGraphicsEffect(self._dashboard_blur)
         self._blur_navigation(True)
 
@@ -1114,39 +1134,35 @@ class DashboardPage(QWidget):
         title.setObjectName("popupSectionTitle")
         ml.addWidget(title)
 
-        model_row = QHBoxLayout()
-        model_row.setContentsMargins(0, 0, 0, 0)
-        model_row.setSpacing(14)
-
         model_names = {"fdsc_mc3": "Spontim 1.0", "mc3": "CampusGuard MC3-18", "x3d": "X3D-M"}
         current_key = getattr(self._settings, "violence_model", "fdsc_mc3") if self._settings else "fdsc_mc3"
-        active = QLabel(model_names.get(current_key, "Spontim 1.0"))
-        active.setObjectName("popupMetricValue")
-        model_row.addWidget(active, 1)
 
+        # Horizontal choices use the popup width instead of stacking three
+        # tall buttons, keeping the full AI overview visible without scrolling.
+        choices = QHBoxLayout()
+        choices.setContentsMargins(0, 0, 0, 0)
+        choices.setSpacing(8)
         options = (
             ("Spontim 1.0", "fdsc_mc3"),
             ("CampusGuard MC3-18", "mc3"),
             ("X3D-M", "x3d"),
         )
-        choices = QVBoxLayout()
-        choices.setSpacing(6)
         for label_text, key in options:
             choice = QPushButton(label_text)
             choice.setCheckable(True)
             choice.setChecked(key == current_key)
             choice.setCursor(Qt.CursorShape.PointingHandCursor)
-            choice.setMinimumHeight(38)
+            choice.setMinimumHeight(36)
+            choice.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             choice.setProperty("modelChoice", True)
             choice.clicked.connect(
                 lambda _checked=False, selected_key=key:
                 self.model_switch_requested.emit(selected_key)
             )
-            choices.addWidget(choice)
-        model_row.addLayout(choices, 1)
-        ml.addLayout(model_row)
+            choices.addWidget(choice, 1)
+        ml.addLayout(choices)
 
-        desc = QLabel("Select the production temporal classifier used by live camera workers.")
+        desc = QLabel("Select the temporal classifier used by live camera workers.")
         desc.setProperty("muted", True)
         desc.setWordWrap(True)
         ml.addWidget(desc)
@@ -1286,6 +1302,7 @@ class DashboardPage(QWidget):
         box.addWidget(state)
 
         self._popup.body.addWidget(state_box)
+        self._popup.body.addStretch(1)
 
 
     def _populate_notifications_popup(self) -> None:
