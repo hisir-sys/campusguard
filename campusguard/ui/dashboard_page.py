@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import time
 
 from PySide6.QtCore import QEvent, QEasingCurve, QPropertyAnimation, QRect, Qt, Signal
 from PySide6.QtGui import QColor, QPixmap
@@ -96,10 +97,10 @@ class GlassPopup(QFrame):
 
         # Size from actual content. Only the available window height caps the
         # popup; compact text therefore produces a compact popup.
-        self.setMinimumWidth(680)
-        self.setMaximumWidth(900)
+        self.setMinimumWidth(780)
+        self.setMaximumWidth(1040)
         self.setMinimumHeight(0)
-        self.setMaximumHeight(760)
+        self.setMaximumHeight(840)
         self.setSizePolicy(
             QSizePolicy.Policy.Preferred,
             QSizePolicy.Policy.Maximum,
@@ -215,7 +216,7 @@ class GlassPopup(QFrame):
         self.body_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.body_scroll.setWidget(self.body_widget)
         self.body_scroll.setMinimumHeight(0)
-        self.body_scroll.setMaximumHeight(600)
+        self.body_scroll.setMaximumHeight(690)
         root.addWidget(self.body_scroll, 1)
 
     def _apply_palette(self) -> None:
@@ -514,6 +515,7 @@ class DashboardPage(QWidget):
             str,
             str,
         ] = {}
+        self._session_started_at = time.monotonic()
 
         self._device_text: str | None = None
         self._settings = None
@@ -543,7 +545,7 @@ class DashboardPage(QWidget):
             self._dashboard_content
         )
 
-        root.setContentsMargins(24, 16, 24, 78)
+        root.setContentsMargins(24, 16, 24, 22)
         root.setSpacing(14)
 
         # --------------------------------------------------------------
@@ -577,10 +579,18 @@ class DashboardPage(QWidget):
         self._network_card.setMinimumHeight(410)
         root.addWidget(self._network_card, 1)
 
-        # Keep the dashboard workspace scrollable so the fixed bottom
-        # navigation can never overlap the camera network on smaller
-        # laptop/window sizes.
-        outer.addWidget(self._dashboard_content, 1)
+        # The workspace scrolls as one surface above the separate bottom dock.
+        # This removes the oversized blank footer and keeps every camera tile
+        # reachable on smaller windows without drawing over the navigation.
+        self.dashboard_scroll = QScrollArea()
+        self.dashboard_scroll.setObjectName("dashboardWorkspaceScroll")
+        self.dashboard_scroll.setWidgetResizable(True)
+        self.dashboard_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.dashboard_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.dashboard_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.dashboard_scroll.viewport().setAutoFillBackground(False)
+        self.dashboard_scroll.setWidget(self._dashboard_content)
+        outer.addWidget(self.dashboard_scroll, 1)
 
         # ==============================================================
         # DASHBOARD BLUR
@@ -654,7 +664,7 @@ class DashboardPage(QWidget):
         # Never allow the popup to become excessively tall.
         maximum_height = min(
             maximum_height,
-            760,
+            840,
         )
 
         self._popup.setMaximumHeight(
@@ -664,8 +674,8 @@ class DashboardPage(QWidget):
         self._popup.adjustSize()
 
         width = min(
-            900,
-            max(680, self._popup.sizeHint().width()),
+            max(520, self.width() - 40),
+            max(780, min(1040, self._popup.sizeHint().width())),
         )
         self._popup.setFixedWidth(width)
         self._popup.adjustSize()
@@ -951,7 +961,7 @@ class DashboardPage(QWidget):
         self.feed_scroll.setWidgetResizable(True)
         self.feed_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.feed_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.feed_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.feed_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.feed_scroll.viewport().setAutoFillBackground(False)
 
         self.feed_content = QWidget()
@@ -1227,6 +1237,22 @@ class DashboardPage(QWidget):
             "AI monitoring",
             "Enabled" if settings and settings.detection_enabled else "Disabled",
         )
+        live_rates = [
+            float(stats.fps)
+            for camera_id, stats in self._stats.items()
+            if camera_id in self._cameras and stats.status == "LIVE" and stats.fps is not None
+        ]
+        average_fps = sum(live_rates) / len(live_rates) if live_rates else None
+        self._popup_key_value(
+            rl,
+            "Frame processing rate",
+            f"{average_fps:.1f} FPS average" if average_fps is not None else "Waiting for live frames",
+        )
+        self._popup_key_value(
+            rl,
+            "Average inference latency",
+            "Not reported by current runtime",
+        )
         self._popup.body.addWidget(runtime)
         self._popup.body.addStretch(1)
 
@@ -1257,80 +1283,103 @@ class DashboardPage(QWidget):
     ) -> None:
         self._popup.set_header(
             "System Stats",
-            "Live operational summary.",
+            "Live operational status, priority distribution, and session health.",
             "server",
         )
         self._popup.clear_body()
-
-        grid = QGridLayout()
-        grid.setHorizontalSpacing(10)
-        grid.setVerticalSpacing(10)
 
         online_count = int(self.online_value.text() or "0")
         offline_count = int(self.offline_value.text() or "0")
         incident_count = int(self.incident_value.text() or "0")
         alert_count = int(self.alert_value.text() or "0")
         total_cameras = online_count + offline_count
-        current_model = getattr(self._settings, "violence_model", "fdsc_mc3") if self._settings else "fdsc_mc3"
-        model_names = {
-            "fdsc_mc3": "Spontim 1.0",
-            "mc3": "CampusGuard MC3-18",
-            "x3d": "X3D-M",
-        }
+
+        # Count only currently active (unacknowledged) alerts by the severity
+        # stored on their linked incident records.
+        priority_counts = {"high": 0, "medium": 0, "low": 0}
+        for alert in self.repository.list_alerts(1000):
+            if alert.get("acknowledged"):
+                continue
+            severity = str(alert.get("severity", "")).strip().lower()
+            if severity in priority_counts:
+                priority_counts[severity] += 1
+
+        uptime_seconds = max(0, int(time.monotonic() - self._session_started_at))
+        hours, remainder = divmod(uptime_seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        uptime_text = f"{hours}h {minutes:02d}m {seconds:02d}s" if hours else f"{minutes}m {seconds:02d}s"
+
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(12)
 
         metrics = (
-            ("video", "Cameras Online", str(online_count)),
-            ("video-off", "Cameras Offline", str(offline_count)),
-            ("file-warning", "Open Incidents", str(incident_count)),
-            ("shield-alert", "Active Alerts", str(alert_count)),
+            ("video", "Connected cameras", str(total_cameras)),
+            ("activity", "Active / Offline streams", f"{online_count} Active / {offline_count} Offline"),
+            ("file-warning", "Open incidents", str(incident_count)),
+            ("shield-alert", "Active alerts", str(alert_count)),
         )
-
         for index, (icon, caption, value_text) in enumerate(metrics):
             tile, value = self._stat_tile(icon, "muted", caption)
             value.setText(value_text)
+            value.setWordWrap(True)
+            value.setMinimumHeight(34)
             grid.addWidget(tile, index // 2, index % 2)
 
         self._popup.body.addLayout(grid)
 
-        online = int(self.online_value.text() or "0")
-        state = QLabel(
-            "Monitoring active"
-            if online > 0
-            else "Waiting for cameras"
-        )
-        state.setObjectName("popupValue")
-        set_tone(state, "good" if online > 0 else "warn")
-
         state_box = QFrame()
         state_box.setObjectName("popupSection")
-        box = QHBoxLayout(state_box)
-        box.setContentsMargins(14, 11, 14, 11)
-        box.setSpacing(10)
+        state_layout = QVBoxLayout(state_box)
+        state_layout.setContentsMargins(18, 14, 18, 14)
+        state_layout.setSpacing(10)
 
-        label = QLabel("Monitoring state")
-        label.setObjectName("popupKey")
-        box.addWidget(label)
-        box.addStretch(1)
-        box.addWidget(state)
+        state_title = QLabel("ALERT PRIORITY BREAKDOWN")
+        state_title.setObjectName("popupSectionTitle")
+        state_layout.addWidget(state_title)
 
+        priority_row = QHBoxLayout()
+        priority_row.setSpacing(12)
+        for priority, tone in (("High", "bad"), ("Medium", "warn"), ("Low", "good")):
+            item = QFrame()
+            item.setObjectName("popupMetric")
+            item_layout = QVBoxLayout(item)
+            item_layout.setContentsMargins(14, 10, 14, 10)
+            item_layout.setSpacing(4)
+            value = QLabel(str(priority_counts[priority.lower()]))
+            value.setObjectName("popupMetricValue")
+            set_tone(value, tone)
+            caption = QLabel(f"{priority} priority")
+            caption.setObjectName("popupMetricCaption")
+            item_layout.addWidget(value)
+            item_layout.addWidget(caption)
+            priority_row.addWidget(item, 1)
+        state_layout.addLayout(priority_row)
         self._popup.body.addWidget(state_box)
 
         details = QFrame()
         details.setObjectName("popupSection")
         details_layout = QVBoxLayout(details)
-        details_layout.setContentsMargins(18, 16, 18, 16)
-        details_layout.setSpacing(12)
+        details_layout.setContentsMargins(18, 15, 18, 15)
+        details_layout.setSpacing(10)
 
         details_title = QLabel("OPERATIONAL DETAILS")
         details_title.setObjectName("popupSectionTitle")
         details_layout.addWidget(details_title)
 
+        current_model = getattr(self._settings, "violence_model", "fdsc_mc3") if self._settings else "fdsc_mc3"
+        model_names = {
+            "fdsc_mc3": "Spontim 1.0",
+            "mc3": "CampusGuard MC3-18",
+            "x3d": "X3D-M",
+            "r3d": "R3D-18",
+        }
         rows = (
-            ("Total configured cameras", str(total_cameras)),
-            ("Camera availability", f"{online_count} of {total_cameras} online" if total_cameras else "No cameras configured"),
+            ("Total connected cameras", str(total_cameras)),
+            ("Stream availability", f"{online_count} Active / {offline_count} Offline"),
             ("Active detection model", model_names.get(current_model, "Spontim 1.0")),
             ("Incident queue", f"{incident_count} open" if incident_count else "Clear"),
-            ("Alert status", f"{alert_count} active" if alert_count else "No active alerts"),
+            ("System uptime (this session)", uptime_text),
         )
         for key_text, value_text in rows:
             row_widget = QWidget()
@@ -1351,7 +1400,6 @@ class DashboardPage(QWidget):
 
         self._popup.body.addWidget(details)
         self._popup.body.addStretch(1)
-
 
     def _populate_notifications_popup(self) -> None:
         self._popup.set_header(
