@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 from campusguard.camera_runtime import LocalVideoTestThread
 from campusguard.settings import AppSettings, CameraConfig, CameraStats
 from campusguard.ui.common import CameraFormDialog, make_page_title, set_status_label
+from campusguard.ui.theme import get_palette, rgba
 
 
 class CameraRow(QFrame):
@@ -144,36 +145,41 @@ class CameraRow(QFrame):
 
 
 
-class LocalVideoTestDialog(QDialog):
-    """Local video tester that runs the production AI and exposes detections."""
+class LocalVideoTestDialog(QFrame):
+    """Theme-aware, in-app overlay for one-shot local video model testing."""
 
     event_detected = Signal(str, float, str)
     footage_saved = Signal(str)
 
-    """One-shot local video tester that never adds the file to the camera network."""
-
-    def __init__(
-        self,
-        video_path: str,
-        settings: AppSettings,
-        parent: QWidget | None = None,
-    ) -> None:
+    def __init__(self, video_path: str, settings: AppSettings, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Local File Test")
-        self.setMinimumSize(900, 620)
-        self.resize(1050, 700)
         self._video_path = video_path
         self._settings = settings
         self._thread: LocalVideoTestThread | None = None
         self._last_pixmap: QPixmap | None = None
+        self.setObjectName("localVideoTestOverlay")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
-        root = QVBoxLayout(self)
-        root.setContentsMargins(22, 20, 22, 20)
-        root.setSpacing(12)
+        self._panel = QFrame(self)
+        self._panel.setObjectName("localVideoTestPanel")
+        self._panel.setMinimumWidth(720)
+        self._panel.setMaximumWidth(1280)
+        self._panel.setMaximumHeight(900)
 
+        root = QVBoxLayout(self._panel)
+        root.setContentsMargins(26, 24, 26, 24)
+        root.setSpacing(14)
+        header = QHBoxLayout()
         title = QLabel("Local File Test")
+        title.setObjectName("localVideoTestTitle")
         title.setStyleSheet("font-size: 17px; font-weight: 750;")
-        root.addWidget(title)
+        header.addWidget(title, 1)
+        self.close_button = QPushButton("×")
+        self.close_button.setFixedSize(36, 36)
+        self.close_button.setToolTip("Close local file testing")
+        header.addWidget(self.close_button)
+        root.addLayout(header)
 
         file_label = QLabel(video_path)
         file_label.setProperty("muted", True)
@@ -182,44 +188,80 @@ class LocalVideoTestDialog(QDialog):
 
         self.video = QLabel("Ready to test")
         self.video.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.video.setMinimumHeight(430)
+        self.video.setMinimumHeight(360)
         self.video.setProperty("videoSurface", True)
         self.video.setStyleSheet("border-radius: 14px; font-size: 10pt;")
         root.addWidget(self.video, 1)
 
-        self.status = QLabel(
-            "Test file loaded. Press Play once to run the production model."
-        )
+        self.status = QLabel("Test file loaded. Press Play once to run the production model.")
         self.status.setProperty("muted", True)
+        self.status.setWordWrap(True)
         root.addWidget(self.status)
 
         controls = QHBoxLayout()
-        controls.setSpacing(8)
-
+        controls.setSpacing(10)
         self.play_button = QPushButton("Play Once")
         self.play_button.setProperty("primary", True)
         self.stop_button = QPushButton("Stop")
         self.stop_button.setEnabled(False)
         self.choose_button = QPushButton("Choose File")
-        self.close_button = QPushButton("Close")
-
         controls.addWidget(self.play_button)
         controls.addWidget(self.stop_button)
         controls.addWidget(self.choose_button)
         controls.addStretch(1)
-        controls.addWidget(self.close_button)
         root.addLayout(controls)
 
         self.play_button.clicked.connect(self._play)
         self.stop_button.clicked.connect(self._stop)
         self.choose_button.clicked.connect(self._choose_file)
         self.close_button.clicked.connect(self.close)
+        self.retint()
+
+    def retint(self) -> None:
+        palette = get_palette()
+        overlay = rgba("#000000" if palette.name == "dark" else "#667085",
+                       178 if palette.name == "dark" else 112)
+        panel = rgba(palette.glass, min(242, max(208, palette.glass_alpha + 60)))
+        line = rgba(palette.line, min(150, max(55, palette.line_alpha * 3)))
+        self.setStyleSheet(
+            f"QFrame#localVideoTestOverlay {{ background: {overlay}; border: none; }}"
+            f"QFrame#localVideoTestPanel {{ background: {panel}; border: 1px solid {line}; "
+            "border-radius: 26px; }"
+            "QLabel#localVideoTestTitle { background: transparent; }"
+        )
+        self.update()
+
+    def _center_panel(self) -> None:
+        if not self.parentWidget():
+            return
+        available_width = max(640, self.width() - 56)
+        available_height = max(480, self.height() - 48)
+        self._panel.setMaximumWidth(min(1280, available_width))
+        self._panel.setMaximumHeight(min(900, available_height))
+        self._panel.adjustSize()
+        width = min(max(720, self._panel.sizeHint().width()), available_width)
+        height = min(max(560, self._panel.sizeHint().height()), available_height)
+        self._panel.resize(width, height)
+        self._panel.move(max(12, (self.width() - width) // 2),
+                         max(12, (self.height() - height) // 2))
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if self.parentWidget():
+            self.setGeometry(self.parentWidget().rect())
+        self.retint()
+        self._center_panel()
+        self.raise_()
+        self.setFocus()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._center_panel()
+        self._scale_frame()
 
     def _choose_file(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Select test video",
-            "",
+            self, "Select test video", "",
             "Video files (*.mp4 *.avi *.mov *.mkv *.wmv *.m4v);;All files (*.*)",
         )
         if not path:
@@ -227,23 +269,17 @@ class LocalVideoTestDialog(QDialog):
         self._video_path = path
         self.video.clear()
         self.video.setText("Ready to test")
-        self.status.setText(
-            "Test file loaded. Press Play once to run the production model."
-        )
+        self.status.setText("Test file loaded. Press Play once to run the production model.")
 
     def _play(self) -> None:
         if self._thread is not None and self._thread.isRunning():
             return
-
         self._last_pixmap = None
         self.video.clear()
-        self.status.setText(
-            "Loading Spontim 1.0 and the production detection pipeline..."
-        )
+        self.status.setText("Loading Spontim 1.0 and the production detection pipeline...")
         self.play_button.setEnabled(False)
         self.stop_button.setEnabled(True)
         self.choose_button.setEnabled(False)
-
         self._thread = LocalVideoTestThread(self._video_path, self._settings)
         self._thread.frame_ready.connect(self._on_frame)
         self._thread.status_changed.connect(self._on_status)
@@ -279,17 +315,10 @@ class LocalVideoTestDialog(QDialog):
     def _scale_frame(self) -> None:
         if self._last_pixmap is None:
             return
-        self.video.setPixmap(
-            self._last_pixmap.scaled(
-                self.video.size(),
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-        )
-
-    def resizeEvent(self, event) -> None:
-        super().resizeEvent(event)
-        self._scale_frame()
+        self.video.setPixmap(self._last_pixmap.scaled(
+            self.video.size(), Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        ))
 
     def closeEvent(self, event) -> None:
         if self._thread is not None and self._thread.isRunning():
