@@ -545,7 +545,7 @@ class DashboardPage(QWidget):
             self._dashboard_content
         )
 
-        root.setContentsMargins(24, 16, 24, 22)
+        root.setContentsMargins(24, 16, 24, 112)
         root.setSpacing(14)
 
         # --------------------------------------------------------------
@@ -579,9 +579,9 @@ class DashboardPage(QWidget):
         self._network_card.setMinimumHeight(410)
         root.addWidget(self._network_card, 1)
 
-        # The workspace scrolls as one surface above the separate bottom dock.
-        # This removes the oversized blank footer and keeps every camera tile
-        # reachable on smaller windows without drawing over the navigation.
+        # Keep a dedicated bottom breathing space in the scrollable content.
+        # This reserves clear canvas above the floating dock at the end of the
+        # Live Network section while keeping every camera tile reachable.
         self.dashboard_scroll = QScrollArea()
         self.dashboard_scroll.setObjectName("dashboardWorkspaceScroll")
         self.dashboard_scroll.setWidgetResizable(True)
