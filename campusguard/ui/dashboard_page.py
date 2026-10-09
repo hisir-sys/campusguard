@@ -225,9 +225,9 @@ class GlassPopup(QFrame):
         self.setStyleSheet(
             f"""
             QFrame#glassPopup {{
-                background: {rgba("#17212B" if palette.name == "dark" else "#FFFFFF", 232 if palette.name == "dark" else 226)};
+                background: {rgba(palette.glass, 174 if palette.name == "dark" else 164)};
                 color: {palette.text};
-                border: 1px solid {rgba(palette.line, 46 if palette.name == "dark" else 62)};
+                border: 1px solid {rgba(palette.line, 54 if palette.name == "dark" else 76)};
                 border-radius: 28px;
             }}
 
@@ -260,14 +260,14 @@ class GlassPopup(QFrame):
             }}
 
             QFrame#popupSection {{
-                background: {rgba(palette.veil, 18)};
+                background: {rgba(palette.veil, 38 if palette.name == "dark" else 84)};
                 color: {palette.text};
                 border: 1px solid {rgba(palette.line, min(255, int(palette.line_alpha * 1.5)))};
                 border-radius: 19px;
             }}
 
             QFrame#popupMetric {{
-                background: {rgba(palette.veil, 14)};
+                background: {rgba(palette.veil, 32 if palette.name == "dark" else 72)};
                 color: {palette.text};
                 border: 1px solid {rgba(palette.line, palette.line_alpha)};
                 border-radius: 16px;
@@ -275,7 +275,7 @@ class GlassPopup(QFrame):
 
             QPushButton[modelChoice="true"] {{
                 color: {palette.text};
-                background: {rgba(palette.veil, 10 if palette.name == "dark" else 90)};
+                background: {rgba(palette.veil, 42 if palette.name == "dark" else 104)};
                 border: 1px solid {rgba(palette.line, 34 if palette.name == "dark" else 58)};
                 border-radius: 11px;
                 padding: 7px 8px;
@@ -283,7 +283,7 @@ class GlassPopup(QFrame):
             }}
 
             QPushButton[modelChoice="true"]:hover {{
-                background: {rgba(palette.veil, 22 if palette.name == "dark" else 135)};
+                background: {rgba(palette.veil, 62 if palette.name == "dark" else 142)};
                 border-color: {rgba(palette.edge, 100)};
             }}
 
