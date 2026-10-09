@@ -215,9 +215,8 @@ class FootagePlayerDialog(QWidget):
             self.play_button.setText("Ⅱ Pause")
 
     def eventFilter(self, watched, event) -> bool:
-        if watched is self.video and event.type() == QEvent.Type.MouseButtonPress:
-            self.close()
-            return True
+        # Clicking the video surface must not close playback; users can interact
+        # with the timeline and controls while reviewing saved footage.
         return super().eventFilter(watched, event)
 
     def mousePressEvent(self, event) -> None:
