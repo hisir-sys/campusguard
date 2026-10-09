@@ -904,6 +904,15 @@ class _DockButton(QAbstractButton):
         self._width = value
         self.setFixedWidth(int(value))
         self.update()
+        dock = self.parentWidget()
+        if dock is not None and dock.objectName() == "bottomBar":
+            # Let the floating dock grow for the hovered label, then keep it
+            # centered in the available canvas as its width animates.
+            dock.adjustSize()
+            window = dock.window()
+            reposition = getattr(window, "_position_bottom_bar", None)
+            if callable(reposition):
+                reposition()
 
     def _set_hover(self, value: float) -> None:
         self._hover = value
@@ -931,8 +940,9 @@ class _DockButton(QAbstractButton):
 
     def leaveEvent(self, event) -> None:
         _run(self._hover_anim, self._hover, 0.0)
-        if not self._active:
-            _run(self._width_anim, self._width, 62.0)
+        # Labels are visible only while this individual item is hovered.
+        # The active page stays indicated by its accent glow, not a wide label.
+        _run(self._width_anim, self._width, 62.0)
         super().leaveEvent(event)
 
     def paintEvent(self, event) -> None:
@@ -998,6 +1008,7 @@ class BottomBar(GlassBar):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.setObjectName("bottomBar")
         self.setFixedHeight(68)
         self.setMinimumWidth(360)
         self.setMaximumWidth(720)
