@@ -565,7 +565,47 @@ def _configure_table(
 
 
 def _apply_table_palette(table: QTableWidget) -> None:
-    """Keep table colors owned by the active application theme."""
+    """Explicitly theme table body, header, and selection in both color modes."""
+    palette = get_palette()
+    body = rgba(palette.surface, min(245, max(218, palette.surface_alpha + 76)))
+    header = rgba(palette.bg0, min(250, max(228, palette.surface_alpha + 94)))
+    alternate = rgba(palette.glass, min(245, max(220, palette.glass_alpha + 66)))
+    border = rgba(palette.line, min(150, max(48, palette.line_alpha * 3)))
+    selected = rgba(palette.accent, 72 if palette.name == "dark" else 38)
+    table.setStyleSheet(
+        f"""
+        QTableWidget {{
+            background: {body};
+            alternate-background-color: {alternate};
+            color: {palette.text};
+            border: 1px solid {border};
+            border-radius: 12px;
+            gridline-color: transparent;
+            selection-background-color: {selected};
+            selection-color: {palette.text};
+        }}
+        QTableWidget::item {{
+            background: transparent;
+            color: {palette.text};
+            padding: 8px 6px;
+            border: none;
+        }}
+        QHeaderView::section {{
+            background: {header};
+            color: {palette.text_dim};
+            border: none;
+            border-bottom: 1px solid {border};
+            padding: 10px 8px;
+            font-size: 9pt;
+            font-weight: 700;
+        }}
+        QTableCornerButton::section {{
+            background: {header};
+            border: none;
+        }}
+        """
+    )
+    table.viewport().setAutoFillBackground(False)
     table.style().unpolish(table)
     table.style().polish(table)
 
@@ -1229,10 +1269,9 @@ class IncidentsPage(QWidget):
         )
 
         preview.setWordWrap(True)
-
-        preview.setMinimumHeight(
-            90
-        )
+        preview.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        preview.setContentsMargins(0, 10, 0, 0)
+        preview.setMinimumHeight(90)
 
         layout.addWidget(
             preview,
@@ -1952,10 +1991,9 @@ class AlertsPage(QWidget):
         )
 
         preview.setWordWrap(True)
-
-        preview.setMinimumHeight(
-            110
-        )
+        preview.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        preview.setContentsMargins(0, 10, 0, 0)
+        preview.setMinimumHeight(110)
 
         layout.addWidget(
             preview,
