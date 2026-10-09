@@ -1266,11 +1266,23 @@ class DashboardPage(QWidget):
         grid.setHorizontalSpacing(10)
         grid.setVerticalSpacing(10)
 
+        online_count = int(self.online_value.text() or "0")
+        offline_count = int(self.offline_value.text() or "0")
+        incident_count = int(self.incident_value.text() or "0")
+        alert_count = int(self.alert_value.text() or "0")
+        total_cameras = online_count + offline_count
+        current_model = getattr(self._settings, "violence_model", "fdsc_mc3") if self._settings else "fdsc_mc3"
+        model_names = {
+            "fdsc_mc3": "Spontim 1.0",
+            "mc3": "CampusGuard MC3-18",
+            "x3d": "X3D-M",
+        }
+
         metrics = (
-            ("video", "Cameras Online", self.online_value.text()),
-            ("video-off", "Cameras Offline", self.offline_value.text()),
-            ("file-warning", "Open Incidents", self.incident_value.text()),
-            ("shield-alert", "Active Alerts", self.alert_value.text()),
+            ("video", "Cameras Online", str(online_count)),
+            ("video-off", "Cameras Offline", str(offline_count)),
+            ("file-warning", "Open Incidents", str(incident_count)),
+            ("shield-alert", "Active Alerts", str(alert_count)),
         )
 
         for index, (icon, caption, value_text) in enumerate(metrics):
@@ -1302,6 +1314,42 @@ class DashboardPage(QWidget):
         box.addWidget(state)
 
         self._popup.body.addWidget(state_box)
+
+        details = QFrame()
+        details.setObjectName("popupSection")
+        details_layout = QVBoxLayout(details)
+        details_layout.setContentsMargins(18, 16, 18, 16)
+        details_layout.setSpacing(12)
+
+        details_title = QLabel("OPERATIONAL DETAILS")
+        details_title.setObjectName("popupSectionTitle")
+        details_layout.addWidget(details_title)
+
+        rows = (
+            ("Total configured cameras", str(total_cameras)),
+            ("Camera availability", f"{online_count} of {total_cameras} online" if total_cameras else "No cameras configured"),
+            ("Active detection model", model_names.get(current_model, "Spontim 1.0")),
+            ("Incident queue", f"{incident_count} open" if incident_count else "Clear"),
+            ("Alert status", f"{alert_count} active" if alert_count else "No active alerts"),
+        )
+        for key_text, value_text in rows:
+            row_widget = QWidget()
+            row_layout = QHBoxLayout(row_widget)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.setSpacing(14)
+
+            key_label = QLabel(key_text)
+            key_label.setObjectName("popupKey")
+            value_label = QLabel(value_text)
+            value_label.setObjectName("popupValue")
+            value_label.setWordWrap(True)
+            value_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+
+            row_layout.addWidget(key_label, 1)
+            row_layout.addWidget(value_label, 2)
+            details_layout.addWidget(row_widget)
+
+        self._popup.body.addWidget(details)
         self._popup.body.addStretch(1)
 
 
