@@ -196,10 +196,15 @@ class GlassPopup(QFrame):
         )
         self.body.setSpacing(12)
 
-        root.addWidget(
-            self.body_widget,
-            0,
-        )
+        self.body_scroll = QScrollArea()
+        self.body_scroll.setObjectName("popupScroll")
+        self.body_scroll.setWidgetResizable(True)
+        self.body_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.body_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.body_scroll.setWidget(self.body_widget)
+        self.body_scroll.setMinimumHeight(120)
+        self.body_scroll.setMaximumHeight(480)
+        root.addWidget(self.body_scroll, 1)
 
     def _apply_palette(self) -> None:
         palette = get_palette()
@@ -440,9 +445,9 @@ class GlassPopup(QFrame):
                         child_widget.deleteLater()
 
     def prepare_for_display(self) -> None:
-        """
-        Reset scroll position whenever a popup is opened.
-        """
+        """Reset the popup's scroll position before showing it."""
+        self.body_scroll.verticalScrollBar().setValue(0)
+        self.body_scroll.setMaximumHeight(480)
 
 
 
@@ -808,6 +813,11 @@ class DashboardPage(QWidget):
             icon="bell",
         )
 
+        view_all = QPushButton("See All")
+        view_all.setProperty("link", True)
+        view_all.setCursor(Qt.CursorShape.PointingHandCursor)
+        view_all.clicked.connect(lambda _checked=False: self._open_popup("notifications"))
+
         view_alerts = QPushButton(
             "View Alerts"
         )
@@ -841,13 +851,9 @@ class DashboardPage(QWidget):
             self.clear_notifications_requested.emit()
         )
 
-        frame.header_layout.addWidget(
-            clear_notifications
-        )
-
-        frame.header_layout.addWidget(
-            view_alerts
-        )
+        frame.header_layout.addWidget(clear_notifications)
+        frame.header_layout.addWidget(view_all)
+        frame.header_layout.addWidget(view_alerts)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -1041,8 +1047,10 @@ class DashboardPage(QWidget):
 
         if kind == "ai":
             self._populate_ai_popup()
-        else:
+        elif kind == "stats":
             self._populate_stats_popup()
+        else:
+            self._populate_notifications_popup()
 
         self._popup.prepare_for_display()
 
@@ -1279,6 +1287,54 @@ class DashboardPage(QWidget):
 
         self._popup.body.addWidget(state_box)
 
+
+    def _populate_notifications_popup(self) -> None:
+        self._popup.set_header(
+            "All Notifications",
+            "Recent camera, incident, and alert activity.",
+            "bell",
+        )
+        self._popup.clear_body()
+
+        rows = self.repository.list_notifications(100)
+        if not rows:
+            empty = QLabel("No notifications yet.")
+            empty.setObjectName("popupKey")
+            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            empty.setMinimumHeight(90)
+            self._popup.body.addWidget(empty)
+            return
+
+        for row in rows:
+            item = QFrame()
+            item.setObjectName("popupSection")
+            layout = QHBoxLayout(item)
+            layout.setContentsMargins(16, 12, 16, 12)
+            layout.setSpacing(12)
+
+            dot = QLabel("●")
+            tone = NOTIFICATION_TONES.get(row.get("kind", ""), "")
+            if tone:
+                set_tone(dot, tone)
+            else:
+                dot.setProperty("muted", True)
+            layout.addWidget(dot, 0, Qt.AlignmentFlag.AlignTop)
+
+            column = QVBoxLayout()
+            column.setSpacing(4)
+            message = QLabel(str(row.get("message", "Notification")))
+            message.setObjectName("popupValue")
+            message.setWordWrap(True)
+            column.addWidget(message)
+
+            created = QLabel(str(row.get("created_at", "")))
+            created.setObjectName("popupKey")
+            created.setWordWrap(True)
+            column.addWidget(created)
+            layout.addLayout(column, 1)
+            self._popup.body.addWidget(item)
+
+        self._popup.body.addStretch(1)
 
     # ==================================================================
     # POPUP HELPERS
