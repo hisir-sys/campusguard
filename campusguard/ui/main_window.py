@@ -1071,7 +1071,8 @@ class MainWindow(QMainWindow):
             ai_enabled=True,
             created_at="",
         )
-        dialog = LocalVideoTestDialog(path, self.settings, self)
+        host = self.centralWidget()
+        dialog = LocalVideoTestDialog(path, self.settings, host)
         dialog.event_detected.connect(
             lambda event, confidence, severity, camera=local_camera:
             self._on_local_test_event(camera, event, confidence, severity)
@@ -1080,7 +1081,9 @@ class MainWindow(QMainWindow):
             lambda footage_path:
             self._on_footage_saved("LOCAL-TEST", footage_path)
         )
-        dialog.exec()
+        dialog.setGeometry(host.rect())
+        dialog.show()
+        dialog.raise_()
 
     def _add_camera(self, values: dict) -> None:
         camera = self.repository.add_camera(
@@ -1177,8 +1180,9 @@ class MainWindow(QMainWindow):
     # Settings, theme, operator, search
     # ------------------------------------------------------------------
     def _save_settings(self, settings: AppSettings) -> None:
-        # Apply settings in-place. Rebuilding the information pages on every
-        # checkbox/dropdown click was causing the settings UI to feel laggy.
+        # Rebuild palette-captured information cards only when the theme changes;
+        # ordinary settings edits remain in-place and responsive.
+        previous_theme = self.settings.theme
         self.settings = AppSettings.from_dict(settings.to_dict())
         self.repository.save_settings(self.settings)
         if self.camera_manager is not None:
@@ -1187,6 +1191,8 @@ class MainWindow(QMainWindow):
         self.top_bar.set_theme(self.settings.theme)
         self.dashboard.update_model_configuration(self.settings)
         self.settings_page.set_theme(self.settings.theme)
+        if previous_theme != self.settings.theme:
+            self._rebuild_information_pages()
         self.settings_page.set_saved()
         self.statusBar().showMessage("Settings saved and applied to camera workers.", 1800)
 
