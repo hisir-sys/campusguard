@@ -54,12 +54,12 @@ class InAppOverlay(QFrame):
         self.setStyleSheet(
             f"""
             QFrame#inAppOverlay {{
-                background: rgba(0, 0, 0, 140);
+                background: {rgba("#000000" if palette.name == "dark" else "#667085", 88 if palette.name == "dark" else 34)};
                 border: none;
             }}
             QFrame#inAppPanel {{
-                background: {rgba(palette.glass, min(220, max(178, int(palette.glass_alpha * 0.82))))};
-                border: 1px solid {rgba(palette.line, min(255, int(palette.line_alpha * 2.3)))};
+                background: {rgba(palette.glass, min(194, max(148, int(palette.glass_alpha * 0.82))))};
+                border: 1px solid {rgba(palette.line, min(110, int(palette.line_alpha * 3.2)))};
                 border-radius: 30px;
             }}
             QLabel#overlayTitle {{
