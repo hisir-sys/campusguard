@@ -56,7 +56,7 @@ class SettingsPage(QWidget):
         self._initial_settings = settings
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(24, 24, 24, 24)
+        root.setContentsMargins(24, 24, 24, 112)
         root.setSpacing(24)
 
         header = QHBoxLayout()
