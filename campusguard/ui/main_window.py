@@ -176,6 +176,48 @@ class InAppOverlay(QFrame):
             return
         super().mousePressEvent(event)
 
+    def retint(self) -> None:
+        """Refresh overlay surfaces after a light/dark theme change."""
+        palette = get_palette()
+        self.setStyleSheet(
+            f"""
+            QFrame#inAppOverlay {{
+                background: {rgba("#000000" if palette.name == "dark" else "#667085", 88 if palette.name == "dark" else 34)};
+                border: none;
+            }}
+            QFrame#inAppPanel {{
+                background: {rgba(palette.glass, min(194, max(148, int(palette.glass_alpha * 0.82))))};
+                border: 1px solid {rgba(palette.line, min(110, int(palette.line_alpha * 3.2)))};
+                border-radius: 30px;
+            }}
+            QLabel#overlayTitle {{
+                font-size: 16pt;
+                font-weight: 800;
+                background: transparent;
+            }}
+            QLabel#overlayBody {{
+                font-size: 10pt;
+                line-height: 1.4;
+                background: transparent;
+            }}
+            QLabel#overlayClose {{
+                background: {rgba(palette.veil, min(255, palette.veil_alpha * 2))};
+                border: 1px solid {rgba(palette.line, palette.line_alpha)};
+                border-radius: 15px;
+                font-size: 14pt;
+            }}
+            QLabel#overlayClose:hover {{
+                background: {rgba(palette.veil, min(255, palette.veil_alpha * 3))};
+            }}
+            QLabel#cameraViewport {{
+                background: {rgba(palette.bg0, 245)};
+                border: 1px solid {rgba(palette.line, palette.line_alpha)};
+                border-radius: 18px;
+            }}
+            """
+        )
+        self.update()
+
     def keyPressEvent(self, event) -> None:
         if event.key() == Qt.Key.Key_Escape:
             self._close_overlay()
