@@ -197,8 +197,8 @@ class GlassBar(QWidget):
         path.addRoundedRect(QRectF(0.5, 0.5, w - 1.0, h - 1.0), radius, radius)
 
         fill = QLinearGradient(0, 0, 0, h)
-        fill.setColorAt(0.0, qcolor(pal.glass, pal.glass_alpha + 18))
-        fill.setColorAt(1.0, qcolor(pal.glass, pal.glass_alpha - 14))
+        fill.setColorAt(0.0, qcolor(pal.glass, min(210, pal.glass_alpha + 24)))
+        fill.setColorAt(1.0, qcolor(pal.glass, max(90, pal.glass_alpha - 22)))
         painter.fillPath(path, QBrush(fill))
 
         painter.save()
