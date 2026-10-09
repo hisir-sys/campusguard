@@ -222,7 +222,7 @@ class GlassBar(QWidget):
             painter.fillRect(QRectF(0, 0, w, 1.6), QBrush(streak))
         painter.restore()
 
-        pen = QPen(qcolor(pal.line, pal.line_alpha + int(30 * self._hover)))
+        pen = QPen(qcolor(pal.line, min(110, pal.line_alpha + 36 + int(24 * self._hover))))
         pen.setWidthF(1.0)
         painter.setPen(pen)
         painter.setBrush(Qt.BrushStyle.NoBrush)
