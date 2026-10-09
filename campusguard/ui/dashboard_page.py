@@ -460,7 +460,7 @@ class GlassPopup(QFrame):
     def prepare_for_display(self, kind: str = "notifications") -> None:
         """Fit compact popups to their content; reserve scrolling for notifications."""
         self.body_scroll.verticalScrollBar().setValue(0)
-        self.body_scroll.setMaximumHeight(600)
+        self.body_scroll.setMaximumHeight(690)
         self.body_scroll.setVerticalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAsNeeded
             if kind == "notifications"
@@ -1210,6 +1210,8 @@ class DashboardPage(QWidget):
         rl.addWidget(rtitle)
 
         status_text, status_tone = self._current_model_status()
+        if status_text == "PARTIAL" and any(stats.status == "LIVE" for stats in self._stats.values()):
+            status_text = "PARTIAL / ONLINE"
         row = QHBoxLayout()
         key = QLabel("Engine status")
         key.setObjectName("popupKey")
@@ -1957,7 +1959,7 @@ class DashboardPage(QWidget):
             and self._popup_kind == "stats"
         ):
             self._populate_stats_popup()
-            self._popup.prepare_for_display()
+            self._popup.prepare_for_display("stats")
             self._center_popup()
 
     def _show_notifications(
