@@ -41,6 +41,16 @@ class DefensiveSettingsTests(unittest.TestCase):
         self.assertTrue(settings.tracking_enabled)
         self.assertFalse(settings.auto_reconnect)
 
+    def test_invalid_unhashable_values_do_not_crash(self):
+        settings = AppSettings.from_dict({
+            "violence_model": ["unexpected"],
+            "theme": [],
+            "device": {},
+        })
+        self.assertEqual(settings.violence_model, AppSettings().violence_model)
+        self.assertEqual(settings.theme, AppSettings().theme)
+        self.assertEqual(settings.device, AppSettings().device)
+
     def test_unknown_model_and_invalid_paths_fall_back_safely(self):
         settings = AppSettings.from_dict({
             "violence_model": "enhanced",
