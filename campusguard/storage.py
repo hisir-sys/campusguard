@@ -278,6 +278,16 @@ class Repository:
                 "UPDATE incidents SET status = ? WHERE public_id = ?",
                 (status, public_id),
             )
+            # Acknowledgement is the alert-side representation of operator
+            # handling. Resolving an incident must not leave its alert active.
+            if status in {"ACKNOWLEDGED", "RESOLVED"}:
+                connection.execute(
+                    """UPDATE alerts SET acknowledged = 1
+                       WHERE incident_id = (
+                           SELECT id FROM incidents WHERE public_id = ?
+                       )""",
+                    (public_id,),
+                )
 
     def list_alerts(self, limit: int = 500) -> list[dict[str, Any]]:
         with self._lock, self._connection() as connection:
