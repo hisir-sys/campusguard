@@ -122,12 +122,10 @@ class FightDecision:
     """
 
     NORMAL_RELEASE_PREDICTIONS = 6
-    # The temporal classifier already produced the user-visible FIGHT DETECTED
-    # state. Persist the incident on that first qualifying prediction instead
-    # of waiting for several later temporal-window updates.
-    TRIGGER_PREDICTIONS = 1
-    # Use the same configured confidence threshold as the visible state.
-    # Do not silently require a second, higher persistence threshold.
+    # Require several consecutive temporal predictions before creating a
+    # persistent incident. This filters isolated classifier spikes while
+    # keeping the configured confidence threshold as the primary confidence gate.
+    TRIGGER_PREDICTIONS = 4
     MIN_TRIGGER_CONFIDENCE = 0.0
 
     def __init__(self, threshold: float) -> None:
@@ -354,8 +352,6 @@ class VisionPipeline:
 
         if self._detect_scene_cut(frame):
             self._reset_tracking_state()
-        elif self.scene_cut_cooldown > 0:
-            self.scene_cut_cooldown -= 1
         process_started = perf_counter()
         annotated = frame.copy()
         state = "AI DISABLED" if not ai_enabled else "MODEL NOT LOADED"
