@@ -15,7 +15,6 @@ def _as_float(value: Any, default: float) -> float:
 
 def _as_int(value: Any, default: int) -> int:
     try:
-        # Avoid accepting lossy values such as 4.7 as an integer setting.
         if isinstance(value, float) and not value.is_integer():
             return default
         return int(value)
@@ -77,12 +76,15 @@ class AppSettings:
         threshold = _as_float(candidate.confidence_threshold, defaults.confidence_threshold)
         cooldown = _as_int(candidate.alert_cooldown_seconds, defaults.alert_cooldown_seconds)
         positive_class = _as_int(candidate.fight_positive_class, defaults.fight_positive_class)
-
-        # CampusGuard Enhanced is intentionally reserved for a future ensemble
-        # release; persisted settings must not activate it.
-        selected_model = candidate.violence_model
+        selected_model = _as_nonempty_string(candidate.violence_model, defaults.violence_model)
         if selected_model not in models:
             selected_model = defaults.violence_model
+        theme = _as_nonempty_string(candidate.theme, defaults.theme)
+        if theme not in {"dark", "light"}:
+            theme = defaults.theme
+        device = _as_nonempty_string(candidate.device, defaults.device)
+        if device not in {"auto", "cpu", "cuda"}:
+            device = defaults.device
 
         return cls(
             confidence_threshold=min(0.99, max(0.05, threshold)),
@@ -91,7 +93,7 @@ class AppSettings:
             pose_enabled=_as_bool(candidate.pose_enabled, defaults.pose_enabled),
             alert_cooldown_seconds=max(0, cooldown),
             auto_reconnect=_as_bool(candidate.auto_reconnect, defaults.auto_reconnect),
-            theme=candidate.theme if candidate.theme in {"dark", "light"} else defaults.theme,
+            theme=theme,
             detector_model_path=_as_nonempty_string(candidate.detector_model_path, defaults.detector_model_path),
             pose_model_path=_as_nonempty_string(candidate.pose_model_path, defaults.pose_model_path),
             fight_model_path=_as_nonempty_string(candidate.fight_model_path, defaults.fight_model_path),
@@ -99,7 +101,7 @@ class AppSettings:
             r3d_model_path=_as_nonempty_string(candidate.r3d_model_path, defaults.r3d_model_path),
             x3d_model_path=_as_nonempty_string(candidate.x3d_model_path, defaults.x3d_model_path),
             violence_model=selected_model,
-            device=candidate.device if candidate.device in {"auto", "cpu", "cuda"} else defaults.device,
+            device=device,
             fight_positive_class=0 if positive_class == 0 else 1,
         )
 
