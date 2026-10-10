@@ -1,9 +1,11 @@
 name: CampusGuard Windows Release
 
 on:
+  # Publishing a desktop executable is a release action, not a side effect of
+  # every commit pushed to main. Create a version tag or run this manually.
   push:
-    branches:
-      - main
+    tags:
+      - "v*"
   workflow_dispatch:
 
 concurrency:
