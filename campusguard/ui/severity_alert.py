@@ -173,7 +173,7 @@ class SeverityAlertToast(QFrame):
         # Start immediately; subsequent ticks make the sound pattern audible without
         # blocking the UI thread. QApplication.beep uses the system's configured alert sound.
         QApplication.beep()
-        self._sound_elapsed = config["interval_ms"]
+        self._sound_elapsed = 0
         self._sound_beats = 1
         self._sound_timer.start()
 
@@ -207,12 +207,7 @@ class SeverityAlertToast(QFrame):
 
     def dismiss(self) -> None:
         self._dismiss_timer.stop()
-        self._sound_timer.stop()
-        self._fade.stop()
-        self._fade.setStartValue(self._opacity.opacity())
-        self._fade.setEndValue(0.0)
-        self._fade.finished.connect(self._hide_after_fade)
-        self._fade.start()
+        self._fade_out()
 
     def _fade_out(self) -> None:
         self._sound_timer.stop()
