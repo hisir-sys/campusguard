@@ -59,7 +59,7 @@ jobs:
         env:
           CAMPUSGUARD_VERSION: ${{ github.run_number }}
         run: |
-          python -m PyInstaller --noconfirm --clean --onefile --windowed --name CampusGuard --icon "assets\\campusguard.ico" --collect-all PySide6 --collect-all cv2 --collect-all torch --collect-all torchvision --collect-all ultralytics --collect-all pytorchvideo --collect-all keyring --add-data "models;models" --add-data "assets;assets" main.py
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name CampusGuard --icon "assets/campusguard.ico" --collect-all PySide6 --collect-all cv2 --collect-all torch --collect-all torchvision --collect-all ultralytics --collect-all pytorchvideo --collect-all keyring --add-data "models;models" --add-data "assets;assets" main.py
 
       - name: Verify executable
         shell: pwsh
