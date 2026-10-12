@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import sys
+import threading
 from pathlib import Path
 
 from campusguard.updater import handle_update_arguments, maybe_update
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QFont, QIcon
-from PySide6.QtWidgets import QApplication, QFrame, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QFrame, QLabel, QMessageBox, QVBoxLayout, QWidget
 
 from campusguard.ui.thinking_orb import ThinkingOrb
 
@@ -77,17 +78,64 @@ def main() -> int:
     startup.activateWindow()
     app.processEvents()
 
-    def launch_main_window() -> None:
-        from campusguard.ui.main_window import MainWindow
+    # Import the UI module away from the GUI thread. Its imports can pull in
+    # OpenCV and other large dependencies; doing that on the GUI thread leaves
+    # the startup surface frozen for minutes on some Windows installations.
+    import_state = {"done": False, "module": None, "error": None}
 
-        window = MainWindow()
-        window.show()
-        startup.close()
-        window.raise_()
-        window.activateWindow()
-        app._campusguard_window = window
+    def import_main_window() -> None:
+        try:
+            from campusguard.ui import main_window
+            import_state["module"] = main_window
+        except Exception as error:
+            import_state["error"] = error
+        finally:
+            import_state["done"] = True
 
-    QTimer.singleShot(80, launch_main_window)
+    import_thread = threading.Thread(
+        target=import_main_window,
+        name="CampusGuard-UI-Import",
+        daemon=True,
+    )
+    import_thread.start()
+
+    launch_poll = QTimer()
+    launch_poll.setInterval(100)
+
+    def finish_launch() -> None:
+        if not import_state["done"]:
+            return
+        launch_poll.stop()
+
+        if import_state["error"] is not None:
+            error = import_state["error"]
+            startup.close()
+            QMessageBox.critical(
+                None,
+                "CampusGuard could not start",
+                f"The main interface failed to load.\n\n{type(error).__name__}: {error}",
+            )
+            app.exit(1)
+            return
+
+        try:
+            window = import_state["module"].MainWindow()
+            window.show()
+            startup.close()
+            window.raise_()
+            window.activateWindow()
+            app._campusguard_window = window
+        except Exception as error:
+            startup.close()
+            QMessageBox.critical(
+                None,
+                "CampusGuard could not start",
+                f"The main window failed to initialize.\n\n{type(error).__name__}: {error}",
+            )
+            app.exit(1)
+
+    launch_poll.timeout.connect(finish_launch)
+    launch_poll.start()
     return app.exec()
 
 
