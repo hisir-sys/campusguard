@@ -96,7 +96,7 @@ def main() -> int:
             QMessageBox.critical(
                 None,
                 "CampusGuard could not start",
-                f"The main interface failed to load.\\n\\n{type(error).__name__}: {error}",
+                f"The main interface failed to load.\n\n{type(error).__name__}: {error}",
             )
             app.exit(1)
 
