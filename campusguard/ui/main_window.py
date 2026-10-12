@@ -1392,6 +1392,8 @@ class MainWindow(QMainWindow):
         confidence: float,
         severity: str,
     ) -> None:
+        score = confidence * 100.0 if confidence <= 1.0 else confidence
+        severity = "LOW" if score < 85.0 else "MEDIUM" if score < 95.0 else "HIGH"
         incident = self.repository.create_incident(
             camera,
             event,
@@ -1426,6 +1428,8 @@ class MainWindow(QMainWindow):
         camera = self.cameras.get(camera_id)
         if camera is None:
             return
+        score = confidence * 100.0 if confidence <= 1.0 else confidence
+        severity = "LOW" if score < 85.0 else "MEDIUM" if score < 95.0 else "HIGH"
         incident = self.repository.create_incident(
             camera,
             event,

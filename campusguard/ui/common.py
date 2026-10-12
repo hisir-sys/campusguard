@@ -230,15 +230,7 @@ class CameraPreview(QFrame):
     ) -> None:
         self._source_pixmap = pixmap
         normalized_state = (state or "UNKNOWN").upper()
-        score = None
-        if confidence is not None:
-            try:
-                raw_score = float(confidence)
-                score = raw_score * 100.0 if raw_score <= 1.0 else raw_score
-            except (TypeError, ValueError):
-                score = None
-
-        text = f"{normalized_state}  ·  {score:.1f}%" if score is not None else normalized_state
+        text = normalized_state
         colors = {
             "FIGHT DETECTED": ("#FF626B", "rgba(255, 98, 107, 130)"),
             "POSSIBLE ALTERCATION": ("#F3B64B", "rgba(243, 182, 75, 130)"),
