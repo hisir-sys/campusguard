@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QTimer, Qt, Signal
-from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
-    QGraphicsDropShadowEffect,
     QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
@@ -28,7 +26,7 @@ class SeverityAlertToast(QFrame):
             "accent": "#D9A441",
             "sound_ms": 2000,
             "popup_ms": 5000,
-            "interval_ms": 800,
+            "interval_ms": 1000,
             "beats": 2,
         },
         "high": {
@@ -111,12 +109,7 @@ class SeverityAlertToast(QFrame):
         layout.addWidget(self._confidence)
         layout.addLayout(actions)
 
-        shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(28)
-        shadow.setOffset(0, 8)
-        shadow.setColor(QColor(0, 0, 0, 95))
-        self.setGraphicsEffect(shadow)
-        # Keep opacity animation on the toast itself without losing the glass shadow.
+        # Opacity is animated directly so the glass toast fades smoothly in and out.
         self._opacity = QGraphicsOpacityEffect(self)
         self._opacity.setOpacity(0.0)
         self.setGraphicsEffect(self._opacity)
