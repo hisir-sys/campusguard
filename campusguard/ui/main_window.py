@@ -471,6 +471,7 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("CampusGuard — Security Operations")
+        self.setWindowIcon(QApplication.windowIcon())
         self.resize(1500, 940)
         self.setMinimumSize(1080, 700)
 
