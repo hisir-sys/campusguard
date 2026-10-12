@@ -110,9 +110,6 @@ class SeverityAlertToast(QFrame):
         layout.addLayout(actions)
 
         # Opacity is animated directly so the glass toast fades smoothly in and out.
-        self._opacity = QGraphicsOpacityEffect(self)
-        self._opacity.setOpacity(0.0)
-        self.setGraphicsEffect(self._opacity)
         self._apply_theme()
 
     def _apply_theme(self) -> None:
