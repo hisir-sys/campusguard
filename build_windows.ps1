@@ -8,7 +8,7 @@ if (-not (Test-Path ".venv\Scripts\python.exe")) {
 
 $python = (Resolve-Path ".venv\Scripts\python.exe").Path
 
-& $python -m pip install --upgrade pyinstaller
+& $python -m pip install --upgrade pyinstaller pillow
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 if (-not (Test-Path "models\yolo11n.pt") -or -not (Test-Path "models\yolo11n-pose.pt")) {
@@ -18,7 +18,10 @@ if (-not (Test-Path "models\yolo11n.pt") -or -not (Test-Path "models\yolo11n-pos
     Copy-Item yolo11n-pose.pt models/yolo11n-pose.pt -Force
 }
 
-& $python -m PyInstaller --noconfirm --clean --onefile --windowed --name CampusGuard --collect-all PySide6 --collect-all cv2 --collect-all torch --collect-all torchvision --collect-all ultralytics --collect-all pytorchvideo --collect-all keyring --add-data "models;models" main.py
+& $python scripts/generate_app_icon.py
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+& $python -m PyInstaller --noconfirm --clean --onefile --windowed --name CampusGuard --icon "assets\campusguard.ico" --collect-all PySide6 --collect-all cv2 --collect-all torch --collect-all torchvision --collect-all ultralytics --collect-all pytorchvideo --collect-all keyring --add-data "models;models" --add-data "assets;assets" main.py
 
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
