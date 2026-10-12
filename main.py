@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 from campusguard.updater import handle_update_arguments, maybe_update
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import QApplication, QFrame, QLabel, QVBoxLayout, QWidget
 
 from campusguard.ui.thinking_orb import ThinkingOrb
@@ -16,6 +17,7 @@ class StartupWindow(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("CampusGuard")
+        self.setWindowIcon(QApplication.windowIcon())
         self.setFixedSize(360, 360)
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -62,6 +64,9 @@ def main() -> int:
     app.setApplicationName("CampusGuard")
     app.setOrganizationName("CampusGuard")
     app.setStyle("Fusion")
+    asset_root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+    app_icon = QIcon(str(asset_root / "assets" / "campusguard-eye.svg"))
+    app.setWindowIcon(app_icon)
 
     # Show a tiny, dependency-light surface first. The heavy MainWindow import
     # happens only after the event loop has painted this window, so the user
