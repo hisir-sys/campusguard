@@ -33,7 +33,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
-          python -m pip install pyinstaller
+          python -m pip install pyinstaller pillow
 
       - name: Prepare YOLO runtime weights
         shell: pwsh
@@ -50,12 +50,16 @@ jobs:
         run: |
           Set-Content version.txt $env:CAMPUSGUARD_VERSION
 
+      - name: Generate application icon
+        shell: pwsh
+        run: python scripts/generate_app_icon.py
+
       - name: Build CampusGuard.exe
         shell: pwsh
         env:
           CAMPUSGUARD_VERSION: ${{ github.run_number }}
         run: |
-          python -m PyInstaller --noconfirm --clean --onefile --windowed --name CampusGuard --collect-all PySide6 --collect-all cv2 --collect-all torch --collect-all torchvision --collect-all ultralytics --collect-all pytorchvideo --collect-all keyring --add-data "models;models" main.py
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name CampusGuard --icon "assets\\campusguard.ico" --collect-all PySide6 --collect-all cv2 --collect-all torch --collect-all torchvision --collect-all ultralytics --collect-all pytorchvideo --collect-all keyring --add-data "models;models" --add-data "assets;assets" main.py
 
       - name: Verify executable
         shell: pwsh
