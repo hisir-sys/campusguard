@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import sys
 from typing import Callable
 
 import cv2
@@ -100,7 +101,18 @@ class VideoClassifier:
         return f"class_{self.fight_class}"
 
     def _load(self) -> None:
-        path = Path(self.path).expanduser()
+        raw_path = Path(self.path).expanduser()
+        path = raw_path
+        if not raw_path.is_absolute():
+            # Resolve checkpoints independently of PowerShell/shortcut working
+            # directory. PyInstaller extracts bundled assets under _MEIPASS.
+            bundle_root = getattr(sys, "_MEIPASS", None)
+            bundled_path = Path(bundle_root) / raw_path if bundle_root else None
+            project_path = Path(__file__).resolve().parents[1] / raw_path
+            if bundled_path is not None and bundled_path.is_file():
+                path = bundled_path
+            elif project_path.is_file():
+                path = project_path
         if not self.path.strip() or not path.is_file():
             self.status(self.profile.key, f"MODEL NOT LOADED — file not found: {path}")
             return
