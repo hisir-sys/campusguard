@@ -22,7 +22,7 @@ class SeverityAlertToast(QFrame):
 
     _LEVELS = {
         "medium": {
-            "title": "SECURITY ALERT",
+            "title": "ALERT",
             "accent": "#D9A441",
             "sound_ms": 2000,
             "popup_ms": 5000,
@@ -30,7 +30,7 @@ class SeverityAlertToast(QFrame):
             "beats": 2,
         },
         "high": {
-            "title": "HIGH ALERT",
+            "title": "CRITICAL ALERT",
             "accent": "#F07838",
             "sound_ms": 5000,
             "popup_ms": 7000,
@@ -38,7 +38,7 @@ class SeverityAlertToast(QFrame):
             "beats": 0,
         },
         "critical": {
-            "title": "CRITICAL ALERT",
+            "title": "DANGER",
             "accent": "#FF343F",
             "sound_ms": 10000,
             "popup_ms": 15000,
