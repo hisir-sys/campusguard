@@ -174,6 +174,16 @@ class CameraPreview(QFrame):
         )
         self.status_overlay.raise_()
 
+        # Separate stream health from AI classification: LIVE means the camera
+        # connection works, while this badge reports the model state and score.
+        self.analysis_overlay = QLabel("AI INITIALIZING", self)
+        self.analysis_overlay.setStyleSheet(
+            "background: rgba(5, 9, 12, 210); color: #B8C0CC; "
+            "border: 1px solid rgba(184, 192, 204, 100); "
+            "border-radius: 9px; padding: 5px 9px; font-size: 8pt; font-weight: 800;"
+        )
+        self.analysis_overlay.raise_()
+
         outer = QVBoxLayout(self)
         outer.setContentsMargins(8, 8, 8, 8)
         outer.setSpacing(0)
@@ -196,6 +206,14 @@ class CameraPreview(QFrame):
                     else "OFFLINE"
                 )
             )
+            self.analysis_overlay.setText(
+                "AI INITIALIZING" if stats.status == "CONNECTING" else "AI WAITING"
+            )
+            self.analysis_overlay.setStyleSheet(
+                "background: rgba(5, 9, 12, 210); color: #B8C0CC; "
+                "border: 1px solid rgba(184, 192, 204, 100); "
+                "border-radius: 9px; padding: 5px 9px; font-size: 8pt; font-weight: 800;"
+            )
         elif self._source_pixmap is None:
             self.video_label.setText("Waiting for camera frames")
         self._position_overlays()
@@ -211,6 +229,32 @@ class CameraPreview(QFrame):
         confidence: float | None = None,
     ) -> None:
         self._source_pixmap = pixmap
+        normalized_state = (state or "UNKNOWN").upper()
+        score = None
+        if confidence is not None:
+            try:
+                raw_score = float(confidence)
+                score = raw_score * 100.0 if raw_score <= 1.0 else raw_score
+            except (TypeError, ValueError):
+                score = None
+
+        text = f"{normalized_state}  ·  {score:.1f}%" if score is not None else normalized_state
+        colors = {
+            "FIGHT DETECTED": ("#FF626B", "rgba(255, 98, 107, 130)"),
+            "POSSIBLE ALTERCATION": ("#F3B64B", "rgba(243, 182, 75, 130)"),
+            "NORMAL": ("#73D69A", "rgba(115, 214, 154, 100)"),
+            "AI DISABLED": ("#B8C0CC", "rgba(184, 192, 204, 100)"),
+            "MODEL NOT LOADED": ("#B8C0CC", "rgba(184, 192, 204, 100)"),
+            "MODEL ERROR": ("#FF626B", "rgba(255, 98, 107, 130)"),
+            "AI ERROR": ("#FF626B", "rgba(255, 98, 107, 130)"),
+        }
+        color, border = colors.get(normalized_state, ("#B8C0CC", "rgba(184, 192, 204, 100)"))
+        self.analysis_overlay.setText(text)
+        self.analysis_overlay.setStyleSheet(
+            f"background: rgba(5, 9, 12, 220); color: {color}; "
+            f"border: 1px solid {border}; "
+            "border-radius: 9px; padding: 5px 9px; font-size: 8pt; font-weight: 800;"
+        )
         self._scale_pixmap()
         self._position_overlays()
 
@@ -238,6 +282,12 @@ class CameraPreview(QFrame):
         )
         self.name_overlay.raise_()
         self.status_overlay.raise_()
+        self.analysis_overlay.adjustSize()
+        self.analysis_overlay.move(
+            max(rect.left() + 12, rect.right() - self.analysis_overlay.width() - 12),
+            max(rect.top() + 8, rect.top() + 12),
+        )
+        self.analysis_overlay.raise_()
 
     def _scale_pixmap(self) -> None:
         if self._source_pixmap is None:
