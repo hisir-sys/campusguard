@@ -39,6 +39,7 @@ from campusguard.ui.glass_nav import BackdropWidget, BottomBar, TopBar
 from campusguard.ui.history_pages import AlertsPage, IncidentsPage
 from campusguard.ui.icons import set_icon_theme
 from campusguard.ui.settings_page import SettingsPage
+from campusguard.ui.severity_alert import SeverityAlertToast
 from campusguard.ui.theme import get_palette, rgba
 
 
@@ -660,6 +661,9 @@ class MainWindow(QMainWindow):
         self._in_app_overlay = InAppOverlay(central)
         self._in_app_overlay.closed.connect(self._on_overlay_closed)
         self._in_app_overlay.hide()
+        self._severity_alert = SeverityAlertToast(central)
+        self._severity_alert.view_requested.connect(self._view_alert_incident)
+        self._severity_alert.hide()
         # This app uses the floating navigation dock instead of a status bar.
         # Hiding the empty QMainWindow status bar removes the full-width gray
         # strip that could appear beneath/behind the dock.
@@ -671,6 +675,8 @@ class MainWindow(QMainWindow):
         super().resizeEvent(event)
         if hasattr(self, "_in_app_overlay"):
             self._in_app_overlay.setGeometry(self.centralWidget().rect())
+        if hasattr(self, "_severity_alert"):
+            self._severity_alert._position()
         self._position_bottom_bar()
 
     def _position_bottom_bar(self) -> None:
@@ -1398,6 +1404,9 @@ class MainWindow(QMainWindow):
         self._pending_footage_incidents["LOCAL-TEST"] = str(
             incident["public_id"]
         )
+        self._severity_alert.show_alert(
+            str(incident["public_id"]), event, camera.name, confidence
+        )
         self.statusBar().showMessage(
             f"{severity} alert: {event} in local test footage ({confidence:.0%}).",
             12000,
@@ -1429,6 +1438,9 @@ class MainWindow(QMainWindow):
         self._pending_footage_incidents[camera_id] = str(
             incident["public_id"]
         )
+        self._severity_alert.show_alert(
+            str(incident["public_id"]), event, camera.name, confidence
+        )
         self.statusBar().showMessage(
             f"{severity} alert: {event} on {camera.name} ({confidence:.0%}).",
             12000,
@@ -1441,6 +1453,28 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     # Incidents / alerts
     # ------------------------------------------------------------------
+    def _view_alert_incident(self, public_id: str) -> None:
+        incident = next(
+            (row for row in self.repository.list_incidents() if row.get("public_id") == public_id),
+            None,
+        )
+        self.navigate("incidents")
+        if incident is None:
+            self.statusBar().showMessage(f"Incident {public_id} is no longer available.", 5000)
+            return
+        footage_path = str(incident.get("footage_path") or "")
+        if footage_path and Path(footage_path).is_file():
+            QTimer.singleShot(
+                120,
+                lambda path=footage_path, identifier=public_id:
+                    self.incidents_page._open_footage(path, identifier),
+            )
+        else:
+            self.statusBar().showMessage(
+                f"Incident {public_id} opened. Saved footage is still being finalized or is unavailable.",
+                6500,
+            )
+
     def _on_footage_saved(self, camera_id: str, footage_path: str) -> None:
         public_id = self._pending_footage_incidents.pop(camera_id, None)
         if public_id is None:
