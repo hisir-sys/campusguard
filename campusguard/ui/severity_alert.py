@@ -288,7 +288,14 @@ class SeverityAlertToast(QFrame):
         self._alarm_stop_event = stop_event
 
         def play_pattern() -> None:
-            pattern = ((1450, 240), (1050, 240), (1450, 240), (1050, 240), (820, 180))
+            # Severity controls pulse speed: slow and restrained at medium,
+            # quicker at high, and rapid/urgent at critical.
+            patterns = {
+                "medium": ((950, 520), (720, 520)),
+                "high": ((1250, 330), (900, 330)),
+                "critical": ((1500, 170), (1050, 170), (1500, 170), (820, 170)),
+            }
+            pattern = patterns.get(self._level, patterns["medium"])
             while not stop_event.is_set():
                 for frequency, duration in pattern:
                     if stop_event.is_set():
@@ -297,7 +304,7 @@ class SeverityAlertToast(QFrame):
                         winsound.Beep(frequency, duration)
                     except (RuntimeError, OSError):
                         return
-                    if stop_event.wait(0.035):
+                    if stop_event.wait(0.025):
                         break
 
         self._alarm_thread = threading.Thread(
