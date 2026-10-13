@@ -1393,25 +1393,51 @@ class MainWindow(QMainWindow):
         severity: str,
     ) -> None:
         score = confidence * 100.0 if confidence <= 1.0 else confidence
+        score = max(0.0, min(100.0, score))
+        is_peak_update = severity == "UPDATE"
         severity = "LOW" if score < 85.0 else "MEDIUM" if score < 95.0 else "HIGH"
+
+        # Local file tests use the same event contract as camera workers. UPDATE
+        # means the same fight's peak rose; never create a second incident.
+        if is_peak_update:
+            public_id = self._pending_footage_incidents.get("LOCAL-TEST")
+            if public_id:
+                self.repository.update_incident_assessment(public_id, confidence, severity)
+                self._severity_alert.update_assessment(public_id, confidence)
+                self.incidents_page.refresh()
+                self.alerts_page.refresh()
+                self.dashboard.refresh_summary()
+                self._update_alert_badge()
+            self.statusBar().showMessage(
+                f"{severity} local-test alert: peak confidence {score:.1f}%.", 6000
+            )
+            return
+
         incident = self.repository.create_incident(
-            camera,
-            event,
-            confidence,
-            severity,
-            self.settings.alert_cooldown_seconds,
+            camera, event, confidence, severity, self.settings.alert_cooldown_seconds
         )
         if incident is None:
+            latest = next(
+                (row for row in self.repository.list_incidents()
+                 if row.get("camera_id") == "LOCAL-TEST"
+                 and row.get("status") != "RESOLVED"),
+                None,
+            )
+            if latest is not None:
+                self._severity_alert.show_alert(
+                    str(latest["public_id"]), event, camera.name, confidence
+                )
+            self.statusBar().showMessage(
+                f"{severity} alert in local test footage ({score:.1f}%). "
+                "A new incident record was suppressed by cooldown.", 12000
+            )
             return
-        self._pending_footage_incidents["LOCAL-TEST"] = str(
-            incident["public_id"]
-        )
-        self._severity_alert.show_alert(
-            str(incident["public_id"]), event, camera.name, confidence
-        )
+
+        public_id = str(incident["public_id"])
+        self._pending_footage_incidents["LOCAL-TEST"] = public_id
+        self._severity_alert.show_alert(public_id, event, camera.name, confidence)
         self.statusBar().showMessage(
-            f"{severity} alert: {event} in local test footage ({confidence:.0%}).",
-            12000,
+            f"{severity} alert: {event} in local test footage ({score:.1f}%).", 12000
         )
         self.incidents_page.refresh()
         self.alerts_page.refresh()
