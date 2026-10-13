@@ -312,7 +312,7 @@ class VisionPipeline:
             else None
         )
 
-        self.classifiers[selected_key] = VideoClassifier(
+        classifier = VideoClassifier(
             profile,
             paths[selected_key],
             self.device,
@@ -320,7 +320,13 @@ class VisionPipeline:
             self.status,
             fight_class_override=fight_class_override,
         )
-        self.status("fight", f"VIOLENCE MODEL — {self.model_display_name(selected_key)}")
+        self.classifiers[selected_key] = classifier
+
+        # VideoClassifier already reports missing checkpoints/load errors. Do not
+        # overwrite those diagnostics with a generic label: the dashboard uses
+        # the READY prefix to calculate the AI Engine health state.
+        if classifier.ready:
+            self.status("fight", f"READY — {self.model_display_name(selected_key)}")
 
         self.person_buffers.clear()
         self.person_frame_counts.clear()
