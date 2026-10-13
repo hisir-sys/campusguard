@@ -136,12 +136,14 @@ class FightDecision:
         self.confidences: deque[float] = deque(maxlen=self.TRIGGER_PREDICTIONS)
         self.event_latched = False
         self.normal_release_count = 0
+        self.peak_confidence: float | None = None
 
     def reset(self) -> None:
         self.states.clear()
         self.confidences.clear()
         self.event_latched = False
         self.normal_release_count = 0
+        self.peak_confidence = None
 
     def update(self, state: str, confidence: float | None) -> Event | None:
         if state == "NORMAL":
@@ -151,6 +153,7 @@ class FightDecision:
             if self.normal_release_count >= self.NORMAL_RELEASE_PREDICTIONS:
                 self.event_latched = False
                 self.normal_release_count = 0
+                self.peak_confidence = None
             return None
 
         self.normal_release_count = 0
@@ -160,11 +163,15 @@ class FightDecision:
             self.confidences.clear()
             return None
 
-        self.states.append(state)
-        self.confidences.append(float(confidence))
-
+        current_confidence = max(0.0, min(1.0, float(confidence)))
         if self.event_latched:
-            return None
+            self.peak_confidence = max(self.peak_confidence or 0.0, current_confidence)
+            # UPDATE events carry the running peak; consumers must update the
+            # existing incident rather than create a new one.
+            return "FIGHT DETECTED", self.peak_confidence, "UPDATE"
+
+        self.states.append(state)
+        self.confidences.append(current_confidence)
         if len(self.states) < self.TRIGGER_PREDICTIONS:
             return None
         if not all(item == "FIGHT DETECTED" for item in self.states):
@@ -179,7 +186,8 @@ class FightDecision:
             return None
 
         self.event_latched = True
-        return "FIGHT DETECTED", rolling_confidence, "HIGH"
+        self.peak_confidence = rolling_confidence
+        return "FIGHT DETECTED", self.peak_confidence, "HIGH"
 
 
 class VisionPipeline:
