@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+import math
+import struct
+import tempfile
+import wave
+from pathlib import Path
+
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QTimer, Qt, Signal
 from PySide6.QtWidgets import (
     QApplication,
@@ -219,13 +225,34 @@ class SeverityAlertToast(QFrame):
 
     @staticmethod
     def _play_beep() -> None:
-        """Play a short audible Windows tone, falling back to Qt on other systems."""
+        """Play a short, non-blocking tone; avoid silent system-beep fallbacks on Windows."""
         if winsound is not None:
             try:
-                # A generated tone does not depend on the Windows system-sound setting.
-                winsound.Beep(1000, 140)
+                # winsound.Beep is synchronous and can stall Qt's UI thread. PlaySound
+                # asynchronously plays a small generated WAV and does not rely on the
+                # Windows "default beep" device being enabled.
+                tone_path = Path(tempfile.gettempdir()) / "campusguard_alert_tone.wav"
+                if not tone_path.is_file():
+                    sample_rate = 22050
+                    duration = 0.16
+                    amplitude = 11000
+                    samples = (
+                        int(amplitude * math.sin(2.0 * math.pi * 1000.0 * i / sample_rate))
+                        for i in range(int(sample_rate * duration))
+                    )
+                    with wave.open(str(tone_path), "wb") as wav_file:
+                        wav_file.setnchannels(1)
+                        wav_file.setsampwidth(2)
+                        wav_file.setframerate(sample_rate)
+                        wav_file.writeframes(
+                            b"".join(struct.pack("<h", sample) for sample in samples)
+                        )
+                winsound.PlaySound(
+                    str(tone_path),
+                    winsound.SND_FILENAME | winsound.SND_ASYNC,
+                )
                 return
-            except (RuntimeError, OSError):
+            except (RuntimeError, OSError, wave.Error):
                 pass
         QApplication.beep()
 
