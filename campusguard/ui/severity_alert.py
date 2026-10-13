@@ -154,7 +154,7 @@ class SeverityAlertToast(QFrame):
         self._sound_beats = 0
         self._title.setText(config["title"])
         self._message.setText(f"{event} · {camera_name}")
-        self._confidence.setText(f"Model confidence  {score:.1f}%")
+        self._confidence.setText(f"Peak model confidence  {score:.1f}%")
         self._apply_theme()
 
         self._dismiss_timer.stop()
@@ -183,7 +183,7 @@ class SeverityAlertToast(QFrame):
         self, incident_id: str, confidence: float
     ) -> None:
         """Refresh the visible peak and escalate an existing toast without duplicating it."""
-        if incident_id != self._incident_id:
+        if incident_id != self._incident_id or not self.isVisible():
             return
         score = confidence * 100.0 if confidence <= 1.0 else confidence
         if score < 70:
