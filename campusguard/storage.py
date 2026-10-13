@@ -255,6 +255,36 @@ class Repository:
             ).fetchone()
         return dict(row) if row else None
 
+    def update_incident_assessment(
+        self, public_id: str, confidence: float, severity: str
+    ) -> None:
+        """Update an active incident with the highest observed event confidence."""
+        score = float(confidence)
+        if score > 1.0:
+            score /= 100.0
+        score = max(0.0, min(1.0, score))
+        with self._lock, self._connection() as connection:
+            connection.execute(
+                """UPDATE incidents
+                   SET confidence = CASE WHEN confidence < ? THEN ? ELSE confidence END,
+                       severity = ?
+                   WHERE public_id = ? AND status != 'RESOLVED'""",
+                (score, score, severity, public_id),
+            )
+            row = connection.execute(
+                "SELECT camera_name, confidence FROM incidents WHERE public_id = ?",
+                (public_id,),
+            ).fetchone()
+            if row:
+                connection.execute(
+                    "INSERT INTO notifications(kind, message, created_at) VALUES (?, ?, ?)",
+                    (
+                        "incident_updated",
+                        f"Fight confidence updated — {row['camera_name']} ({float(row['confidence']):.1%})",
+                        datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    ),
+                )
+
     def list_incidents(self, limit: int = 500) -> list[dict[str, Any]]:
         with self._lock, self._connection() as connection:
             rows = connection.execute(
