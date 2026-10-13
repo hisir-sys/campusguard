@@ -5,7 +5,7 @@ from pathlib import Path
 import threading
 
 from PySide6.QtGui import QAction, QKeySequence, QPixmap
-from PySide6.QtCore import QEvent, QEasingCurve, QPropertyAnimation, QRect, QTimer, Qt, Signal
+from PySide6.QtCore import QEvent, QEasingCurve, QPropertyAnimation, QRect, QTimer, Qt, Signal, Slot
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -1122,14 +1122,11 @@ class MainWindow(QMainWindow):
         )
         host = self.centralWidget()
         dialog = LocalVideoTestDialog(path, self.settings, host)
-        dialog.event_detected.connect(
-            lambda event, confidence, severity, camera=local_camera:
-            self._on_local_test_event(camera, event, confidence, severity)
-        )
-        dialog.footage_saved.connect(
-            lambda footage_path:
-            self._on_footage_saved("LOCAL-TEST", footage_path)
-        )
+        # Connect worker-thread signals to bound MainWindow slots. Using lambdas
+        # here can execute database/UI work on the video worker thread.
+        self._local_test_camera = local_camera
+        dialog.event_detected.connect(self._on_local_test_event_from_dialog)
+        dialog.footage_saved.connect(self._on_local_test_footage_saved)
         dialog.setGeometry(host.rect())
         dialog.show()
         dialog.raise_()
@@ -1385,6 +1382,18 @@ class MainWindow(QMainWindow):
         if component == "device":
             self.settings_page.set_device_status(message)
 
+    @Slot(str, float, str)
+    def _on_local_test_event_from_dialog(
+        self, event: str, confidence: float, severity: str
+    ) -> None:
+        camera = getattr(self, "_local_test_camera", None)
+        if camera is not None:
+            self._on_local_test_event(camera, event, confidence, severity)
+
+    @Slot(str)
+    def _on_local_test_footage_saved(self, footage_path: str) -> None:
+        self._on_footage_saved("LOCAL-TEST", footage_path)
+
     def _on_local_test_event(
         self,
         camera: CameraConfig,
@@ -1393,25 +1402,51 @@ class MainWindow(QMainWindow):
         severity: str,
     ) -> None:
         score = confidence * 100.0 if confidence <= 1.0 else confidence
+        score = max(0.0, min(100.0, score))
+        is_peak_update = severity == "UPDATE"
         severity = "LOW" if score < 85.0 else "MEDIUM" if score < 95.0 else "HIGH"
+
+        # Local file tests use the same event contract as camera workers. UPDATE
+        # means the same fight's peak rose; never create a second incident.
+        if is_peak_update:
+            public_id = self._pending_footage_incidents.get("LOCAL-TEST")
+            if public_id:
+                self.repository.update_incident_assessment(public_id, confidence, severity)
+                self._severity_alert.update_assessment(public_id, confidence)
+                self.incidents_page.refresh()
+                self.alerts_page.refresh()
+                self.dashboard.refresh_summary()
+                self._update_alert_badge()
+            self.statusBar().showMessage(
+                f"{severity} local-test alert: peak confidence {score:.1f}%.", 6000
+            )
+            return
+
         incident = self.repository.create_incident(
-            camera,
-            event,
-            confidence,
-            severity,
-            self.settings.alert_cooldown_seconds,
+            camera, event, confidence, severity, self.settings.alert_cooldown_seconds
         )
         if incident is None:
+            latest = next(
+                (row for row in self.repository.list_incidents()
+                 if row.get("camera_id") == "LOCAL-TEST"
+                 and row.get("status") != "RESOLVED"),
+                None,
+            )
+            if latest is not None:
+                self._severity_alert.show_alert(
+                    str(latest["public_id"]), event, camera.name, confidence
+                )
+            self.statusBar().showMessage(
+                f"{severity} alert in local test footage ({score:.1f}%). "
+                "A new incident record was suppressed by cooldown.", 12000
+            )
             return
-        self._pending_footage_incidents["LOCAL-TEST"] = str(
-            incident["public_id"]
-        )
-        self._severity_alert.show_alert(
-            str(incident["public_id"]), event, camera.name, confidence
-        )
+
+        public_id = str(incident["public_id"])
+        self._pending_footage_incidents["LOCAL-TEST"] = public_id
+        self._severity_alert.show_alert(public_id, event, camera.name, confidence)
         self.statusBar().showMessage(
-            f"{severity} alert: {event} in local test footage ({confidence:.0%}).",
-            12000,
+            f"{severity} alert: {event} in local test footage ({score:.1f}%).", 12000
         )
         self.incidents_page.refresh()
         self.alerts_page.refresh()
@@ -1429,7 +1464,26 @@ class MainWindow(QMainWindow):
         if camera is None:
             return
         score = confidence * 100.0 if confidence <= 1.0 else confidence
+        score = max(0.0, min(100.0, score))
+        is_peak_update = severity == "UPDATE"
         severity = "LOW" if score < 85.0 else "MEDIUM" if score < 95.0 else "HIGH"
+
+        # UPDATE is emitted only when the peak rises during an already-latched
+        # fight. Update the same incident; never create a new incident per frame.
+        if is_peak_update:
+            public_id = self._pending_footage_incidents.get(camera_id)
+            if public_id:
+                self.repository.update_incident_assessment(
+                    public_id, confidence,
+                    "LOW" if score < 85.0 else "MEDIUM" if score < 95.0 else "HIGH",
+                )
+                self._severity_alert.update_assessment(public_id, confidence)
+                self.incidents_page.refresh()
+                self.alerts_page.refresh()
+                self.dashboard.refresh_summary()
+                self._update_alert_badge()
+            return
+
         incident = self.repository.create_incident(
             camera,
             event,
@@ -1438,15 +1492,40 @@ class MainWindow(QMainWindow):
             self.settings.alert_cooldown_seconds,
         )
         if incident is None:
+            # Cooldown should suppress duplicate records, not silently suppress
+            # operator feedback. Reuse the latest active incident for the toast,
+            # without reassigning its footage link.
+            latest = next(
+                (
+                    row for row in self.repository.list_incidents()
+                    if row.get("camera_id") == camera_id
+                    and row.get("status") != "RESOLVED"
+                ),
+                None,
+            )
+            if latest is not None:
+                self._severity_alert.show_alert(
+                    str(latest["public_id"]), event, camera.name, confidence
+                )
+                self.statusBar().showMessage(
+                    f"{severity} alert: {event} on {camera.name} ({score:.1f}%). "
+                    "A new incident record was suppressed by the alert cooldown.",
+                    12000,
+                )
+            else:
+                self.statusBar().showMessage(
+                    f"{severity} alert: {event} on {camera.name} ({score:.1f}%).",
+                    12000,
+                )
             return
-        self._pending_footage_incidents[camera_id] = str(
-            incident["public_id"]
-        )
+
+        public_id = str(incident["public_id"])
+        self._pending_footage_incidents[camera_id] = public_id
         self._severity_alert.show_alert(
-            str(incident["public_id"]), event, camera.name, confidence
+            public_id, event, camera.name, confidence
         )
         self.statusBar().showMessage(
-            f"{severity} alert: {event} on {camera.name} ({confidence:.0%}).",
+            f"{severity} alert: {event} on {camera.name} ({score:.1f}%).",
             12000,
         )
         self.incidents_page.refresh()

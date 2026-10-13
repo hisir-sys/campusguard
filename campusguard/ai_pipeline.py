@@ -116,9 +116,10 @@ def combinations(items: list[TrackedPerson]):
 class FightDecision:
     """Turn noisy temporal predictions into one stable, high-confidence event.
 
-    Persistent incidents require several consecutive FIGHT predictions with a
-    strong rolling confidence average. POSSIBLE ALTERCATION remains a visual
-    state but does not create a persistent incident.
+    A persistent incident starts on the first qualifying FIGHT prediction.
+    The decision remains latched until six NORMAL predictions, while tracking
+    the highest FIGHT confidence seen during that single event. POSSIBLE
+    ALTERCATION remains a visual state but does not start a new incident.
     """
 
     NORMAL_RELEASE_PREDICTIONS = 6
@@ -136,12 +137,14 @@ class FightDecision:
         self.confidences: deque[float] = deque(maxlen=self.TRIGGER_PREDICTIONS)
         self.event_latched = False
         self.normal_release_count = 0
+        self.peak_confidence: float | None = None
 
     def reset(self) -> None:
         self.states.clear()
         self.confidences.clear()
         self.event_latched = False
         self.normal_release_count = 0
+        self.peak_confidence = None
 
     def update(self, state: str, confidence: float | None) -> Event | None:
         if state == "NORMAL":
@@ -151,6 +154,7 @@ class FightDecision:
             if self.normal_release_count >= self.NORMAL_RELEASE_PREDICTIONS:
                 self.event_latched = False
                 self.normal_release_count = 0
+                self.peak_confidence = None
             return None
 
         self.normal_release_count = 0
@@ -160,11 +164,18 @@ class FightDecision:
             self.confidences.clear()
             return None
 
-        self.states.append(state)
-        self.confidences.append(float(confidence))
-
+        current_confidence = max(0.0, min(1.0, float(confidence)))
         if self.event_latched:
+            previous_peak = self.peak_confidence or 0.0
+            self.peak_confidence = max(previous_peak, current_confidence)
+            if self.peak_confidence > previous_peak:
+                # UPDATE events carry a new running peak; consumers update the
+                # existing incident rather than create another one.
+                return "FIGHT DETECTED", self.peak_confidence, "UPDATE"
             return None
+
+        self.states.append(state)
+        self.confidences.append(current_confidence)
         if len(self.states) < self.TRIGGER_PREDICTIONS:
             return None
         if not all(item == "FIGHT DETECTED" for item in self.states):
@@ -179,7 +190,8 @@ class FightDecision:
             return None
 
         self.event_latched = True
-        return "FIGHT DETECTED", rolling_confidence, "HIGH"
+        self.peak_confidence = rolling_confidence
+        return "FIGHT DETECTED", self.peak_confidence, "HIGH"
 
 
 class VisionPipeline:
@@ -300,7 +312,7 @@ class VisionPipeline:
             else None
         )
 
-        self.classifiers[selected_key] = VideoClassifier(
+        classifier = VideoClassifier(
             profile,
             paths[selected_key],
             self.device,
@@ -308,7 +320,13 @@ class VisionPipeline:
             self.status,
             fight_class_override=fight_class_override,
         )
-        self.status("fight", f"VIOLENCE MODEL — {self.model_display_name(selected_key)}")
+        self.classifiers[selected_key] = classifier
+
+        # VideoClassifier already reports missing checkpoints/load errors. Do not
+        # overwrite those diagnostics with a generic label: the dashboard uses
+        # the READY prefix to calculate the AI Engine health state.
+        if classifier.ready:
+            self.status("fight", f"READY — {self.model_display_name(selected_key)}")
 
         self.person_buffers.clear()
         self.person_frame_counts.clear()

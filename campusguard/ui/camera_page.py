@@ -304,8 +304,14 @@ class LocalVideoTestDialog(QFrame):
         self.status.setText(message)
 
     def _on_model_status(self, component: str, message: str) -> None:
-        if component == "fight":
-            self.status.setText(message)
+        # Surface every component's diagnostic in local-file testing. Previously
+        # detector/device/pose load failures were silently hidden, making PARTIAL
+        # look like an unexplained video-test failure.
+        if component == "fight" or any(
+            token in message.casefold()
+            for token in ("partial", "failed", "unavailable", "error", "not loaded", "warning")
+        ):
+            self.status.setText(f"{component.upper()}: {message}")
 
     def _on_finished(self) -> None:
         self.play_button.setEnabled(True)
