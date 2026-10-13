@@ -113,13 +113,25 @@ class InteractionTests(unittest.TestCase):
 
 
 class DecisionTests(unittest.TestCase):
-    def test_stable_predictions_trigger_event(self):
+    def test_first_qualifying_prediction_triggers_event_once(self):
         decision = FightDecision(0.65)
-        self.assertIsNone(decision.update("FIGHT DETECTED", 0.90))
-        self.assertIsNone(decision.update("FIGHT DETECTED", 0.90))
-        decision.update("FIGHT DETECTED", 0.90)
         event = decision.update("FIGHT DETECTED", 0.90)
         self.assertEqual(event, ("FIGHT DETECTED", 0.90, "HIGH"))
+        self.assertIsNone(decision.update("FIGHT DETECTED", 0.90))
+        self.assertIsNone(decision.update("FIGHT DETECTED", 0.90))
+
+    def test_peak_confidence_updates_without_duplicate_start_event(self):
+        decision = FightDecision(0.65)
+        self.assertEqual(
+            decision.update("FIGHT DETECTED", 0.82),
+            ("FIGHT DETECTED", 0.82, "HIGH"),
+        )
+        self.assertEqual(
+            decision.update("FIGHT DETECTED", 0.91),
+            ("FIGHT DETECTED", 0.91, "UPDATE"),
+        )
+        self.assertIsNone(decision.update("FIGHT DETECTED", 0.88))
+        self.assertEqual(decision.peak_confidence, 0.91)
 
     def test_normal_resets_event_latch(self):
         decision = FightDecision(0.65)
