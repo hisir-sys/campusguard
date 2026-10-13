@@ -179,6 +179,34 @@ class SeverityAlertToast(QFrame):
         self._sound_beats = 1
         self._sound_timer.start()
 
+    def update_assessment(
+        self, incident_id: str, confidence: float
+    ) -> None:
+        """Refresh the visible peak and escalate an existing toast without duplicating it."""
+        if incident_id != self._incident_id:
+            return
+        score = confidence * 100.0 if confidence <= 1.0 else confidence
+        if score < 70:
+            return
+        new_level = "medium" if score < 85 else "high" if score < 95 else "critical"
+        old_level = self._level
+        self._confidence.setText(f"Peak model confidence  {score:.1f}%")
+        if new_level == old_level:
+            return
+
+        self._level = new_level
+        config = self._LEVELS[new_level]
+        self._title.setText(config["title"])
+        self._apply_theme()
+        self._dismiss_timer.start(config["popup_ms"])
+        self._sound_timer.stop()
+        self._sound_elapsed = 0
+        self._sound_beats = 0
+        self._sound_timer.setInterval(config["interval_ms"])
+        self._play_beep()
+        self._sound_beats = 1
+        self._sound_timer.start()
+
     def _position(self) -> None:
         parent = self.parentWidget()
         if parent is None:
