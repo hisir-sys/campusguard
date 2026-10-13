@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import struct
 import tempfile
+import threading
 import wave
 from pathlib import Path
 
@@ -258,21 +259,44 @@ class SeverityAlertToast(QFrame):
         return tone_path
 
     def _play_alarm(self) -> None:
-        """Play a repeating, high-priority alert without blocking the GUI thread."""
+        """Play a distinct two-tone emergency-style alert on a background thread."""
+        self._stop_alarm()
         if winsound is None:
+            # Keep a portable fallback, though Windows is the primary target.
             QApplication.beep()
             return
-        try:
-            tone_path = self._alarm_wave_path()
-            winsound.PlaySound(
-                str(tone_path),
-                winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_LOOP,
-            )
-        except (RuntimeError, OSError, wave.Error):
-            QApplication.beep()
 
-    @staticmethod
-    def _stop_alarm() -> None:
+        stop_event = threading.Event()
+        self._alarm_stop_event = stop_event
+
+        def play_pattern() -> None:
+            # winsound.Beep is used directly as a fallback-independent Windows
+            # audio path. Run it off the GUI thread so it cannot freeze the app.
+            # Alternating high/low pitches evoke a siren without copying a real
+            # police/ambulance recording.
+            pattern = ((1450, 240), (1050, 240), (1450, 240), (1050, 240), (820, 180))
+            while not stop_event.is_set():
+                for frequency, duration in pattern:
+                    if stop_event.is_set():
+                        break
+                    try:
+                        winsound.Beep(frequency, duration)
+                    except (RuntimeError, OSError):
+                        return
+                    if stop_event.wait(0.035):
+                        break
+
+        self._alarm_thread = threading.Thread(
+            target=play_pattern,
+            name="CampusGuardAlertSound",
+            daemon=True,
+        )
+        self._alarm_thread.start()
+
+    def _stop_alarm(self) -> None:
+        stop_event = getattr(self, "_alarm_stop_event", None)
+        if stop_event is not None:
+            stop_event.set()
         if winsound is not None:
             try:
                 winsound.PlaySound(None, 0)
