@@ -116,9 +116,10 @@ def combinations(items: list[TrackedPerson]):
 class FightDecision:
     """Turn noisy temporal predictions into one stable, high-confidence event.
 
-    Persistent incidents require several consecutive FIGHT predictions with a
-    strong rolling confidence average. POSSIBLE ALTERCATION remains a visual
-    state but does not create a persistent incident.
+    A persistent incident starts on the first qualifying FIGHT prediction.
+    The decision remains latched until six NORMAL predictions, while tracking
+    the highest FIGHT confidence seen during that single event. POSSIBLE
+    ALTERCATION remains a visual state but does not start a new incident.
     """
 
     NORMAL_RELEASE_PREDICTIONS = 6
