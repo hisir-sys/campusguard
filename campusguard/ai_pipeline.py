@@ -165,10 +165,13 @@ class FightDecision:
 
         current_confidence = max(0.0, min(1.0, float(confidence)))
         if self.event_latched:
-            self.peak_confidence = max(self.peak_confidence or 0.0, current_confidence)
-            # UPDATE events carry the running peak; consumers must update the
-            # existing incident rather than create a new one.
-            return "FIGHT DETECTED", self.peak_confidence, "UPDATE"
+            previous_peak = self.peak_confidence or 0.0
+            self.peak_confidence = max(previous_peak, current_confidence)
+            if self.peak_confidence > previous_peak:
+                # UPDATE events carry a new running peak; consumers update the
+                # existing incident rather than create another one.
+                return "FIGHT DETECTED", self.peak_confidence, "UPDATE"
+            return None
 
         self.states.append(state)
         self.confidences.append(current_confidence)
