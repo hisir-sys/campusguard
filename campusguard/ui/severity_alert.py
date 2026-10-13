@@ -217,7 +217,11 @@ class SeverityAlertToast(QFrame):
         parent = self.parentWidget()
         if parent is None:
             return
-        self.move(max(18, parent.width() - self.width() - 24), 22)
+        # Center the alert over the app canvas so it reads as a deliberate
+        # glass incident dialog, not a small notification competing with cards.
+        x = max(18, (parent.width() - self.width()) // 2)
+        y = max(18, (parent.height() - self.height()) // 2)
+        self.move(x, y)
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
