@@ -1262,13 +1262,13 @@ class DashboardPage(QWidget):
         if self._settings is None:
             return "Waiting", "warn"
 
-        required = ("detector", "pose", "fight")
-        loaded = sum(
-            self._runtime_loaded.get(key) is True
-            for key in required
-        )
+        # Person detection and the temporal fight classifier are the core
+        # production path. Pose is an optional enrichment layer; requiring it
+        # made the whole engine appear PARTIAL even when fight detection worked.
+        core = ("detector", "fight")
+        loaded = sum(self._runtime_loaded.get(key) is True for key in core)
 
-        if loaded == len(required):
+        if loaded == len(core):
             return "ACTIVE", "good"
         if loaded > 0:
             return "PARTIAL", "warn"
