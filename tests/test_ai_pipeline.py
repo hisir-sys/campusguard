@@ -16,7 +16,7 @@ class SettingsTests(unittest.TestCase):
 
     def test_enhanced_is_not_operational(self):
         settings = AppSettings.from_dict({"violence_model": "enhanced"})
-        self.assertEqual(settings.violence_model, "mc3")
+        self.assertEqual(settings.violence_model, "fdsc_mc3")
 
     def test_mc3_fight_class_is_verified_from_manifest(self):
         profile = MODEL_PROFILES["mc3"]
