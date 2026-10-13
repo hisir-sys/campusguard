@@ -1430,11 +1430,12 @@ class MainWindow(QMainWindow):
             return
         score = confidence * 100.0 if confidence <= 1.0 else confidence
         score = max(0.0, min(100.0, score))
+        is_peak_update = severity == "UPDATE"
         severity = "LOW" if score < 85.0 else "MEDIUM" if score < 95.0 else "HIGH"
 
         # UPDATE is emitted only when the peak rises during an already-latched
         # fight. Update the same incident; never create a new incident per frame.
-        if severity == "UPDATE":
+        if is_peak_update:
             public_id = self._pending_footage_incidents.get(camera_id)
             if public_id:
                 self.repository.update_incident_assessment(
