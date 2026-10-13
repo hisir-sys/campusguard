@@ -8,6 +8,8 @@ import wave
 from pathlib import Path
 
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QTimer, Qt, Signal
+from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
+from PySide6.QtCore import QUrl
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -70,6 +72,13 @@ class SeverityAlertToast(QFrame):
         self._level = "medium"
         self._sound_elapsed = 0
         self._sound_beats = 0
+        self._audio_output = QAudioOutput(self)
+        self._audio_player = QMediaPlayer(self)
+        self._audio_player.setAudioOutput(self._audio_output)
+        self._audio_output.setVolume(1.0)
+        self._user_alarm_path = (
+            Path(__file__).resolve().parents[2] / "assets" / "campusguard_alert.mp3"
+        )
 
         self._opacity = QGraphicsOpacityEffect(self)
         self._opacity.setOpacity(0.0)
@@ -259,10 +268,19 @@ class SeverityAlertToast(QFrame):
         return tone_path
 
     def _play_alarm(self) -> None:
-        """Play a distinct two-tone emergency-style alert on a background thread."""
+        """Play the user's supplied alarm clip; fall back to a Windows siren pattern."""
+        if self._user_alarm_path.is_file():
+            try:
+                self._stop_alarm()
+                self._audio_player.setSource(QUrl.fromLocalFile(str(self._user_alarm_path)))
+                self._audio_player.setLoops(QMediaPlayer.Loops.Infinite)
+                self._audio_player.play()
+                return
+            except (RuntimeError, OSError):
+                pass
+
         self._stop_alarm()
         if winsound is None:
-            # Keep a portable fallback, though Windows is the primary target.
             QApplication.beep()
             return
 
@@ -270,10 +288,6 @@ class SeverityAlertToast(QFrame):
         self._alarm_stop_event = stop_event
 
         def play_pattern() -> None:
-            # winsound.Beep is used directly as a fallback-independent Windows
-            # audio path. Run it off the GUI thread so it cannot freeze the app.
-            # Alternating high/low pitches evoke a siren without copying a real
-            # police/ambulance recording.
             pattern = ((1450, 240), (1050, 240), (1450, 240), (1050, 240), (820, 180))
             while not stop_event.is_set():
                 for frequency, duration in pattern:
@@ -287,9 +301,7 @@ class SeverityAlertToast(QFrame):
                         break
 
         self._alarm_thread = threading.Thread(
-            target=play_pattern,
-            name="CampusGuardAlertSound",
-            daemon=True,
+            target=play_pattern, name="CampusGuardAlertSound", daemon=True
         )
         self._alarm_thread.start()
 
@@ -297,6 +309,10 @@ class SeverityAlertToast(QFrame):
         stop_event = getattr(self, "_alarm_stop_event", None)
         if stop_event is not None:
             stop_event.set()
+        try:
+            self._audio_player.stop()
+        except (RuntimeError, AttributeError):
+            pass
         if winsound is not None:
             try:
                 winsound.PlaySound(None, 0)
