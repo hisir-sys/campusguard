@@ -14,6 +14,11 @@ from PySide6.QtWidgets import (
 
 from campusguard.ui.theme import get_palette, rgba
 
+try:
+    import winsound
+except ImportError:  # Non-Windows development/test environments.
+    winsound = None
+
 
 class SeverityAlertToast(QFrame):
     """Compact, auto-dismissing glass alert that lives inside the app window."""
@@ -169,7 +174,7 @@ class SeverityAlertToast(QFrame):
         self._sound_timer.setInterval(config["interval_ms"])
         # Start immediately; subsequent ticks make the sound pattern audible without
         # blocking the UI thread. QApplication.beep uses the system's configured alert sound.
-        QApplication.beep()
+        self._play_beep()
         self._sound_elapsed = 0
         self._sound_beats = 1
         self._sound_timer.start()
@@ -184,6 +189,18 @@ class SeverityAlertToast(QFrame):
         super().resizeEvent(event)
         self._position()
 
+    @staticmethod
+    def _play_beep() -> None:
+        """Play a short audible Windows tone, falling back to Qt on other systems."""
+        if winsound is not None:
+            try:
+                # A generated tone does not depend on the Windows system-sound setting.
+                winsound.Beep(1000, 140)
+                return
+            except (RuntimeError, OSError):
+                pass
+        QApplication.beep()
+
     def _sound_tick(self) -> None:
         config = self._LEVELS[self._level]
         self._sound_elapsed += config["interval_ms"]
@@ -193,7 +210,7 @@ class SeverityAlertToast(QFrame):
         if self._level == "medium" and self._sound_beats >= config["beats"]:
             self._sound_timer.stop()
             return
-        QApplication.beep()
+        self._play_beep()
         self._sound_beats += 1
 
     def _view_incident(self) -> None:
