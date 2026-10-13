@@ -178,9 +178,9 @@ class SeverityAlertToast(QFrame):
 
         self._dismiss_timer.start(config["popup_ms"])
         self._sound_timer.setInterval(config["interval_ms"])
-        # Start immediately; subsequent ticks make the sound pattern audible without
-        # blocking the UI thread. QApplication.beep uses the system's configured alert sound.
-        self._play_beep()
+        # Start a dedicated repeating two-tone alarm immediately. The sound is
+        # synthesized locally (no bundled copyrighted siren recording or network file).
+        self._play_alarm()
         self._sound_elapsed = 0
         self._sound_beats = 1
         self._sound_timer.start()
@@ -209,7 +209,7 @@ class SeverityAlertToast(QFrame):
         self._sound_elapsed = 0
         self._sound_beats = 0
         self._sound_timer.setInterval(config["interval_ms"])
-        self._play_beep()
+        self._play_alarm()
         self._sound_beats = 1
         self._sound_timer.start()
 
@@ -228,49 +228,64 @@ class SeverityAlertToast(QFrame):
         self._position()
 
     @staticmethod
-    def _play_beep() -> None:
-        """Play a short, non-blocking tone; avoid silent system-beep fallbacks on Windows."""
+    def _alarm_wave_path() -> Path:
+        """Create a short, repeating two-tone emergency-style alert locally."""
+        tone_path = Path(tempfile.gettempdir()) / "campusguard_severity_alarm.wav"
+        if tone_path.is_file() and tone_path.stat().st_size > 1000:
+            return tone_path
+
+        sample_rate = 22050
+        duration = 1.0
+        amplitude = 15000
+        frames = bytearray()
+        for i in range(int(sample_rate * duration)):
+            t = i / sample_rate
+            # Alternating rising/falling tones, with short gaps for a clear alert pulse.
+            phase = t % 0.5
+            if phase >= 0.42:
+                sample = 0
+            else:
+                frequency = 880.0 if phase < 0.21 else 660.0
+                envelope = min(1.0, phase / 0.012, (0.42 - phase) / 0.012)
+                sample = int(amplitude * max(0.0, envelope) * math.sin(2.0 * math.pi * frequency * t))
+            frames.extend(struct.pack("<h", sample))
+
+        with wave.open(str(tone_path), "wb") as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(sample_rate)
+            wav_file.writeframes(bytes(frames))
+        return tone_path
+
+    def _play_alarm(self) -> None:
+        """Play a repeating, high-priority alert without blocking the GUI thread."""
+        if winsound is None:
+            QApplication.beep()
+            return
+        try:
+            tone_path = self._alarm_wave_path()
+            winsound.PlaySound(
+                str(tone_path),
+                winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_LOOP,
+            )
+        except (RuntimeError, OSError, wave.Error):
+            QApplication.beep()
+
+    @staticmethod
+    def _stop_alarm() -> None:
         if winsound is not None:
             try:
-                # winsound.Beep is synchronous and can stall Qt's UI thread. PlaySound
-                # asynchronously plays a small generated WAV and does not rely on the
-                # Windows "default beep" device being enabled.
-                tone_path = Path(tempfile.gettempdir()) / "campusguard_alert_tone.wav"
-                if not tone_path.is_file():
-                    sample_rate = 22050
-                    duration = 0.16
-                    amplitude = 11000
-                    samples = (
-                        int(amplitude * math.sin(2.0 * math.pi * 1000.0 * i / sample_rate))
-                        for i in range(int(sample_rate * duration))
-                    )
-                    with wave.open(str(tone_path), "wb") as wav_file:
-                        wav_file.setnchannels(1)
-                        wav_file.setsampwidth(2)
-                        wav_file.setframerate(sample_rate)
-                        wav_file.writeframes(
-                            b"".join(struct.pack("<h", sample) for sample in samples)
-                        )
-                winsound.PlaySound(
-                    str(tone_path),
-                    winsound.SND_FILENAME | winsound.SND_ASYNC,
-                )
-                return
-            except (RuntimeError, OSError, wave.Error):
+                winsound.PlaySound(None, 0)
+            except (RuntimeError, OSError):
                 pass
-        QApplication.beep()
 
     def _sound_tick(self) -> None:
         config = self._LEVELS[self._level]
         self._sound_elapsed += config["interval_ms"]
         if self._sound_elapsed >= config["sound_ms"]:
             self._sound_timer.stop()
+            self._stop_alarm()
             return
-        if self._level == "medium" and self._sound_beats >= config["beats"]:
-            self._sound_timer.stop()
-            return
-        self._play_beep()
-        self._sound_beats += 1
 
     def _view_incident(self) -> None:
         incident_id = self._incident_id
@@ -284,6 +299,7 @@ class SeverityAlertToast(QFrame):
 
     def _fade_out(self) -> None:
         self._sound_timer.stop()
+        self._stop_alarm()
         self._fade.stop()
         self._fade.setStartValue(self._opacity.opacity())
         self._fade.setEndValue(0.0)
