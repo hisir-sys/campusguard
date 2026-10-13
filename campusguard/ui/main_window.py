@@ -1429,7 +1429,25 @@ class MainWindow(QMainWindow):
         if camera is None:
             return
         score = confidence * 100.0 if confidence <= 1.0 else confidence
+        score = max(0.0, min(100.0, score))
         severity = "LOW" if score < 85.0 else "MEDIUM" if score < 95.0 else "HIGH"
+
+        # UPDATE is emitted only when the peak rises during an already-latched
+        # fight. Update the same incident; never create a new incident per frame.
+        if severity == "UPDATE":
+            public_id = self._pending_footage_incidents.get(camera_id)
+            if public_id:
+                self.repository.update_incident_assessment(
+                    public_id, confidence,
+                    "LOW" if score < 85.0 else "MEDIUM" if score < 95.0 else "HIGH",
+                )
+                self._severity_alert.update_assessment(public_id, confidence)
+                self.incidents_page.refresh()
+                self.alerts_page.refresh()
+                self.dashboard.refresh_summary()
+                self._update_alert_badge()
+            return
+
         incident = self.repository.create_incident(
             camera,
             event,
@@ -1438,15 +1456,40 @@ class MainWindow(QMainWindow):
             self.settings.alert_cooldown_seconds,
         )
         if incident is None:
+            # Cooldown should suppress duplicate records, not silently suppress
+            # operator feedback. Reuse the latest active incident for the toast,
+            # without reassigning its footage link.
+            latest = next(
+                (
+                    row for row in self.repository.list_incidents()
+                    if row.get("camera_id") == camera_id
+                    and row.get("status") != "RESOLVED"
+                ),
+                None,
+            )
+            if latest is not None:
+                self._severity_alert.show_alert(
+                    str(latest["public_id"]), event, camera.name, confidence
+                )
+                self.statusBar().showMessage(
+                    f"{severity} alert: {event} on {camera.name} ({score:.1f}%). "
+                    "A new incident record was suppressed by the alert cooldown.",
+                    12000,
+                )
+            else:
+                self.statusBar().showMessage(
+                    f"{severity} alert: {event} on {camera.name} ({score:.1f}%).",
+                    12000,
+                )
             return
-        self._pending_footage_incidents[camera_id] = str(
-            incident["public_id"]
-        )
+
+        public_id = str(incident["public_id"])
+        self._pending_footage_incidents[camera_id] = public_id
         self._severity_alert.show_alert(
-            str(incident["public_id"]), event, camera.name, confidence
+            public_id, event, camera.name, confidence
         )
         self.statusBar().showMessage(
-            f"{severity} alert: {event} on {camera.name} ({confidence:.0%}).",
+            f"{severity} alert: {event} on {camera.name} ({score:.1f}%).",
             12000,
         )
         self.incidents_page.refresh()
