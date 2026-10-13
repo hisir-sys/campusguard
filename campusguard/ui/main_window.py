@@ -5,7 +5,7 @@ from pathlib import Path
 import threading
 
 from PySide6.QtGui import QAction, QKeySequence, QPixmap
-from PySide6.QtCore import QEvent, QEasingCurve, QPropertyAnimation, QRect, QTimer, Qt, Signal
+from PySide6.QtCore import QEvent, QEasingCurve, QPropertyAnimation, QRect, QTimer, Qt, Signal, Slot
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -1122,14 +1122,11 @@ class MainWindow(QMainWindow):
         )
         host = self.centralWidget()
         dialog = LocalVideoTestDialog(path, self.settings, host)
-        dialog.event_detected.connect(
-            lambda event, confidence, severity, camera=local_camera:
-            self._on_local_test_event(camera, event, confidence, severity)
-        )
-        dialog.footage_saved.connect(
-            lambda footage_path:
-            self._on_footage_saved("LOCAL-TEST", footage_path)
-        )
+        # Connect worker-thread signals to bound MainWindow slots. Using lambdas
+        # here can execute database/UI work on the video worker thread.
+        self._local_test_camera = local_camera
+        dialog.event_detected.connect(self._on_local_test_event_from_dialog)
+        dialog.footage_saved.connect(self._on_local_test_footage_saved)
         dialog.setGeometry(host.rect())
         dialog.show()
         dialog.raise_()
@@ -1384,6 +1381,18 @@ class MainWindow(QMainWindow):
         self.dashboard.update_model_status(camera_id, component, message)
         if component == "device":
             self.settings_page.set_device_status(message)
+
+    @Slot(str, float, str)
+    def _on_local_test_event_from_dialog(
+        self, event: str, confidence: float, severity: str
+    ) -> None:
+        camera = getattr(self, "_local_test_camera", None)
+        if camera is not None:
+            self._on_local_test_event(camera, event, confidence, severity)
+
+    @Slot(str)
+    def _on_local_test_footage_saved(self, footage_path: str) -> None:
+        self._on_footage_saved("LOCAL-TEST", footage_path)
 
     def _on_local_test_event(
         self,
