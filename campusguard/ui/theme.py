@@ -41,35 +41,35 @@ class Palette:
 
 DARK = Palette(
     "dark",
-    "#0C1116", "#0A0F14",
-    "#5B7CFA", 20, "#73809A", 14,
-    "#F3F6FA", "#B7C0CC", "#778391",
-    "#5B7CFA", "#708DFF",
-    "#43C78A", "#D7A844", "#E45E68",
-    "#141B22", 154,
-    "#FFFFFF", 30,
-    "#FFFFFF", 38,
-    "#141B22", 154,
-    "#0F151B", 218,
-    "#5B7CFA",  # edge
-    10,
-    "#151C24",
+    "#090C0A", "#090C0A",
+    "#C8FF52", 18, "#6D746B", 8,
+    "#F7F8F4", "#D6D9D2", "#9AA197",
+    "#C8FF52", "#D8FF83",
+    "#43C78A", "#E0B34D", "#F06A70",
+    "#111610", 190,
+    "#F7F8F4", 24,
+    "#F7F8F4", 12,
+    "#111610", 205,
+    "#090C0A", 240,
+    "#C8FF52",  # edge
+    8,
+    "#111610",
 )
 
 LIGHT = Palette(
     "light",
-    "#F4F6F9", "#E9EDF2",
-    "#5B7CFA", 14, "#8794A8", 16,
-    "#17212B", "#4E5B68", "#778391",
-    "#526FD6", "#667FE1",
+    "#F7F8F4", "#F1F3EC",
+    "#C8FF52", 18, "#6D746B", 8,
+    "#171B16", "#343B31", "#6D746B",
+    "#C8FF52", "#D8FF83",
     "#197A55", "#986D0C", "#C74752",
-    "#FFFFFF", 150,
-    "#17212B", 22,
-    "#17212B", 18,
-    "#FFFFFF", 150,
-    "#F7F9FB", 220,
-    "#526FD6",  # edge
-    24,
+    "#FFFFFF", 220,
+    "#171B16", 20,
+    "#171B16", 12,
+    "#FFFFFF", 220,
+    "#F7F8F4", 245,
+    "#91C82A",  # edge
+    12,
     "#FFFFFF",
 )
 
@@ -109,7 +109,7 @@ def rgba(hex_color: str, alpha: int) -> str:
 _QSS = """
 QWidget {
   color: @text@;
-  font-family: "Segoe UI", "Inter", sans-serif;
+  font-family: "DM Sans", "Manrope", "Segoe UI", sans-serif;
   font-size: 10pt;
 }
 QMainWindow { background: @bg1@; }\nQWidget#centralContent { background: transparent; }
@@ -148,7 +148,7 @@ QToolTip {
 QFrame[card="true"] {
   background: @glass@;
   border: 1px solid @glass_line@;
-  border-radius: 16px;
+  border-radius: 10px;
 }
 QFrame[tile="true"] {
   background: @veil@;
@@ -223,7 +223,7 @@ QPushButton:focus {
 }
 QPushButton:disabled { color: @muted@; }
 QPushButton[primary="true"] {
-  background: @accent@; border-color: @accent@; color: #FFFFFF; font-weight: 600;
+  background: @accent@; border-color: @accent@; color: #090C0A; font-weight: 700;
 }
 QPushButton[primary="true"]:hover {
   background: @accent_hover@; border-color: @accent_hover@;
@@ -239,7 +239,7 @@ QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
   background: @field@; color: @text@;
   border: 1px solid @line@; border-radius: 9px;
   padding: 8px 9px;
-  selection-background-color: @accent@; selection-color: #FFFFFF;
+  selection-background-color: @accent@; selection-color: #090C0A;
 }
 QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover {
   border-color: @line_strong@;
