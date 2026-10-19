@@ -5,10 +5,18 @@ from pathlib import Path
 
 from campusguard.updater import handle_update_arguments, maybe_update
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QFontDatabase, QIcon
 from PySide6.QtWidgets import QApplication, QFrame, QLabel, QMessageBox, QVBoxLayout, QWidget
 
 from campusguard.ui.thinking_orb import ThinkingOrb
+
+
+def _load_brand_fonts() -> None:
+    """Register the bundled website fonts (DM Sans, Manrope) so the UI does not
+    fall back to Segoe UI on machines that do not have them installed."""
+    font_dir = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent)) / "assets" / "fonts"
+    for font_file in sorted(font_dir.glob("*.ttf")):
+        QFontDatabase.addApplicationFont(str(font_file))
 
 
 class StartupWindow(QWidget):
@@ -64,6 +72,7 @@ def main() -> int:
     app.setApplicationName("CampusGuard")
     app.setOrganizationName("CampusGuard")
     app.setStyle("Fusion")
+    _load_brand_fonts()
     asset_root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
     app_icon = QIcon(str(asset_root / "assets" / "campusguard-eye.svg"))
     app.setWindowIcon(app_icon)

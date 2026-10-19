@@ -589,7 +589,7 @@ class SearchControl(QWidget):
         self.edit.setStyleSheet(
             "QLineEdit { background: transparent; border: none; padding: 0 2px; "
             f"color: {pal.text}; selection-background-color: {pal.accent}; "
-            "selection-color: #ffffff; }"
+            "selection-color: #090C0A; }"
         )
         self.esc_badge.setStyleSheet(
             f"QLabel {{ background: transparent; color: {pal.muted}; "
