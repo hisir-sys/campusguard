@@ -73,7 +73,7 @@ def make_page_title(title: str, subtitle: str) -> QWidget:
     layout.setContentsMargins(0, 0, 0, 8)
     layout.setSpacing(8)
     heading = QLabel(title)
-    heading.setStyleSheet("font-size: 21pt; font-weight: 700; letter-spacing: -0.15px;")
+    heading.setStyleSheet("font-family: 'Manrope', 'DM Sans', 'Segoe UI', sans-serif; font-size: 21pt; font-weight: 800; letter-spacing: -0.5px;")
     description = QLabel(subtitle)
     description.setProperty("muted", True)
     layout.addWidget(heading)

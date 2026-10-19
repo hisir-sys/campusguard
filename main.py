@@ -30,8 +30,8 @@ class StartupWindow(QWidget):
         panel.setStyleSheet(
             """
             QFrame {
-                background: #0C1116;
-                border: 1px solid rgba(255,255,255,0.08);
+                background: #090C0A;
+                border: 1px solid rgba(200,255,82,0.16);
                 border-radius: 28px;
             }
             """
