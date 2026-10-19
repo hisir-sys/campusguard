@@ -1299,10 +1299,10 @@ class MainWindow(QMainWindow):
             self._update_operator_button()
             return
         self._in_app_overlay.show_text_input(
-            "Local operator session",
-            "Enter the display name for this local CampusGuard session.",
+            "Sign in · Local operator",
+            "Enter a display name for this device. This local session does not authenticate a cloud account.",
             self._set_operator_name,
-            "Operator display name",
+            "Your display name",
         )
 
     def _set_operator_name(self, name: str) -> None:
