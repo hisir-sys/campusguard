@@ -250,7 +250,7 @@ QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {
 QComboBox QAbstractItemView {
   background: @popup@; color: @text@;
   border: 1px solid @line@;
-  selection-background-color: @accent@; selection-color: #FFFFFF;
+  selection-background-color: @accent@; selection-color: #090C0A;
   outline: 0;
 }
 
