@@ -7,7 +7,9 @@ painting (used by the glass nav buttons).
 
 from __future__ import annotations
 
+import sys
 from functools import lru_cache
+from pathlib import Path
 
 from PySide6.QtCore import QByteArray, QSize, Qt
 from PySide6.QtGui import QGuiApplication, QIcon, QPainter, QPixmap
@@ -27,6 +29,10 @@ _ICONS: dict[str, str] = {
     "moon": '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
     "x": '<path d="M18 6 6 18M6 6l12 12"/>',
     "shield": '<path d="M12 3 4 6v6c0 4.5 3.2 7.8 8 9 4.8-1.2 8-4.5 8-9V6z"/>',
+    "shield-check": (
+        '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>'
+        '<path d="m9 12 2 2 4-4"/>'
+    ),
     "layers": (
         '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 12 9 5 9-5"/>'
         '<path d="m3 16 9 5 9-5"/>'
@@ -134,6 +140,26 @@ def _render(name: str, size: int, color: str, ratio: float) -> QPixmap:
     painter = QPainter(pixmap)
     renderer.render(painter)
     painter.end()
+    pixmap.setDevicePixelRatio(ratio)
+    return pixmap
+
+
+def _asset_root() -> Path:
+    return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2]))
+
+
+@lru_cache(maxsize=16)
+def logo_pixmap(size: int) -> QPixmap:
+    """The CampusGuard logo (assets/campusguard-eye.svg) rendered crisply at ``size`` px."""
+    ratio = _device_ratio()
+    pixels = max(1, int(round(size * ratio)))
+    pixmap = QPixmap(pixels, pixels)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    renderer = QSvgRenderer(str(_asset_root() / "assets" / "campusguard-eye.svg"))
+    if renderer.isValid():
+        painter = QPainter(pixmap)
+        renderer.render(painter)
+        painter.end()
     pixmap.setDevicePixelRatio(ratio)
     return pixmap
 

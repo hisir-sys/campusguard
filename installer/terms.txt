@@ -1,0 +1,27 @@
+CAMPUSGUARD SOFTWARE TERMS AND CONDITIONS
+
+Please read these terms carefully. By installing or using CampusGuard you agree to them. If you do not agree, do not install or use the software.
+
+1. LICENCE
+CampusGuard grants you a personal, non-exclusive, non-transferable licence to install and use the CampusGuard desktop application on computers you control, for the institution and term agreed with the CampusGuard team. You may not copy, sell, sub-license, reverse engineer or redistribute the software except where the law allows it.
+
+2. YOUR ACCOUNT
+Use of the application requires an approved CampusGuard account. Keep your sign-in details confidential. You are responsible for all activity under your account. CampusGuard may suspend or end access if these terms are broken or an agreement ends.
+
+3. AI ALERTS SUPPORT HUMAN REVIEW
+CampusGuard uses AI models to flag possible incidents in video. Alerts can be wrong, can be missed, and are not proof that an incident happened or did not happen. The software is an aid for trained staff and does not replace human judgement, safety procedures, or emergency services. You stay responsible for every decision and action taken in response to an alert.
+
+4. LAWFUL USE AND PRIVACY
+You must use cameras and recorded footage lawfully, only where you are entitled to monitor, and in line with applicable privacy, data-protection and consent or notice requirements. CampusGuard does not perform facial recognition or identity matching. Video capture and analysis run on your own computer. Camera passwords are stored in the Windows credential vault. Signing in sends your account email and password to the CampusGuard account service, and update checks contact GitHub. Footage is not uploaded by the application.
+
+5. UPDATES
+The application can check for, download and (with your permission) install updates. Updates may change or remove features.
+
+6. NO WARRANTY
+The software is provided "as is" and "as available", without warranties of any kind, express or implied, including fitness for a particular purpose and uninterrupted or error-free operation, to the fullest extent permitted by law.
+
+7. LIMITATION OF LIABILITY
+To the fullest extent permitted by law, CampusGuard is not liable for indirect, incidental or consequential loss, or for loss arising from reliance on, or failure of, an AI alert. Nothing in these terms limits liability that cannot be limited by law.
+
+8. CHANGES AND CONTACT
+These terms may be updated with a new version of the software. Questions can be sent to campusguard43@gmail.com or via WhatsApp on +91 70032 76998.

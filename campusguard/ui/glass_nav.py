@@ -659,7 +659,7 @@ class _Logo(QWidget):
         row = QHBoxLayout(self)
         row.setContentsMargins(10, 0, 10, 0)
         row.setSpacing(10)
-        self.icon = IconLabel("eye", 24, "accent")
+        self.icon = IconLabel("shield-check", 24, "accent")
         self.label = QLabel("CampusGuard")
         self.label.setStyleSheet("font-size: 12.5pt; font-weight: 750;")
         row.addWidget(self.icon)
@@ -870,11 +870,12 @@ class TopBar(GlassBar):
 
     def set_operator(self, name: str | None) -> None:
         if name:
-            self.login_button.setText(f"Log out · {name}")
-            self.login_button.setToolTip("This is a local display label, not an authenticated account.")
+            short = name if len(name) <= 20 else name[:19] + "…"
+            self.login_button.setText(f"Log out · {short}")
+            self.login_button.setToolTip(f"Signed in as {name}. Click to log out.")
         else:
             self.login_button.setText("Log in")
-            self.login_button.setToolTip("Set a local operator display label. This does not authenticate an account.")
+            self.login_button.setToolTip("Sign in with your CampusGuard account.")
 
     def focus_search(self) -> None:
         self._expanded = True

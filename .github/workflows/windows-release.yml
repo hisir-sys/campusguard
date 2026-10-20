@@ -49,6 +49,9 @@ jobs:
           CAMPUSGUARD_VERSION: ${{ github.run_number }}
         run: |
           Set-Content version.txt $env:CAMPUSGUARD_VERSION
+          # Bake the number into the app: the frozen exe cannot see build-time env vars,
+          # and without it the updater would treat every build as "dev".
+          Set-Content -Path campusguard/_build_version.py -Value "VERSION = '$env:CAMPUSGUARD_VERSION'" -Encoding ascii
 
       - name: Generate application icon
         shell: pwsh
@@ -59,20 +62,38 @@ jobs:
         env:
           CAMPUSGUARD_VERSION: ${{ github.run_number }}
         run: |
-          python -m PyInstaller --noconfirm --clean --onefile --windowed --name CampusGuard --icon "assets/campusguard.ico" --collect-all PySide6 --collect-all cv2 --collect-all torch --collect-all torchvision --collect-all ultralytics --collect-all pytorchvideo --collect-all keyring --add-data "models;models" --add-data "assets;assets" main.py
+          python -m PyInstaller --noconfirm --clean --onedir --windowed --name CampusGuard --icon "assets/campusguard.ico" --collect-all PySide6 --collect-all cv2 --collect-all torch --collect-all torchvision --collect-all ultralytics --collect-all pytorchvideo --collect-all keyring --add-data "models;models" --add-data "assets;assets" main.py
 
-      - name: Verify executable
+      - name: Verify application folder
         shell: pwsh
         run: |
-          if (-not (Test-Path "dist\CampusGuard.exe")) { throw "CampusGuard.exe was not produced." }
-          $size = (Get-Item "dist\CampusGuard.exe").Length
+          if (-not (Test-Path "dist\CampusGuard\CampusGuard.exe")) { throw "CampusGuard.exe was not produced." }
+          $size = (Get-Item "dist\CampusGuard\CampusGuard.exe").Length
           Write-Host "CampusGuard.exe size: $size bytes"
-          if ($size -lt 1000000) { throw "Executable is unexpectedly small." }
+          if ($size -lt 100000) { throw "Executable is unexpectedly small." }
+          if (-not (Get-ChildItem "dist\CampusGuard" -Recurse -Filter "dm-sans-400.ttf")) { throw "Bundled fonts are missing." }
 
-      - name: Create executable checksum
+      - name: Build installer
+        shell: pwsh
+        env:
+          CAMPUSGUARD_VERSION: ${{ github.run_number }}
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+          }
+          if (-not (Test-Path $iscc)) { throw "Inno Setup was not found." }
+          & $iscc "/DAppVersion=$env:CAMPUSGUARD_VERSION" "installer\CampusGuard.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed." }
+          if (-not (Test-Path "dist\CampusGuard-Setup.exe")) { throw "CampusGuard-Setup.exe was not produced." }
+          $size = (Get-Item "dist\CampusGuard-Setup.exe").Length
+          Write-Host "CampusGuard-Setup.exe size: $size bytes"
+          if ($size -lt 1000000) { throw "Installer is unexpectedly small." }
+
+      - name: Create installer checksum
         shell: pwsh
         run: |
-          (Get-FileHash "dist\\CampusGuard.exe" -Algorithm SHA256).Hash | Set-Content checksum.txt
+          (Get-FileHash "dist\CampusGuard-Setup.exe" -Algorithm SHA256).Hash | Set-Content checksum.txt
 
       - name: Publish rolling latest release
         env:
@@ -81,13 +102,13 @@ jobs:
         run: |
           gh release delete latest --yes 2>$null
           git push origin --delete latest 2>$null
-          gh release create latest "dist/CampusGuard.exe" "version.txt" "checksum.txt" --target "${{ github.sha }}" --title "CampusGuard Latest" --notes "${{ github.run_number }}"
+          gh release create latest "dist/CampusGuard-Setup.exe" "version.txt" "checksum.txt" --target "${{ github.sha }}" --title "CampusGuard Latest" --notes "${{ github.run_number }}"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: CampusGuard-Windows
           path: |
-            dist/CampusGuard.exe
+            dist/CampusGuard-Setup.exe
             version.txt
             checksum.txt

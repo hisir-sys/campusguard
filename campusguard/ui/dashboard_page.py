@@ -97,9 +97,9 @@ class GlassPopup(QFrame):
 
         # Give operational popups enough room to read their metrics and details.
         # Final geometry is still capped by the available application window.
-        self.setMinimumWidth(960)
+        self.setMinimumWidth(640)
         self.setMaximumWidth(1240)
-        self.setMinimumHeight(520)
+        self.setMinimumHeight(420)
         self.setMaximumHeight(900)
         self.setSizePolicy(
             QSizePolicy.Policy.Preferred,

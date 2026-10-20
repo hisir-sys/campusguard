@@ -17,7 +17,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from campusguard.camera_runtime import LocalVideoTestThread
 from campusguard.settings import AppSettings, CameraConfig, CameraStats
 from campusguard.ui.common import CameraFormDialog, make_page_title, set_status_label
 from campusguard.ui.theme import get_palette, rgba
@@ -280,6 +279,8 @@ class LocalVideoTestDialog(QFrame):
         self.play_button.setEnabled(False)
         self.stop_button.setEnabled(True)
         self.choose_button.setEnabled(False)
+        from campusguard.camera_runtime import LocalVideoTestThread
+
         self._thread = LocalVideoTestThread(self._video_path, self._settings)
         self._thread.frame_ready.connect(self._on_frame)
         self._thread.status_changed.connect(self._on_status)

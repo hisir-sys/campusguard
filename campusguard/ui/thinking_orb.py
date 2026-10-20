@@ -2,17 +2,36 @@ from __future__ import annotations
 
 import math
 
-from PySide6.QtCore import QPointF, QTimer, Qt
-from PySide6.QtGui import QColor, QPainter
+from PySide6.QtCore import QElapsedTimer, QPointF, QRectF, QTimer, Qt
+from PySide6.QtGui import QBrush, QColor, QPainter, QPen, QRadialGradient
 from PySide6.QtWidgets import QSizePolicy, QWidget
+
+LIME = QColor("#C8FF52")
+LIME_SOFT = QColor("#D8FF83")
+LIME_CORE = QColor("#F4FFD0")
+
+
+def _with_alpha(color: QColor, alpha: float) -> QColor:
+    result = QColor(color)
+    result.setAlpha(max(0, min(255, int(alpha))))
+    return result
 
 
 class ThinkingOrb(QWidget):
-    """Qt rendering inspired by the MIT-licensed thinking-orbs project.
+    """CampusGuard's start-up orb: a breathing lime core with three tilted
+    orbit rings, travelling signal dots and a sweeping scan arc.
 
-    CampusGuard uses an original painter implementation of the repository's
-    dotted-globe/searching visual so the desktop app stays dependency-light.
+    It is drawn entirely with QPainter on the CampusGuard website palette
+    (lime on near-black). Motion is driven by elapsed wall-clock time, so the
+    speed stays constant even if a frame is delayed by other start-up work.
     """
+
+    _RINGS = (
+        # (tilt degrees, radius factor, flatness, speed, phase)
+        (-24.0, 0.44, 0.34, 1.00, 0.0),
+        (38.0, 0.40, 0.30, -1.35, 2.1),
+        (96.0, 0.46, 0.38, 0.78, 4.2),
+    )
 
     def __init__(self, parent: QWidget | None = None, size: int = 56) -> None:
         super().__init__(parent)
@@ -20,77 +39,81 @@ class ThinkingOrb(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
 
-        self._phase = 0.0
+        self._clock = QElapsedTimer()
+        self._clock.start()
         self._timer = QTimer(self)
         self._timer.setInterval(16)
-        self._timer.timeout.connect(self._tick)
+        self._timer.timeout.connect(self.update)
         self._timer.start()
 
-    def _tick(self) -> None:
-        self._phase = (self._phase + 0.038) % math.tau
-        self.update()
+    def _seconds(self) -> float:
+        return self._clock.elapsed() / 1000.0
 
     def paintEvent(self, event) -> None:
         del event
-
-        width = float(self.width())
-        height = float(self.height())
-        cx = width * 0.5
-        cy = height * 0.5
-        radius = min(width, height) * 0.34
+        t = self._seconds()
+        size = float(min(self.width(), self.height()))
+        center = QPointF(self.width() / 2.0, self.height() / 2.0)
+        breathe = 0.5 + 0.5 * math.sin(t * 2.3)
 
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setPen(Qt.PenStyle.NoPen)
 
-        # Monochrome dotted globe: latitude rings + a rotating longitude scan.
-        # This follows the visual language of the "searching" orb in
-        # Jakub Antalik's thinking-orbs project without embedding its web code.
-        ink = QColor("#E3E9F2")
-        soft = QColor("#AEB8C7")
+        # Soft halo that breathes with the core.
+        halo_radius = size * (0.50 + 0.03 * breathe)
+        halo = QRadialGradient(center, halo_radius)
+        halo.setColorAt(0.0, _with_alpha(LIME, 70 + 40 * breathe))
+        halo.setColorAt(0.45, _with_alpha(LIME, 22 + 10 * breathe))
+        halo.setColorAt(1.0, _with_alpha(LIME, 0))
+        painter.setBrush(QBrush(halo))
+        painter.drawEllipse(center, halo_radius, halo_radius)
 
-        latitudes = (-0.82, -0.52, -0.22, 0.10, 0.40, 0.68)
-        columns = 30
+        # Sweeping scan arc: a fading comet tail on the outer circle.
+        sweep_radius = size * 0.47
+        sweep_rect = QRectF(
+            center.x() - sweep_radius, center.y() - sweep_radius, sweep_radius * 2, sweep_radius * 2
+        )
+        head = (t * 140.0) % 360.0
+        steps = 28
+        for step in range(steps):
+            fade = 1.0 - step / steps
+            pen = QPen(_with_alpha(LIME, 190 * fade * fade), max(1.2, size * 0.012), Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+            painter.setPen(pen)
+            start_angle = (head - step * 3.2) % 360.0
+            painter.drawArc(sweep_rect, int(-start_angle * 16), int(-3.4 * 16))
+        painter.setPen(Qt.PenStyle.NoPen)
 
-        for row, latitude in enumerate(latitudes):
-            y = cy + latitude * radius * 0.86
-            ring_scale = math.sqrt(max(0.05, 1.0 - latitude * latitude))
-            row_phase = self._phase * (0.20 + row * 0.018)
-
-            for index in range(columns):
-                angle = math.tau * index / columns + row_phase
-                x = cx + math.sin(angle) * radius * ring_scale
-                z = math.cos(angle) * ring_scale
-                depth = (z + 1.0) * 0.5
-                dot = 0.75 + depth * 0.95
-                alpha = int(48 + depth * 150)
-
-                color = QColor(ink if row % 2 else soft)
-                color.setAlpha(alpha)
-                painter.setBrush(color)
+        # Tilted orbit rings with travelling signal dots.
+        dots: list[tuple[float, QPointF, float]] = []
+        for tilt, radius_factor, flatness, speed, phase in self._RINGS:
+            radius = size * radius_factor
+            ry = radius * flatness
+            painter.save()
+            painter.translate(center)
+            painter.rotate(tilt)
+            painter.setPen(QPen(_with_alpha(LIME, 46), max(1.0, size * 0.008)))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(QPointF(0, 0), radius, ry)
+            painter.setPen(Qt.PenStyle.NoPen)
+            for trail in range(7):
+                angle = t * speed * 1.6 + phase - trail * 0.16 * (1 if speed > 0 else -1)
+                x, y = radius * math.cos(angle), ry * math.sin(angle)
+                depth = 0.5 + 0.5 * math.sin(angle)  # 1 = in front of the core
+                fade = 1.0 - trail / 7.0
+                dot = size * (0.011 + 0.014 * depth) * (0.55 + 0.45 * fade)
+                painter.setBrush(_with_alpha(LIME_SOFT if trail == 0 else LIME, (70 + 185 * depth) * fade))
                 painter.drawEllipse(QPointF(x, y), dot, dot)
+            painter.restore()
 
-        # A brighter dotted meridian sweeps around the sphere.
-        scan = self._phase * 1.35
-        for index in range(34):
-            t = index / 33.0
-            latitude = -0.95 + t * 1.9
-            y = cy + latitude * radius * 0.86
-            ring_scale = math.sqrt(max(0.04, 1.0 - min(1.0, latitude * latitude)))
-            angle = scan + latitude * 0.9
-            x = cx + math.sin(angle) * radius * ring_scale
-            depth = (math.cos(angle) + 1.0) * 0.5
-
-            color = QColor("#F2F5FA")
-            color.setAlpha(int(90 + depth * 150))
-            dot = 0.9 + depth * 1.15
-            painter.setBrush(color)
-            painter.drawEllipse(QPointF(x, y), dot, dot)
-
-        center = QColor("#F5F7FB")
-        center.setAlpha(205)
-        painter.setBrush(center)
-        painter.drawEllipse(QPointF(cx, cy), 1.8, 1.8)
+        # Core: bright centre fading into lime.
+        core_radius = size * (0.135 + 0.014 * breathe)
+        core = QRadialGradient(QPointF(center.x() - core_radius * 0.25, center.y() - core_radius * 0.3), core_radius * 1.3)
+        core.setColorAt(0.0, LIME_CORE)
+        core.setColorAt(0.55, LIME)
+        core.setColorAt(1.0, _with_alpha(LIME, 70))
+        painter.setBrush(QBrush(core))
+        painter.drawEllipse(center, core_radius, core_radius)
         painter.end()
 
     def stop(self) -> None:

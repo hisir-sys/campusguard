@@ -4,7 +4,7 @@ from dataclasses import replace
 from pathlib import Path
 import threading
 
-from PySide6.QtGui import QAction, QKeySequence, QPixmap
+from PySide6.QtGui import QAction, QGuiApplication, QKeySequence, QPixmap
 from PySide6.QtCore import QEvent, QEasingCurve, QPropertyAnimation, QRect, QTimer, Qt, Signal
 from PySide6.QtWidgets import (
     QApplication,
@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMessageBox,
     QScrollArea,
     QPushButton,
     QSizePolicy,
@@ -469,12 +470,14 @@ class InAppOverlay(QFrame):
             self._center()
 
 class MainWindow(QMainWindow):
-    def __init__(self) -> None:
+    logout_requested = Signal()
+    closed = Signal()
+
+    def __init__(self, account_email: str | None = None) -> None:
         super().__init__()
         self.setWindowTitle("CampusGuard — Security Operations")
         self.setWindowIcon(QApplication.windowIcon())
-        self.resize(1500, 940)
-        self.setMinimumSize(1080, 700)
+        self._fit_to_screen()
 
         self.repository = Repository()
         self.vault = CredentialVault()
@@ -488,7 +491,7 @@ class MainWindow(QMainWindow):
         self.model_statuses: dict[str, dict[str, str]] = {}
         self._previous_camera_status: dict[str, str] = {}
         self._camera_view_camera_id: str | None = None
-        self.operator_name: str | None = None
+        self.operator_name: str | None = account_email or None
         self._pending_footage_incidents: dict[str, str] = {}
 
         # Pick the icon/palette theme before any widget is built so nothing flashes.
@@ -549,7 +552,7 @@ class MainWindow(QMainWindow):
         self._camera_engine_poll.start()
 
     def _finish_camera_engine_import(self) -> None:
-        if self._camera_engine_importing:
+        if self._camera_engine_importing or getattr(self, "_closing", False):
             return
         self._camera_engine_poll.stop()
 
@@ -1294,20 +1297,26 @@ class MainWindow(QMainWindow):
         self._save_settings(AppSettings.from_dict(values))
 
     def _toggle_operator(self) -> None:
-        if self.operator_name:
-            self.operator_name = None
-            self._update_operator_button()
-            return
-        self._in_app_overlay.show_text_input(
-            "Local operator session",
-            "Enter the display name for this local CampusGuard session.",
-            self._set_operator_name,
-            "Operator display name",
+        """The account button logs out; the sign-in screen is handled by main.py."""
+        answer = QMessageBox.question(
+            self,
+            "Log out of CampusGuard?",
+            "Camera monitoring stops until you sign in again. Log out now?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
         )
+        if answer == QMessageBox.StandardButton.Yes:
+            self.logout_requested.emit()
 
-    def _set_operator_name(self, name: str) -> None:
-        self.operator_name = name.strip()
-        self._update_operator_button()
+    def _fit_to_screen(self) -> None:
+        """Open at a comfortable size that always fits the screen's usable area."""
+        screen = self.screen() or QGuiApplication.primaryScreen()
+        avail = screen.availableGeometry() if screen is not None else QRect(0, 0, 1500, 940)
+        usable_w, usable_h = int(avail.width() * 0.94), int(avail.height() * 0.94)
+        self.setMinimumSize(min(1080, usable_w), min(700, usable_h))
+        width, height = min(1500, usable_w), min(940, usable_h)
+        self.resize(width, height)
+        self.move(avail.x() + (avail.width() - width) // 2, avail.y() + (avail.height() - height) // 2)
 
     def _update_operator_button(self) -> None:
         self.top_bar.set_operator(self.operator_name)
@@ -1560,6 +1569,14 @@ class MainWindow(QMainWindow):
         self._update_alert_badge()
 
     def closeEvent(self, event) -> None:
+        # Stop everything that could create camera workers after the window is gone
+        # (matters when the user logs out while the AI engine is still importing).
+        self._closing = True
+        for timer_name in ("_camera_engine_poll", "_refresh_timer"):
+            timer = getattr(self, timer_name, None)
+            if timer is not None:
+                timer.stop()
         if self.camera_manager is not None:
             self.camera_manager.stop_all(timeout_ms=5000)
         event.accept()
+        self.closed.emit()

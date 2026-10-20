@@ -110,7 +110,7 @@ _QSS = """
 QWidget {
   color: @text@;
   font-family: "DM Sans", "Segoe UI", sans-serif;
-  font-size: 10pt;
+  font-size: @base_pt@pt;
 }
 QMainWindow { background: @bg1@; }\nQWidget#centralContent { background: transparent; }
 QDialog, QMessageBox, QInputDialog {
@@ -300,6 +300,19 @@ QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 """
 
 
+# Small screens get a slightly smaller base font so more fits without scrolling.
+_compact = False
+
+
+def set_compact(compact: bool) -> None:
+    global _compact
+    _compact = bool(compact)
+
+
+def is_compact() -> bool:
+    return _compact
+
+
 def build_qss(theme: str) -> str:
     p = LIGHT if theme == "light" else DARK
     values = {
@@ -323,6 +336,7 @@ def build_qss(theme: str) -> str:
         "handle_hover": rgba(p.text, 110),
         "bad_line": rgba(p.bad, 100),
         "accent_line": rgba(p.accent, 190),
+        "base_pt": "9" if _compact else "10",
     }
     qss = _QSS
     for key, value in values.items():

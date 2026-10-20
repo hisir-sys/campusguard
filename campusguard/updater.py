@@ -1,23 +1,33 @@
+"""Self-update for the installed Windows build.
+
+The release workflow publishes ``CampusGuard-Setup.exe`` (an Inno Setup
+installer) plus ``checksum.txt`` to the rolling ``latest`` GitHub release.
+The app checks in the background after sign-in, downloads the installer,
+verifies its SHA-256, and — only if the user agrees — runs it silently. The
+installer closes CampusGuard, replaces the files and relaunches it.
+"""
+
 from __future__ import annotations
 
 import hashlib
 import json
-import os
 import shutil
 import subprocess
 import sys
 import tempfile
-import time
 from pathlib import Path
 from urllib.request import Request, urlopen
 
 from campusguard.build_info import BUILD_VERSION, GITHUB_REPOSITORY, RELEASE_TAG
 
+INSTALLER_ASSET = "CampusGuard-Setup.exe"
+CHECKSUM_ASSET = "checksum.txt"
 _API_URL = f"https://api.github.com/repos/{GITHUB_REPOSITORY}/releases/tags/{RELEASE_TAG}"
-_USER_AGENT = "CampusGuard-Updater/1.0"
+_USER_AGENT = "CampusGuard-Updater/2.0"
+_MIN_INSTALLER_BYTES = 1_000_000
 
 
-def _request(url: str, timeout: float = 4.0):
+def _request(url: str, timeout: float = 10.0):
     return urlopen(
         Request(url, headers={"Accept": "application/vnd.github+json", "User-Agent": _USER_AGENT}),
         timeout=timeout,
@@ -31,6 +41,25 @@ def _version_number(value: str) -> int:
         return -1
 
 
+def select_update(release: dict, current_version: str) -> dict | None:
+    """Pure helper: pick the installer/checksum assets if the release is newer."""
+    remote_version = str(release.get("body", "")).strip()
+    if not remote_version:
+        remote_version = str(release.get("tag_name", "")).removeprefix("v")
+    if _version_number(remote_version) <= _version_number(current_version):
+        return None
+    installer_url = None
+    checksum_url = None
+    for asset in release.get("assets", []):
+        if asset.get("name") == INSTALLER_ASSET:
+            installer_url = asset.get("browser_download_url")
+        elif asset.get("name") == CHECKSUM_ASSET:
+            checksum_url = asset.get("browser_download_url")
+    if not installer_url or not checksum_url:
+        return None
+    return {"version": remote_version, "url": installer_url, "checksum_url": checksum_url}
+
+
 def check_for_update() -> dict | None:
     if BUILD_VERSION == "dev" or not getattr(sys, "frozen", False):
         return None
@@ -39,28 +68,11 @@ def check_for_update() -> dict | None:
             release = json.loads(response.read().decode("utf-8"))
     except Exception:
         return None
-
-    remote_version = str(release.get("body", "")).strip()
-    if not remote_version:
-        remote_version = str(release.get("tag_name", "")).removeprefix("v")
-
-    if _version_number(remote_version) <= _version_number(BUILD_VERSION):
-        return None
-
-    exe_url = None
-    checksum_url = None
-    for asset in release.get("assets", []):
-        if asset.get("name") == "CampusGuard.exe":
-            exe_url = asset.get("browser_download_url")
-        elif asset.get("name") == "checksum.txt":
-            checksum_url = asset.get("browser_download_url")
-
-    if not exe_url or not checksum_url:
-        return None
-    return {"version": remote_version, "url": exe_url, "checksum_url": checksum_url}
+    return select_update(release, BUILD_VERSION)
 
 
-def _download(url: str, checksum_url: str) -> Path | None:
+def download_installer(url: str, checksum_url: str) -> Path | None:
+    """Download and verify the installer. Returns its path, or None on any failure."""
     try:
         with _request(checksum_url) as response:
             checksum_text = response.read().decode("utf-8").strip()
@@ -69,13 +81,12 @@ def _download(url: str, checksum_url: str) -> Path | None:
             return None
         folder = Path(tempfile.gettempdir()) / "CampusGuardUpdate"
         folder.mkdir(parents=True, exist_ok=True)
-        target = folder / "CampusGuard.exe.new"
-        with _request(url, timeout=60) as response, target.open("wb") as output:
+        target = folder / INSTALLER_ASSET
+        with _request(url, timeout=120) as response, target.open("wb") as output:
             shutil.copyfileobj(response, output, length=1024 * 1024)
-        if target.stat().st_size < 1_000_000:
+        if target.stat().st_size < _MIN_INSTALLER_BYTES:
             target.unlink(missing_ok=True)
             return None
-
         digest = hashlib.sha256()
         with target.open("rb") as source:
             for chunk in iter(lambda: source.read(1024 * 1024), b""):
@@ -83,63 +94,30 @@ def _download(url: str, checksum_url: str) -> Path | None:
         if digest.hexdigest().lower() != expected:
             target.unlink(missing_ok=True)
             return None
-
         return target
     except Exception:
         return None
 
 
-def _apply_update(new_file: str, current_file: str, parent_pid: int) -> int:
-    new_path = Path(new_file)
-    current_path = Path(current_file)
-
-    for _ in range(120):
-        try:
-            os.kill(parent_pid, 0)
-        except OSError:
-            break
-        time.sleep(0.25)
-
-    if not new_path.is_file():
-        return 1
-
-    backup = current_path.with_suffix(".old.exe")
+def launch_installer(installer: Path) -> bool:
+    """Start the silent installer. The caller must quit the app right afterwards."""
     try:
-        if current_path.is_file():
-            shutil.copy2(current_path, backup)
-        os.replace(new_path, current_path)
-        backup.unlink(missing_ok=True)
+        subprocess.Popen(
+            [str(installer), "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CLOSEAPPLICATIONS"],
+            close_fds=True,
+            creationflags=getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
+        )
+        return True
     except Exception:
-        try:
-            if backup.is_file():
-                os.replace(backup, current_path)
-        except Exception:
-            pass
-        return 1
-
-    subprocess.Popen([str(current_path)], close_fds=True)
-    return 0
+        return False
 
 
-def maybe_update() -> bool:
+def prepare_update() -> tuple[dict, Path] | None:
+    """Check for a newer release and download + verify its installer (blocking)."""
     latest = check_for_update()
     if not latest:
-        return False
-
-    downloaded = _download(latest["url"], latest["checksum_url"])
-    if not downloaded:
-        return False
-
-    current = Path(sys.executable).resolve()
-    subprocess.Popen(
-        [str(current), "--apply-update", str(downloaded), str(current), str(os.getpid())],
-        close_fds=True,
-        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-    )
-    return True
-
-
-def handle_update_arguments(argv: list[str]) -> int | None:
-    if len(argv) != 5 or argv[1] != "--apply-update":
         return None
-    return _apply_update(argv[2], argv[3], int(argv[4]))
+    installer = download_installer(latest["url"], latest["checksum_url"])
+    if not installer:
+        return None
+    return latest, installer

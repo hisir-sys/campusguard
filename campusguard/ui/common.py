@@ -18,11 +18,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from campusguard.camera_runtime import (
-    CameraTestThread,
-    build_capture_source,
-    enumerate_local_cameras,
-)
+# camera_runtime pulls in PyTorch/OpenCV; import it lazily (see the methods
+# below) so the window and splash animation are not blocked at start-up.
 from campusguard.settings import CameraConfig, CameraCredentials, CameraStats
 from campusguard.ui.icons import IconLabel, set_icon_theme
 from campusguard.ui.theme import build_qss, get_palette, set_current
@@ -415,6 +412,8 @@ class CameraFormDialog(QDialog):
         self.detected_input.blockSignals(False)
         self.refresh_cameras_button.setEnabled(False)
 
+        from campusguard.camera_runtime import enumerate_local_cameras
+
         cameras = enumerate_local_cameras(max_devices=8)
 
         self.detected_input.blockSignals(True)
@@ -461,6 +460,8 @@ class CameraFormDialog(QDialog):
             return
         self.validation_status.hide()
         credentials = CameraCredentials(values["username"], values["password"])
+        from campusguard.camera_runtime import CameraTestThread
+
         self._test_thread = CameraTestThread(
             values["source_type"],
             values["source_address"],
@@ -495,6 +496,8 @@ class CameraFormDialog(QDialog):
             self.validation_status.setText("Source address required — enter a camera source address.")
             self.validation_status.show()
             return
+        from campusguard.camera_runtime import build_capture_source
+
         try:
             build_capture_source(
                 values["source_type"],

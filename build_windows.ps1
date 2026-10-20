@@ -21,9 +21,18 @@ if (-not (Test-Path "models\yolo11n.pt") -or -not (Test-Path "models\yolo11n-pos
 & $python scripts/generate_app_icon.py
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-& $python -m PyInstaller --noconfirm --clean --onefile --windowed --name CampusGuard --icon "assets\campusguard.ico" --collect-all PySide6 --collect-all cv2 --collect-all torch --collect-all torchvision --collect-all ultralytics --collect-all pytorchvideo --collect-all keyring --add-data "models;models" --add-data "assets;assets" main.py
+& $python -m PyInstaller --noconfirm --clean --onedir --windowed --name CampusGuard --icon "assets\campusguard.ico" --collect-all PySide6 --collect-all cv2 --collect-all torch --collect-all torchvision --collect-all ultralytics --collect-all pytorchvideo --collect-all keyring --add-data "models;models" --add-data "assets;assets" main.py
 
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host ""
-Write-Host "Build complete: dist\CampusGuard.exe"
+Write-Host "App folder built: dist\CampusGuard\CampusGuard.exe"
+
+$iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+if (Test-Path $iscc) {
+    & $iscc "installer\CampusGuard.iss"
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Write-Host "Installer built: dist\CampusGuard-Setup.exe"
+} else {
+    Write-Host "Inno Setup 6 not found - install it from jrsoftware.org to build the installer."
+}

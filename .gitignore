@@ -7,3 +7,4 @@ __pycache__/
 data/
 temp_fdsc/
 models/*.pt
+campusguard/_build_version.py

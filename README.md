@@ -12,7 +12,15 @@ model inference instead of the ZIP's browser-based simulated detections.
 - An external USB, RTSP, HTTP/MJPEG, or IP camera source that OpenCV can open
 - Optional local model weights; none are bundled with this source
 
-## Install and run
+## Install (customers)
+
+Download `CampusGuard-Setup.exe` from the latest release, accept the terms and
+install. It installs for your Windows user only (no administrator prompt).
+Sign in with the email and password from your CampusGuard website account;
+only approved accounts can use the app, and no camera starts before sign-in.
+Updates are downloaded in the background and installed with your permission.
+
+## Install and run (developers)
 
 Open PowerShell in this folder (`campusguard-desktop`) and run:
 
