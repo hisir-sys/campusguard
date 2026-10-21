@@ -21,14 +21,14 @@ class SharedCameraModelTests(unittest.TestCase):
     def test_video_classifier_weights_are_shared_but_stream_state_is_not(self):
         profile = MODEL_PROFILES["mc3"]
         path = "tests/test-shared-camera-classifier.pth"
-        key = (profile.architecture, path, str(torch.device("cpu")))
+        key = (profile.architecture, str(Path(path).resolve()), str(torch.device("cpu")), None)
         with MODEL_CACHE_LOCK:
             _SHARED_VIDEO_MODELS.pop(key, None)
 
         fake_model = torch.nn.Linear(1, 1)
         load_calls = []
 
-        def fake_load(instance):
+        def fake_load(instance, _path=None):
             load_calls.append(instance)
             instance.model = fake_model
             instance.class_count = 2
