@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import sys
 from typing import Callable
+import threading
 
 import cv2
 import numpy as np
@@ -15,6 +16,11 @@ from campusguard.model_paths import with_aliases
 from campusguard.model_adapters import get_model_input_adapter
 
 Status = Callable[[str, str], None]
+
+# Share immutable model weights across per-camera classifier state. Each camera
+# still owns its own temporal frames, probabilities, and decision history.
+MODEL_INFERENCE_LOCK = threading.RLock()
+_SHARED_VIDEO_MODELS: dict[tuple[str, str, str], tuple[nn.Module | torch.jit.ScriptModule, int]] = {}
 
 @dataclass(frozen=True)
 class ModelProfile:
@@ -102,6 +108,24 @@ class VideoClassifier:
         return f"class_{self.fight_class}"
 
     def _load(self) -> None:
+        # Loading a camera starts a worker. Serialize cache misses so dozens of
+        # camera workers cannot all allocate identical model weights at once.
+        cache_key = (self.profile.architecture, self.path, str(self.device))
+        with MODEL_INFERENCE_LOCK:
+            cached = _SHARED_VIDEO_MODELS.get(cache_key)
+            if cached is not None:
+                self.model, self.class_count = cached
+                self.last_state = "NORMAL"
+                self.status(
+                    self.profile.key,
+                    f"READY — {self.profile.name} (shared model instance)",
+                )
+                return
+            self._load_uncached()
+            if self.model is not None:
+                _SHARED_VIDEO_MODELS[cache_key] = (self.model, self.class_count)
+
+    def _load_uncached(self) -> None:
         raw_path = Path(self.path).expanduser()
         path = raw_path
         if not raw_path.is_absolute():
@@ -305,7 +329,10 @@ class VideoClassifier:
         tensor = self.adapter.prepare(clip, self.device)
 
         with torch.inference_mode():
-            logits = self.model(tensor)
+            # A shared model is read-only, but a lock avoids simultaneous
+            # forwards from many camera threads overwhelming accelerator memory.
+            with MODEL_INFERENCE_LOCK:
+                logits = self.model(tensor)
             if isinstance(logits, (tuple, list)):
                 logits = logits[0]
             probabilities = torch.softmax(logits, dim=1)[0].detach().cpu().numpy()
