@@ -21,7 +21,7 @@ if (-not (Test-Path "models\yolo11n.pt") -or -not (Test-Path "models\yolo11n-pos
 & $python scripts/generate_app_icon.py
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-& $python -m PyInstaller --noconfirm --clean --onedir --windowed --name CampusGuard --icon "assets\campusguard.ico" --collect-all PySide6 --collect-all cv2 --collect-all torch --collect-all torchvision --collect-all ultralytics --collect-all pytorchvideo --collect-all keyring --add-data "models;models" --add-data "assets;assets" main.py
+& $python -m PyInstaller --noconfirm --clean CampusGuard.spec
 
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 

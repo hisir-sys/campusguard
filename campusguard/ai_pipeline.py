@@ -13,6 +13,7 @@ import cv2
 import numpy as np
 import torch
 
+from campusguard.model_paths import with_aliases
 from campusguard.model_registry import EnhancedEnsemble, MODEL_PROFILES, VideoClassifier
 from campusguard.settings import AppSettings
 
@@ -26,19 +27,20 @@ def resolve_model_path(value: str) -> Path:
     if raw.is_absolute():
         return raw
 
-    # PyInstaller extracts bundled data below _MEIPASS at runtime.
     bundle_root = getattr(sys, "_MEIPASS", None)
-    if bundle_root:
-        bundled = Path(bundle_root) / raw
-        if bundled.is_file():
-            return bundled
-
-    # Source checkout: resolve relative to the project root, not the user's
-    # current PowerShell/shortcut working directory.
     project_root = Path(__file__).resolve().parents[1]
-    project_file = project_root / raw
-    if project_file.is_file():
-        return project_file
+    for candidate in with_aliases(raw):
+        # PyInstaller extracts bundled data below _MEIPASS at runtime.
+        if bundle_root:
+            bundled = Path(bundle_root) / candidate
+            if bundled.is_file():
+                return bundled
+
+        # Source checkout: resolve relative to the project root, not the user's
+        # current PowerShell/shortcut working directory.
+        project_file = project_root / candidate
+        if project_file.is_file():
+            return project_file
 
     return raw
 

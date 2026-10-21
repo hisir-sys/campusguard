@@ -32,7 +32,10 @@ jobs:
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
+          # CPU-only PyTorch: the CUDA builds are several times larger and CampusGuard runs on CPU.
+          python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           python -m pip install -r requirements.txt
+          python -c "import torch; print('torch', torch.__version__); assert torch.version.cuda is None, 'CUDA build of torch installed'"
           python -m pip install pyinstaller pillow
 
       - name: Prepare YOLO runtime weights
@@ -62,7 +65,7 @@ jobs:
         env:
           CAMPUSGUARD_VERSION: ${{ github.run_number }}
         run: |
-          python -m PyInstaller --noconfirm --clean --onedir --windowed --name CampusGuard --icon "assets/campusguard.ico" --collect-all PySide6 --collect-all cv2 --collect-all torch --collect-all torchvision --collect-all ultralytics --collect-all pytorchvideo --collect-all keyring --add-data "models;models" --add-data "assets;assets" main.py
+          python -m PyInstaller --noconfirm --clean CampusGuard.spec
 
       - name: Verify application folder
         shell: pwsh
@@ -72,6 +75,40 @@ jobs:
           Write-Host "CampusGuard.exe size: $size bytes"
           if ($size -lt 100000) { throw "Executable is unexpectedly small." }
           if (-not (Get-ChildItem "dist\CampusGuard" -Recurse -Filter "dm-sans-400.ttf")) { throw "Bundled fonts are missing." }
+
+      - name: Report application size
+        shell: pwsh
+        run: |
+          # Informational only: never fails the build.
+          try {
+            $root = (Resolve-Path "dist\CampusGuard").Path
+            $files = Get-ChildItem $root -Recurse -File
+            Write-Host ("Total: {0:N0} MB in {1} files" -f (($files | Measure-Object Length -Sum).Sum / 1MB), $files.Count)
+            foreach ($base in @($root, (Join-Path $root "_internal"))) {
+              if (-not (Test-Path $base)) { continue }
+              Write-Host "--- folders in $base (MB) ---"
+              Get-ChildItem $base -Directory | ForEach-Object {
+                $sum = (Get-ChildItem $_.FullName -Recurse -File | Measure-Object Length -Sum).Sum
+                [pscustomobject]@{ Folder = $_.Name; MB = [math]::Round($sum / 1MB, 1) }
+              } | Sort-Object MB -Descending | Select-Object -First 15 | Format-Table -AutoSize | Out-String | Write-Host
+            }
+            Write-Host "--- 25 largest files (MB) ---"
+            $files | Sort-Object Length -Descending | Select-Object -First 25 | ForEach-Object {
+              "{0,8:N1}  {1}" -f ($_.Length / 1MB), $_.FullName.Substring($root.Length)
+            } | Write-Host
+          } catch {
+            Write-Host "Size report failed: $_"
+          }
+
+      - name: Smoke-test the built app
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP "selfcheck.txt"
+          Remove-Item $out -ErrorAction SilentlyContinue
+          $p = Start-Process -FilePath "dist\CampusGuard\CampusGuard.exe" -ArgumentList "--self-check", "`"$out`"" -PassThru
+          if (-not $p.WaitForExit(300000)) { $p.Kill(); throw "Self-check timed out." }
+          if (Test-Path $out) { Get-Content $out | Write-Host } else { Write-Host "No self-check output was written." }
+          if (-not (Test-Path $out) -or -not ((Get-Content $out -Raw).StartsWith("OK"))) { throw "Built app failed its self-check." }
 
       - name: Build installer
         shell: pwsh

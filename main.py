@@ -240,7 +240,72 @@ class AppController:
         self.app.quit()
 
 
+def run_self_check(result_file: str | None) -> int:
+    """Build smoke test: `CampusGuard.exe --self-check result.txt`.
+
+    The release workflow runs this on the freshly built app so a bundle that is
+    missing Qt plugins, fonts, models or AI libraries fails the build instead of
+    reaching customers. It writes OK or FAIL lines to ``result_file``.
+    """
+    problems: list[str] = []
+
+    def check(name: str, func) -> None:
+        try:
+            func()
+        except BaseException as error:  # report everything, keep going
+            problems.append(f"{name}: {type(error).__name__}: {error}")
+
+    app = QApplication(sys.argv[:1])
+
+    def fonts() -> None:
+        _load_brand_fonts()
+        families = set(QFontDatabase.families())
+        for family in ("DM Sans", "Manrope"):
+            if family not in families:
+                raise RuntimeError(f"font {family} not registered")
+
+    def svg() -> None:
+        from campusguard.ui.icons import logo_pixmap
+
+        if logo_pixmap(32).isNull():
+            raise RuntimeError("logo SVG did not render")
+
+    def models() -> None:
+        from campusguard.ai_pipeline import resolve_model_path
+
+        for name in ("yolo11n.pt", "yolo11n-pose.pt", "fight_mc3_18.pth", "model_16_m3_0.8888.pth", "final_x3d_realtime.pt"):
+            if not resolve_model_path(f"models/{name}").is_file():
+                raise RuntimeError(f"model {name} not found in the bundle")
+
+    def ui() -> None:
+        import campusguard.ui.main_window  # noqa: F401
+        import campusguard.ui.login_window  # noqa: F401
+
+    def ai_stack() -> None:
+        import campusguard.camera_runtime  # noqa: F401
+        import cv2  # noqa: F401
+        import torch  # noqa: F401
+        import torchvision  # noqa: F401
+        import ultralytics  # noqa: F401
+
+    def vault() -> None:
+        import keyring
+
+        keyring.get_keyring()
+
+    for name, func in (("fonts", fonts), ("svg", svg), ("models", models), ("ui", ui), ("ai-stack", ai_stack), ("keyring", vault)):
+        check(name, func)
+
+    message = "OK" if not problems else "FAIL\n" + "\n".join(problems)
+    if result_file:
+        Path(result_file).write_text(message + "\n", encoding="utf-8")
+    del app
+    return 0 if not problems else 1
+
+
 def main() -> int:
+    if len(sys.argv) >= 2 and sys.argv[1] == "--self-check":
+        return run_self_check(sys.argv[2] if len(sys.argv) > 2 else None)
     # Fractional display scaling (125%, 150%) stays sharp instead of being rounded.
     QGuiApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     app = QApplication(sys.argv)
