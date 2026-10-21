@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 import copy
 import os
 import sys
+import weakref
 from pathlib import Path
 from time import perf_counter
 from typing import Callable
@@ -28,7 +29,7 @@ Event = tuple[str, float, str]
 
 # Identical detector/pose weights are shared between camera pipelines. Per-camera
 # tracking and temporal state remain on each VisionPipeline instance.
-_SHARED_YOLO_MODELS: dict[tuple[str, str, str, int], object] = {}
+_SHARED_YOLO_MODELS: weakref.WeakValueDictionary = weakref.WeakValueDictionary()
 
 
 def resolve_model_path(value: str) -> Path:
