@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 import copy
 import os
 import sys
-import threading
 from pathlib import Path
 from time import perf_counter
 from typing import Callable
@@ -15,7 +14,13 @@ import numpy as np
 import torch
 
 from campusguard.model_paths import with_aliases
-from campusguard.model_registry import EnhancedEnsemble, MODEL_PROFILES, MODEL_CACHE_LOCK, VideoClassifier, model_inference_lock
+from campusguard.model_registry import (
+    EnhancedEnsemble,
+    MODEL_CACHE_LOCK,
+    MODEL_PROFILES,
+    VideoClassifier,
+    model_inference_lock,
+)
 from campusguard.settings import AppSettings
 
 ModelStatusCallback = Callable[[str, str], None]
@@ -190,7 +195,7 @@ class FightDecision:
 
 
 class VisionPipeline:
-    """YOLO person detection + ByteTrack + YOLO Pose + selectable temporal violence model."""
+    """Shared YOLO models with isolated per-camera tracking and temporal violence state."""
 
     def __init__(self, settings: AppSettings, status: ModelStatusCallback) -> None:
         # Keep CPU inference responsive when multiple camera workers run at once.
