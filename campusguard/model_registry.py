@@ -5,6 +5,7 @@ from pathlib import Path
 import sys
 from typing import Callable
 import threading
+import weakref
 
 import cv2
 import numpy as np
@@ -20,15 +21,23 @@ Status = Callable[[str, str], None]
 # Share immutable model weights across per-camera classifier state. Each camera
 # still owns its own temporal frames, probabilities, and decision history.
 MODEL_CACHE_LOCK = threading.RLock()
-_MODEL_INFERENCE_LOCKS: dict[int, threading.RLock] = {}
+_MODEL_INFERENCE_LOCKS: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
 
 def model_inference_lock(model) -> threading.RLock:
     """Return a lock scoped to one shared model, not to the whole AI stack."""
-    key = id(model)
     with MODEL_CACHE_LOCK:
-        return _MODEL_INFERENCE_LOCKS.setdefault(key, threading.RLock())
+        lock = _MODEL_INFERENCE_LOCKS.get(model)
+        if lock is None:
+            lock = threading.RLock()
+            _MODEL_INFERENCE_LOCKS[model] = lock
+        return lock
 
-_SHARED_VIDEO_MODELS: dict[tuple[str, str, str], tuple[nn.Module | torch.jit.ScriptModule, int]] = {}
+# Weak references allow unused model variants to be released when the last
+# camera stops using them, instead of pinning every GPU model until app exit.
+_SHARED_VIDEO_MODELS: dict[
+    tuple[str, str, str],
+    tuple[weakref.ReferenceType[nn.Module | torch.jit.ScriptModule], int],
+] = {}
 
 @dataclass(frozen=True)
 class ModelProfile:
@@ -121,8 +130,9 @@ class VideoClassifier:
         cache_key = (self.profile.architecture, self.path, str(self.device))
         with MODEL_CACHE_LOCK:
             cached = _SHARED_VIDEO_MODELS.get(cache_key)
-            if cached is not None:
-                self.model, self.class_count = cached
+            cached_model = cached[0]() if cached is not None else None
+            if cached_model is not None:
+                self.model, self.class_count = cached_model, cached[1]
                 self.last_state = "NORMAL"
                 self.status(
                     self.profile.key,
@@ -131,7 +141,10 @@ class VideoClassifier:
                 return
             self._load_uncached()
             if self.model is not None:
-                _SHARED_VIDEO_MODELS[cache_key] = (self.model, self.class_count)
+                _SHARED_VIDEO_MODELS[cache_key] = (
+                    weakref.ref(self.model),
+                    self.class_count,
+                )
 
     def _load_uncached(self) -> None:
         raw_path = Path(self.path).expanduser()
