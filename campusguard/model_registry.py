@@ -35,7 +35,7 @@ def model_inference_lock(model) -> threading.RLock:
 # Weak references allow unused model variants to be released when the last
 # camera stops using them, instead of pinning every GPU model until app exit.
 _SHARED_VIDEO_MODELS: dict[
-    tuple[str, str, str],
+    tuple[str, str, str, int | None],
     tuple[weakref.ReferenceType[nn.Module | torch.jit.ScriptModule], int],
 ] = {}
 
@@ -124,29 +124,7 @@ class VideoClassifier:
             return self.profile.class_labels[self.fight_class]
         return f"class_{self.fight_class}"
 
-    def _load(self) -> None:
-        # Loading a camera starts a worker. Serialize cache misses so dozens of
-        # camera workers cannot all allocate identical model weights at once.
-        cache_key = (self.profile.architecture, self.path, str(self.device))
-        with MODEL_CACHE_LOCK:
-            cached = _SHARED_VIDEO_MODELS.get(cache_key)
-            cached_model = cached[0]() if cached is not None else None
-            if cached_model is not None:
-                self.model, self.class_count = cached_model, cached[1]
-                self.last_state = "NORMAL"
-                self.status(
-                    self.profile.key,
-                    f"READY — {self.profile.name} (shared model instance)",
-                )
-                return
-            self._load_uncached()
-            if self.model is not None:
-                _SHARED_VIDEO_MODELS[cache_key] = (
-                    weakref.ref(self.model),
-                    self.class_count,
-                )
-
-    def _load_uncached(self) -> None:
+    def _resolved_path(self) -> Path:
         raw_path = Path(self.path).expanduser()
         path = raw_path
         if not raw_path.is_absolute():
@@ -162,6 +140,42 @@ class VideoClassifier:
                 if project_path.is_file():
                     path = project_path
                     break
+        return path
+
+    def _load(self) -> None:
+        # Resolve aliases before caching, so relative and absolute references to
+        # the same checkpoint reuse the same model. File changes invalidate cache.
+        path = self._resolved_path()
+        try:
+            modified_ns = path.stat().st_mtime_ns
+        except OSError:
+            modified_ns = None
+        cache_key = (
+            self.profile.architecture,
+            str(path.resolve()),
+            str(self.device),
+            modified_ns,
+        )
+        with MODEL_CACHE_LOCK:
+            cached = _SHARED_VIDEO_MODELS.get(cache_key)
+            cached_model = cached[0]() if cached is not None else None
+            if cached_model is not None:
+                self.model, self.class_count = cached_model, cached[1]
+                self.last_state = "NORMAL"
+                self.status(
+                    self.profile.key,
+                    f"READY — {self.profile.name} (shared model instance)",
+                )
+                return
+            self._load_uncached(path)
+            if self.model is not None:
+                _SHARED_VIDEO_MODELS[cache_key] = (
+                    weakref.ref(self.model),
+                    self.class_count,
+                )
+
+    def _load_uncached(self, path: Path | None = None) -> None:
+        path = path or self._resolved_path()
         if not self.path.strip() or not path.is_file():
             self.status(self.profile.key, f"MODEL NOT LOADED — file not found: {path}")
             return
