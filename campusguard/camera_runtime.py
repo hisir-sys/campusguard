@@ -71,7 +71,7 @@ def build_capture_source(
 
 
 
-def enumerate_local_cameras(max_devices: int = 10) -> list[dict[str, object]]:
+def enumerate_local_cameras(max_devices: int = 80) -> list[dict[str, object]]:
     """Probe Windows camera device indexes that CampusGuard can actually open.
 
     OpenCV does not expose friendly Windows device names, so the UI uses the
