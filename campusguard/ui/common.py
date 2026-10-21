@@ -291,6 +291,9 @@ class CameraPreview(QFrame):
         )
 
 
+_ACTIVE_SCANS: set = set()
+
+
 class CameraFormDialog(QDialog):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -412,10 +415,26 @@ class CameraFormDialog(QDialog):
         self.detected_input.blockSignals(False)
         self.refresh_cameras_button.setEnabled(False)
 
-        from campusguard.camera_runtime import enumerate_local_cameras
+        # Probing up to 80 device indexes can take many seconds, so scan off the
+        # UI thread. The thread outlives a closed dialog (kept in _ACTIVE_SCANS).
+        from campusguard.ui.workers import Worker
 
-        cameras = enumerate_local_cameras(max_devices=8)
+        def scan() -> list[dict[str, object]]:
+            from campusguard.camera_runtime import enumerate_local_cameras
 
+            return enumerate_local_cameras(max_devices=80)
+
+        worker = Worker(scan)
+        _ACTIVE_SCANS.add(worker)
+        worker.finished.connect(lambda w=worker: _ACTIVE_SCANS.discard(w))
+        worker.succeeded.connect(self._show_local_cameras)
+        worker.failed.connect(self._scan_failed)
+        worker.start()
+
+    def _scan_failed(self, _error: object) -> None:
+        self._show_local_cameras([])
+
+    def _show_local_cameras(self, cameras: list[dict[str, object]]) -> None:
         self.detected_input.blockSignals(True)
         self.detected_input.clear()
 
