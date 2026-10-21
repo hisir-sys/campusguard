@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark"><title>CampusGuard — Anatomy pipeline explainer</title>
+<style>
+:root{color-scheme:dark;--bg:#090c0a;--panel:#111713;--line:#303a30;--ink:#f4f7f0;--muted:#9ba79a;--lime:#c8ff52;--amber:#e7b85d;--blue:#8bb7f0;font-family:"DM Sans",Inter,system-ui,sans-serif}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 50% -20%,#253122 0,transparent 54%),var(--bg);color:var(--ink);min-height:100vh}
+main{max-width:1180px;margin:auto;padding:36px 24px 52px}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;border-bottom:1px solid #ffffff18;padding-bottom:18px}.brand{font-size:13px;letter-spacing:.14em;text-transform:uppercase;font-weight:800}.brand b{color:var(--lime)}.tag{font:10px ui-monospace,monospace;color:var(--lime);border:1px solid #c8ff5255;border-radius:99px;padding:7px 10px}
+h1{font-size:clamp(30px,5vw,56px);line-height:1.02;letter-spacing:-.055em;max-width:760px;margin:34px 0 12px}h1 em{font-family:Georgia,serif;font-weight:400;color:var(--lime)}.intro{max-width:700px;color:var(--muted);line-height:1.7;font-size:14px}
+.layout{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(250px,.8fr);gap:18px;margin-top:28px}.stage{border:1px solid var(--line);border-radius:16px;background:linear-gradient(145deg,#151c16,#0c100d);padding:18px;min-width:0}.stage-head{display:flex;justify-content:space-between;gap:12px;align-items:center;font:10px ui-monospace,monospace;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}.live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--lime);margin-right:7px;box-shadow:0 0 12px #c8ff5270}
+svg{display:block;width:100%;height:auto;max-height:500px;margin:8px auto}.node{cursor:pointer;outline:none}.node .face{fill:#1b261c;stroke:#52604c;stroke-width:1.2;transition:fill .2s,stroke .2s}.node .side{fill:#101710;stroke:#43513e;stroke-width:1}.node .topface{fill:#2b3b27;stroke:#65765c;stroke-width:1}.node.active .face,.node:focus .face{fill:#2b3a20;stroke:var(--lime);stroke-width:2}.node.active .topface{fill:#465c2f;stroke:var(--lime)}.node text{fill:#f4f7f0;font:12px system-ui,sans-serif;pointer-events:none}.node .sub{fill:#a8b6a0;font:9px ui-monospace,monospace}.wire{fill:none;stroke:#64715d;stroke-width:1.5;stroke-dasharray:4 6}.pulse{fill:none;stroke:var(--lime);stroke-width:2;stroke-dasharray:3 15;animation:flow 2.8s linear infinite}.glow{fill:#c8ff52;opacity:.08}.node.active .glow{opacity:.23}.detail{border:1px solid var(--line);border-radius:16px;background:#101510;padding:22px;display:flex;flex-direction:column;min-height:100%}.eyebrow{font:10px ui-monospace,monospace;letter-spacing:.12em;color:var(--lime)}h2{font-size:25px;letter-spacing:-.04em;margin:12px 0 10px}.detail p{font-size:13px;line-height:1.7;color:var(--muted);margin:0}.readout{margin-top:24px;padding-top:17px;border-top:1px solid var(--line)}.readout label{display:block;font:10px ui-monospace,monospace;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:7px}.readout strong{font-size:14px;font-weight:600}.steps{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:16px}.step{border:1px solid var(--line);background:#0e130f;color:var(--muted);border-radius:9px;padding:11px 9px;text-align:left;font-size:11px;min-height:64px;cursor:pointer}.step span{display:block;color:#6e7c69;font:10px ui-monospace,monospace;margin-bottom:7px}.step[aria-pressed=true]{border-color:#c8ff5280;color:var(--ink);background:#1b2616}.step[aria-pressed=true] span{color:var(--lime)}.note{margin-top:22px;border-left:2px solid var(--lime);padding:4px 0 4px 12px;color:#aab4a6;font-size:11px;line-height:1.6}.foot{display:flex;justify-content:space-between;gap:16px;margin-top:24px;color:#7f8a7c;font:10px ui-monospace,monospace}
+@keyframes flow{to{stroke-dashoffset:-72}}@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+@media(max-width:760px){main{padding:22px 14px 36px}.layout{grid-template-columns:1fr}.detail{min-height:unset}.steps{grid-template-columns:repeat(2,minmax(0,1fr))}.step:last-child{grid-column:span 2}.foot{flex-direction:column}.tag{font-size:9px}}
+</style>
+</head>
+<body><main>
+<header class="top"><div class="brand"><b>✓</b> CampusGuard <span style="color:#7f8a7c;font-weight:500">/ Anatomy study</span></div><div class="tag">CONCEPTUAL • NOT LIVE DATA</div></header>
+<h1>A closer look at <em>the pipeline.</em></h1>
+<p class="intro">Explore how CampusGuard's desktop analysis stages relate to one another. Select a station to inspect its role. This is an explanatory illustration—not a live camera view, model trace, or performance dashboard.</p>
+<div class="layout">
+<section class="stage" aria-label="Interactive isometric pipeline illustration">
+<div class="stage-head"><span><i class="live-dot"></i>System map</span><span>SELECT A STATION ↘</span></div>
+<svg viewBox="0 0 680 440" role="img" aria-labelledby="svgtitle svgdesc">
+<title id="svgtitle">CampusGuard conceptual analysis pipeline</title><desc id="svgdesc">Five selectable isometric stations represent local capture, person detection and tracking, pose estimation, temporal classification, and human review.</desc>
+<defs><linearGradient id="base" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#202a1e"/><stop offset="1" stop-color="#101710"/></linearGradient><pattern id="grid" width="22" height="22" patternUnits="userSpaceOnUse"><path d="M22 0H0V22" fill="none" stroke="#9cad8f" stroke-opacity=".09"/></pattern></defs>
+<path d="M45 216 338 47 637 220 344 393Z" fill="url(#base)" stroke="#344330"/><path d="M45 216 338 47 637 220 344 393Z" fill="url(#grid)"/>
+<path class="wire" d="M102 192 219 125 331 192 446 125 562 192"/><path class="pulse" d="M102 192 219 125 331 192 446 125 562 192"/>
+<g class="node active" data-stage="0" tabindex="0" role="button" aria-label="Inspect local capture" aria-pressed="true" transform="translate(52 163)">
+<ellipse class="glow" cx="55" cy="44" rx="66" ry="42"/><path class="side" d="M7 34 56 62 56 90 7 62Z"/><path class="side" d="M56 62 104 34 104 62 56 90Z"/><path class="topface" d="M7 34 55 6 104 34 56 62Z"/><path class="face" d="M22 32 55 13 88 32 55 51Z"/><circle cx="55" cy="31" r="10" fill="#0b100c" stroke="#c8ff52"/><circle cx="55" cy="31" r="4" fill="#c8ff52"/><text x="55" y="108" text-anchor="middle">Local capture</text><text class="sub" x="55" y="123" text-anchor="middle">01 / SOURCE</text>
+</g>
+<g class="node" data-stage="1" tabindex="0" role="button" aria-label="Inspect person detection and tracking" aria-pressed="false" transform="translate(169 96)">
+<ellipse class="glow" cx="55" cy="44" rx="66" ry="42"/><path class="side" d="M7 34 56 62 56 90 7 62Z"/><path class="side" d="M56 62 104 34 104 62 56 90Z"/><path class="topface" d="M7 34 55 6 104 34 56 62Z"/><path class="face" d="M22 32 55 13 88 32 55 51Z"/><path d="M43 22h24v18H43z" fill="none" stroke="#c8ff52"/><path d="M49 27h12m-12 5h8" stroke="#c8ff52"/><text x="55" y="108" text-anchor="middle">Detect + track</text><text class="sub" x="55" y="123" text-anchor="middle">02 / PERSON</text>
+</g>
+<g class="node" data-stage="2" tabindex="0" role="button" aria-label="Inspect pose estimation" aria-pressed="false" transform="translate(286 163)">
+<ellipse class="glow" cx="55" cy="44" rx="66" ry="42"/><path class="side" d="M7 34 56 62 56 90 7 62Z"/><path class="side" d="M56 62 104 34 104 62 56 90Z"/><path class="topface" d="M7 34 55 6 104 34 56 62Z"/><path class="face" d="M22 32 55 13 88 32 55 51Z"/><circle cx="55" cy="20" r="4" fill="#c8ff52"/><path d="m55 24-1 11m0-6-10 6m10-6 10 4m-10 2-7 9m7-9 8 10" fill="none" stroke="#c8ff52" stroke-width="2" stroke-linecap="round"/><text x="55" y="108" text-anchor="middle">Pose estimate</text><text class="sub" x="55" y="123" text-anchor="middle">03 / KEYPOINTS</text>
+</g>
+<g class="node" data-stage="3" tabindex="0" role="button" aria-label="Inspect temporal classification" aria-pressed="false" transform="translate(403 96)">
+<ellipse class="glow" cx="55" cy="44" rx="66" ry="42"/><path class="side" d="M7 34 56 62 56 90 7 62Z"/><path class="side" d="M56 62 104 34 104 62 56 90Z"/><path class="topface" d="M7 34 55 6 104 34 56 62Z"/><path class="face" d="M22 32 55 13 88 32 55 51Z"/><path d="M34 39V29m9 10V22m9 17V27m9 12V18m9 21V25m9 14V30" stroke="#c8ff52" stroke-width="3" stroke-linecap="round"/><text x="55" y="108" text-anchor="middle">Temporal model</text><text class="sub" x="55" y="123" text-anchor="middle">04 / 16 FRAMES*</text>
+</g>
+<g class="node" data-stage="4" tabindex="0" role="button" aria-label="Inspect incident review" aria-pressed="false" transform="translate(520 163)">
+<ellipse class="glow" cx="55" cy="44" rx="66" ry="42"/><path class="side" d="M7 34 56 62 56 90 7 62Z"/><path class="side" d="M56 62 104 34 104 62 56 90Z"/><path class="topface" d="M7 34 55 6 104 34 56 62Z"/><path class="face" d="M22 32 55 13 88 32 55 51Z"/><path d="m43 31 8 8 17-19" fill="none" stroke="#c8ff52" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><text x="55" y="108" text-anchor="middle">Human review</text><text class="sub" x="55" y="123" text-anchor="middle">05 / RESPONSE</text>
+</g>
+<text x="340" y="424" text-anchor="middle" fill="#82907c" font-size="10" font-family="monospace">ILLUSTRATIVE FLOW • NOT A LIVE SYSTEM TRACE</text>
+</svg>
+<div class="steps" role="group" aria-label="Select pipeline stage">
+<button class="step" data-pick="0" aria-pressed="true"><span>01 / SOURCE</span>Local capture</button><button class="step" data-pick="1" aria-pressed="false"><span>02 / PERSON</span>Detect + track</button><button class="step" data-pick="2" aria-pressed="false"><span>03 / POSE</span>Pose estimate</button><button class="step" data-pick="3" aria-pressed="false"><span>04 / MODEL</span>Temporal model</button><button class="step" data-pick="4" aria-pressed="false"><span>05 / REVIEW</span>Human review</button>
+</div>
+</section>
+<aside class="detail" aria-live="polite" aria-atomic="true">
+<span class="eyebrow" id="kicker">STATION 01 / SOURCE</span><h2 id="title">Capture stays local.</h2><p id="body">CampusGuard's Windows desktop app opens a configured camera source and processes frames on the host machine. This visual doesn't connect to a camera or show footage.</p>
+<div class="readout"><label>Role in the flow</label><strong id="role">Bring frames into the local pipeline</strong></div><div class="readout"><label>Data note</label><strong id="data">No live values shown</strong></div>
+<div class="note">*The temporal classifier's 16-frame input describes the documented MC3-18 adapter configuration. Exact behavior depends on the configured model and loaded weights.</div>
+</aside>
+</div>
+<footer class="foot"><span>CAMPUSGUARD / TECHNICAL EXPLAINER</span><span>KEYBOARD: TAB TO A STATION · ENTER OR SPACE TO SELECT</span></footer>
+</main>
+<script>
+const stages=[
+{tag:'STATION 01 / SOURCE',title:'Capture stays local.',body:"CampusGuard's Windows desktop app opens a configured camera source and processes frames on the host machine. This visual doesn't connect to a camera or show footage.",role:'Bring frames into the local pipeline',data:'No live values shown'},
+{tag:'STATION 02 / PERSON',title:'Find people, maintain tracks.',body:'The configured person detector identifies people in a frame; tracking associates detections across frames. A missing or incompatible detector does not magically produce results.',role:'Spatial detection and track continuity',data:'No detections or confidence values simulated'},
+{tag:'STATION 03 / POSE',title:'Add body-motion context.',body:'A configured pose estimator can provide body keypoints for the downstream analysis. The diagram is a concept illustration, not a skeleton extracted from video.',role:'Describe pose as structured keypoints',data:'No keypoints or identities displayed'},
+{tag:'STATION 04 / MODEL',title:'Classify a short sequence.',body:'The documented MC3-18 adapter consumes a temporal sequence of 16 RGB frames. The loaded checkpoint, preprocessing, and configured thresholds determine real model behavior.',role:'Temporal action classification',data:'No probability or accuracy invented'},
+{tag:'STATION 05 / RESPONSE',title:'Keep a person in the loop.',body:'A stable above-threshold classifier result can feed the incident and alert workflow. Staff review the available incident information and decide what action to take.',role:'Review, acknowledge outcome, and follow up',data:'No incidents or alerts are generated by this page'}
+];
+function selectStage(i){const s=stages[i];document.querySelectorAll('[data-stage]').forEach(n=>{const active=Number(n.dataset.stage)===i;n.classList.toggle('active',active);n.setAttribute('aria-pressed',String(active))});document.querySelectorAll('[data-pick]').forEach(n=>n.setAttribute('aria-pressed',String(Number(n.dataset.pick)===i)));for(const [id,val] of Object.entries({kicker:s.tag,title:s.title,body:s.body,role:s.role,data:s.data}))document.getElementById(id).textContent=val}
+document.querySelectorAll('[data-stage]').forEach(n=>{n.addEventListener('click',()=>selectStage(Number(n.dataset.stage)));n.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectStage(Number(n.dataset.stage))}if(e.key==='ArrowRight'||e.key==='ArrowDown'){e.preventDefault();document.querySelector('[data-stage="'+((Number(n.dataset.stage)+1)%5)+'"]').focus()}if(e.key==='ArrowLeft'||e.key==='ArrowUp'){e.preventDefault();document.querySelector('[data-stage="'+((Number(n.dataset.stage)+4)%5)+'"]').focus()}})});
+document.querySelectorAll('[data-pick]').forEach(n=>n.addEventListener('click',()=>selectStage(Number(n.dataset.pick))));
+</script></body></html>
