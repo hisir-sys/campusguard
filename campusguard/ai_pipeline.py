@@ -15,7 +15,7 @@ import numpy as np
 import torch
 
 from campusguard.model_paths import with_aliases
-from campusguard.model_registry import EnhancedEnsemble, MODEL_PROFILES, MODEL_INFERENCE_LOCK, VideoClassifier
+from campusguard.model_registry import EnhancedEnsemble, MODEL_PROFILES, MODEL_CACHE_LOCK, VideoClassifier, model_inference_lock
 from campusguard.settings import AppSettings
 
 ModelStatusCallback = Callable[[str, str], None]
@@ -338,7 +338,7 @@ class VisionPipeline:
             )
             # Keep model creation single-flight: starting many cameras must not
             # create dozens of copies of the same detector/pose weights.
-            with MODEL_INFERENCE_LOCK:
+            with MODEL_CACHE_LOCK:
                 model = _SHARED_YOLO_MODELS.get(cache_key)
                 if model is None:
                     from ultralytics import YOLO
@@ -568,7 +568,7 @@ sk=task)
         # would mix identities between cameras if the detector weights are shared.
         # Run stateless detection and keep fallback tracking inside this camera's
         # VisionPipeline instead.
-        with MODEL_INFERENCE_LOCK:
+        with model_inference_lock(self.detector):
             results = self.detector.predict(
                 annotated,
                 classes=[0],
@@ -779,7 +779,7 @@ sk=task)
         annotated: np.ndarray,
         settings: AppSettings,
     ) -> None:
-        with MODEL_INFERENCE_LOCK:
+        with model_inference_lock(self.pose_model):
             results = self.pose_model.predict(
                 frame,
                 conf=POSE_DETECTION_CONFIDENCE,
