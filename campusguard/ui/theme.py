@@ -300,17 +300,21 @@ QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
 """
 
 
-# Small screens get a slightly smaller base font so more fits without scrolling.
-_compact = False
+# Base font size in points; chosen from the screen size (see screen_fit.py).
+_base_pt = 10
+
+
+def set_base_pt(points: int) -> None:
+    global _base_pt
+    _base_pt = max(8, min(14, int(points)))
 
 
 def set_compact(compact: bool) -> None:
-    global _compact
-    _compact = bool(compact)
+    set_base_pt(9 if compact else 10)
 
 
 def is_compact() -> bool:
-    return _compact
+    return _base_pt < 10
 
 
 def build_qss(theme: str) -> str:
@@ -336,7 +340,7 @@ def build_qss(theme: str) -> str:
         "handle_hover": rgba(p.text, 110),
         "bad_line": rgba(p.bad, 100),
         "accent_line": rgba(p.accent, 190),
-        "base_pt": "9" if _compact else "10",
+        "base_pt": str(_base_pt),
     }
     qss = _QSS
     for key, value in values.items():

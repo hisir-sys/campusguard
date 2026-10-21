@@ -39,6 +39,7 @@ from campusguard.ui.dashboard_page import DashboardPage
 from campusguard.ui.glass_nav import BackdropWidget, BottomBar, TopBar
 from campusguard.ui.history_pages import AlertsPage, IncidentsPage
 from campusguard.ui.icons import set_icon_theme
+from campusguard.ui.screen_fit import compute_fit
 from campusguard.ui.settings_page import SettingsPage
 from campusguard.ui.severity_alert import SeverityAlertToast
 from campusguard.ui.theme import get_palette, rgba
@@ -1308,15 +1309,48 @@ class MainWindow(QMainWindow):
         if answer == QMessageBox.StandardButton.Yes:
             self.logout_requested.emit()
 
-    def _fit_to_screen(self) -> None:
-        """Open at a comfortable size that always fits the screen's usable area."""
+    def _available_geometry(self) -> QRect:
         screen = self.screen() or QGuiApplication.primaryScreen()
-        avail = screen.availableGeometry() if screen is not None else QRect(0, 0, 1500, 940)
-        usable_w, usable_h = int(avail.width() * 0.94), int(avail.height() * 0.94)
-        self.setMinimumSize(min(1080, usable_w), min(700, usable_h))
-        width, height = min(1500, usable_w), min(940, usable_h)
-        self.resize(width, height)
-        self.move(avail.x() + (avail.width() - width) // 2, avail.y() + (avail.height() - height) // 2)
+        return screen.availableGeometry() if screen is not None else QRect(0, 0, 1500, 940)
+
+    def _fit_to_screen(self) -> None:
+        """Size the window from the screen's usable area (and keep it centred)."""
+        avail = self._available_geometry()
+        fit = compute_fit(avail.width(), avail.height())
+        self._fit = fit
+        self.setMinimumSize(fit.min_width, fit.min_height)
+        self.resize(fit.width, fit.height)
+        self.move(avail.x() + (avail.width() - fit.width) // 2, avail.y() + (avail.height() - fit.height) // 2)
+
+    def show_fitted(self) -> None:
+        """Show the window: maximised on small laptop screens, centred elsewhere."""
+        if self._fit.maximize:
+            self.showMaximized()
+        else:
+            self.show()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        handle = self.windowHandle()
+        if handle is not None and not getattr(self, "_screen_hooked", False):
+            self._screen_hooked = True
+            handle.screenChanged.connect(self._on_screen_changed)
+
+    def _on_screen_changed(self, _screen) -> None:
+        """Moved to another monitor: refit if the window no longer fits there."""
+        avail = self._available_geometry()
+        fit = compute_fit(avail.width(), avail.height())
+        self._fit = fit
+        self.setMinimumSize(fit.min_width, fit.min_height)
+        if self.isMaximized() or self.isFullScreen():
+            return
+        too_big = self.width() > avail.width() or self.height() > avail.height()
+        if too_big or fit.maximize:
+            if fit.maximize:
+                self.showMaximized()
+            else:
+                self.resize(min(self.width(), fit.width), min(self.height(), fit.height))
+                self.move(avail.x() + (avail.width() - self.width()) // 2, avail.y() + (avail.height() - self.height()) // 2)
 
     def _update_operator_button(self) -> None:
         self.top_bar.set_operator(self.operator_name)

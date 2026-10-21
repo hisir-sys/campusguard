@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import time
 from pathlib import Path
 
 from PySide6.QtCore import QTimer, Qt
@@ -16,6 +17,10 @@ from PySide6.QtWidgets import (
 )
 
 from campusguard.ui.thinking_orb import ThinkingOrb
+
+
+# The orb stays on screen at least this long after launch (5-7 seconds).
+SPLASH_MIN_SECONDS = 6.0
 
 
 def _asset_root() -> Path:
@@ -108,6 +113,12 @@ class AppController:
         self.window = None
         self._workers: list = []
         self._closing_for_flow = False  # logout/update closes the window without quitting
+        self._launched_at = time.monotonic()
+
+    def _after_splash(self, func) -> None:
+        """Run ``func`` once the orb has been shown for SPLASH_MIN_SECONDS since launch."""
+        remaining = max(0.0, SPLASH_MIN_SECONDS - (time.monotonic() - self._launched_at))
+        QTimer.singleShot(int(remaining * 1000), func)
 
     # ----- helpers -------------------------------------------------------
 
@@ -131,16 +142,22 @@ class AppController:
     # ----- sequence ------------------------------------------------------
 
     def start(self) -> None:
-        self.startup.set_status("Checking your account…")
+        self.startup.set_status("Starting CampusGuard…")
+        QTimer.singleShot(1200, lambda: self.startup.set_status("Checking your account…"))
         from campusguard import auth
 
-        self._run(auth.resume, self._after_resume, lambda _error: self.show_login())
+        self._run(auth.resume, self._after_resume, lambda _error: self._after_splash(self.show_login))
 
     def _after_resume(self, session) -> None:
-        if session is not None:
-            self.launch_main(session)
-        else:
-            self.show_login()
+        if session is None:
+            self._after_splash(self.show_login)
+            return
+        # Build the window now (the heavy part), then keep the orb animating until
+        # the minimum splash time has passed before revealing it.
+        self.startup.set_status("Preparing your workspace…")
+        window = self._build_window(session)
+        if window is not None:
+            self._after_splash(lambda: self._present_window(window))
 
     def show_login(self, prefill: str = "", notice: str = "") -> None:
         from campusguard import auth
@@ -161,19 +178,21 @@ class AppController:
             self.app.quit()
 
     def launch_main(self, session) -> None:
+        """Build and show the main window right away (used after an interactive sign-in)."""
         self.startup.set_status("Loading CampusGuard…")
         self.app.processEvents()
+        window = self._build_window(session)
+        if window is not None:
+            self._present_window(window)
+
+    def _build_window(self, session):
         try:
             from campusguard.ui.main_window import MainWindow
 
             window = MainWindow(account_email=session.email)
             window.logout_requested.connect(lambda: self.logout(session.email))
             window.closed.connect(self._on_window_closed)
-            window.show()
-            self.startup.hide()
-            window.raise_()
-            window.activateWindow()
-            self.window = window
+            return window
         except Exception as error:
             self.startup.hide()
             QMessageBox.critical(
@@ -182,7 +201,14 @@ class AppController:
                 f"The main interface failed to load.\n\n{type(error).__name__}: {error}",
             )
             self.app.exit(1)
-            return
+            return None
+
+    def _present_window(self, window) -> None:
+        window.show_fitted()
+        self.startup.hide()
+        window.raise_()
+        window.activateWindow()
+        self.window = window
         self._begin_update_check()
 
     def _on_window_closed(self) -> None:
@@ -319,12 +345,13 @@ def main() -> int:
     app.setWindowIcon(QIcon(str(_asset_root() / "assets" / "campusguard-eye.svg")))
 
     # Smaller screens get a slightly smaller base font so more fits on screen.
-    from campusguard.ui.theme import set_compact
+    from campusguard.ui.screen_fit import base_font_pt
+    from campusguard.ui.theme import set_base_pt
 
     screen = QGuiApplication.primaryScreen()
     if screen is not None:
         avail = screen.availableGeometry()
-        set_compact(avail.width() < 1500 or avail.height() < 860)
+        set_base_pt(base_font_pt(avail.width(), avail.height()))
 
     # Paint the splash first; everything else happens after the event loop starts.
     startup = StartupWindow()
