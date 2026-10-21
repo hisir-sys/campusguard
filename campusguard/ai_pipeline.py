@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 import copy
 import os
 import sys
+import threading
 from pathlib import Path
 from time import perf_counter
 from typing import Callable
@@ -14,11 +15,15 @@ import numpy as np
 import torch
 
 from campusguard.model_paths import with_aliases
-from campusguard.model_registry import EnhancedEnsemble, MODEL_PROFILES, VideoClassifier
+from campusguard.model_registry import EnhancedEnsemble, MODEL_PROFILES, MODEL_INFERENCE_LOCK, VideoClassifier
 from campusguard.settings import AppSettings
 
 ModelStatusCallback = Callable[[str, str], None]
 Event = tuple[str, float, str]
+
+# Identical detector/pose weights are shared between camera pipelines. Per-camera
+# tracking and temporal state remain on each VisionPipeline instance.
+_SHARED_YOLO_MODELS: dict[tuple[str, str, str, int], object] = {}
 
 
 def resolve_model_path(value: str) -> Path:
@@ -319,22 +324,34 @@ class VisionPipeline:
         self.display_ids.clear()
         self.display_track_memory.clear()
         self.next_display_id = 1
-        self.last_scene_signature = None
-        self.scene_cut_cooldown = 0
-        self.decision.reset()
-        self.last_state = "MODEL NOT LOADED"
-        self.last_confidence = None
-        self.last_involved_ids.clear()
-        self.cached_people.clear()
-
-    def _load_yolo(self, component: str, model_path: str, task: str):
+         def _load_yolo(self, component: str, model_path: str, task: str):
         path = resolve_model_path(model_path)
         if not model_path.strip() or not path.is_file():
             self.status(component, f"MODEL NOT LOADED — file not found: {path}")
             return None
         try:
-            from ultralytics import YOLO
-            model = YOLO(str(path), task=task)
+            cache_key = (
+                task,
+                str(path.resolve()),
+                str(self.device),
+                path.stat().st_mtime_ns,
+            )
+            # Keep model creation single-flight: starting many cameras must not
+            # create dozens of copies of the same detector/pose weights.
+            with MODEL_INFERENCE_LOCK:
+                model = _SHARED_YOLO_MODELS.get(cache_key)
+                if model is None:
+                    from ultralytics import YOLO
+                    model = YOLO(str(path), task=task)
+                    model.to(str(self.device))
+                    _SHARED_YOLO_MODELS[cache_key] = model
+            self.status(component, f"READY — {path.name} (shared model instance)")
+            return model
+        except Exception as error:
+            self.status(component, f"MODEL NOT LOADED — {error}")
+            return None
+
+sk=task)
             model.to(str(self.device))
             self.status(component, f"READY — {path.name}")
             return model
@@ -546,37 +563,12 @@ class VisionPipeline:
             return None
         return frame[top:bottom, left:right].copy()
 
-    def _aggregate_person_predictions(self, people: list[TrackedPerson]) -> tuple[str, float | None]:
-        predictions = [
-            self.person_scores[person.track_id]
-            for person in people
-            if person.track_id in self.person_scores
-        ]
-        if not predictions:
-            # No visible people means there is no current person-level evidence.
-            return "NORMAL", None
-
-        fight = [confidence for state, confidence in predictions if state == "FIGHT DETECTED"]
-        possible = [confidence for state, confidence in predictions if state == "POSSIBLE ALTERCATION"]
-        if fight:
-            return "FIGHT DETECTED", max(fight)
-        if possible:
-            return "POSSIBLE ALTERCATION", max(possible)
-        return "NORMAL", max(confidence for _, confidence in predictions)
-
-
-    def _detect_people(self, annotated: np.ndarray, tracking_enabled: bool, settings: AppSettings) -> list[TrackedPerson]:
-        if tracking_enabled:
-            results = self.detector.track(
-                annotated,
-                persist=True,
-                tracker="bytetrack.yaml",
-                classes=[0],
-                conf=PERSON_DETECTION_CONFIDENCE,
-                device=str(self.device),
-                verbose=False,
-            )
-        else:
+    def _    def _detect_people(self, annotated: np.ndarray, tracking_enabled: bool, settings: AppSettings) -> list[TrackedPerson]:
+        # Ultralytics' persistent tracker is attached to the model predictor and
+        # would mix identities between cameras if the detector weights are shared.
+        # Run stateless detection and keep fallback tracking inside this camera's
+        # VisionPipeline instead.
+        with MODEL_INFERENCE_LOCK:
             results = self.detector.predict(
                 annotated,
                 classes=[0],
@@ -590,11 +582,29 @@ class VisionPipeline:
         boxes = results[0].boxes
         xyxy = boxes.xyxy.detach().cpu().numpy()
         confs = boxes.conf.detach().cpu().numpy() if boxes.conf is not None else np.ones(len(xyxy))
+        ids = self._assign_fallback_track_ids(xyxy)
 
-        has_tracker_ids = boxes.id is not None and tracking_enabled
-        if has_tracker_ids:
-            ids = boxes.id.detach().cpu().numpy().astype(int).tolist()
-            self.fallback_tracks.clear()
+        people = []
+        used_display_ids: set[int] = set()
+        for raw_box, raw_conf, raw_id in zip(xyxy, confs, ids):
+            x1, y1, x2, y2 = (int(v) for v in raw_box)
+            track_id = int(raw_id)
+            display_id = self._stable_display_id(
+                track_id,
+                (x1, y1, x2, y2),
+                used_display_ids,
+            )
+            used_display_ids.add(display_id)
+            person = TrackedPerson(
+                track_id=track_id,
+                display_id=display_id,
+                bbox=(x1, y1, x2, y2),
+                detection_confidence=float(raw_conf),
+                center=((x1 + x2) / 2.0, (y1 + y2) / 2.0),
+            )
+            people.append(person)
+        return people
+
         else:
             ids = self._assign_fallback_track_ids(xyxy)
 
@@ -769,13 +779,14 @@ class VisionPipeline:
         annotated: np.ndarray,
         settings: AppSettings,
     ) -> None:
-        results = self.pose_model.predict(
-            frame,
-            conf=POSE_DETECTION_CONFIDENCE,
-            classes=[0],
-            device=str(self.device),
-            verbose=False,
-        )
+        with MODEL_INFERENCE_LOCK:
+            results = self.pose_model.predict(
+                frame,
+                conf=POSE_DETECTION_CONFIDENCE,
+                classes=[0],
+                device=str(self.device),
+                verbose=False,
+            )
         if not results or results[0].keypoints is None or not people:
             return
 
