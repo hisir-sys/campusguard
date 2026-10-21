@@ -414,7 +414,7 @@ class CameraFormDialog(QDialog):
 
         from campusguard.camera_runtime import enumerate_local_cameras
 
-        cameras = enumerate_local_cameras(max_devices=8)
+        cameras = enumerate_local_cameras(max_devices=80)
 
         self.detected_input.blockSignals(True)
         self.detected_input.clear()
