@@ -19,7 +19,15 @@ Status = Callable[[str, str], None]
 
 # Share immutable model weights across per-camera classifier state. Each camera
 # still owns its own temporal frames, probabilities, and decision history.
-MODEL_INFERENCE_LOCK = threading.RLock()
+MODEL_CACHE_LOCK = threading.RLock()
+_MODEL_INFERENCE_LOCKS: dict[int, threading.RLock] = {}
+
+def model_inference_lock(model) -> threading.RLock:
+    """Return a lock scoped to one shared model, not to the whole AI stack."""
+    key = id(model)
+    with MODEL_CACHE_LOCK:
+        return _MODEL_INFERENCE_LOCKS.setdefault(key, threading.RLock())
+
 _SHARED_VIDEO_MODELS: dict[tuple[str, str, str], tuple[nn.Module | torch.jit.ScriptModule, int]] = {}
 
 @dataclass(frozen=True)
@@ -111,7 +119,7 @@ class VideoClassifier:
         # Loading a camera starts a worker. Serialize cache misses so dozens of
         # camera workers cannot all allocate identical model weights at once.
         cache_key = (self.profile.architecture, self.path, str(self.device))
-        with MODEL_INFERENCE_LOCK:
+        with MODEL_CACHE_LOCK:
             cached = _SHARED_VIDEO_MODELS.get(cache_key)
             if cached is not None:
                 self.model, self.class_count = cached
@@ -331,7 +339,7 @@ class VideoClassifier:
         with torch.inference_mode():
             # A shared model is read-only, but a lock avoids simultaneous
             # forwards from many camera threads overwhelming accelerator memory.
-            with MODEL_INFERENCE_LOCK:
+            with model_inference_lock(self.model):
                 logits = self.model(tensor)
             if isinstance(logits, (tuple, list)):
                 logits = logits[0]
