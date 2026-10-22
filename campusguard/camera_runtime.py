@@ -187,6 +187,7 @@ class RuntimeOptions:
         self._ai_enabled = ai_enabled
         self._source_fps = 30.0
         self._preview_enabled = True
+        self._snapshot_enabled = False
 
     def snapshot(self) -> tuple[AppSettings, bool]:
         with self._lock:
@@ -213,6 +214,15 @@ class RuntimeOptions:
     def preview_enabled(self) -> bool:
         with self._lock:
             return self._preview_enabled
+
+    def set_snapshot_enabled(self, enabled: bool) -> None:
+        with self._lock:
+            self._snapshot_enabled = bool(enabled)
+
+    @property
+    def snapshot_enabled(self) -> bool:
+        with self._lock:
+            return self._snapshot_enabled
 
     @property
     def source_fps(self) -> float:
@@ -363,6 +373,7 @@ class CameraCaptureThread(QThread):
 
 class FrameAnalysisThread(QThread):
     frame_ready = Signal(QImage, str, object)
+    snapshot_ready = Signal(bytes)
     model_status = Signal(str, str)
     event_detected = Signal(str, float, str)
     footage_saved = Signal(str)
@@ -394,6 +405,7 @@ class FrameAnalysisThread(QThread):
         last_state = "MODEL NOT LOADED"
         last_confidence = None
         last_preview = 0.0
+        last_snapshot = 0.0
         next_profile_check = 0.0
         preview_interval = 0.0
         max_width: int | None = None
@@ -474,6 +486,7 @@ class FrameAnalysisThread(QThread):
                 want_preview = self.options.preview_enabled and (
                     preview_interval <= 0.0 or now - last_preview >= preview_interval
                 )
+                want_snapshot = self.options.snapshot_enabled and now - last_snapshot >= 0.5
                 processed = None
 
                 if pipeline is None:
@@ -524,6 +537,26 @@ class FrameAnalysisThread(QThread):
                         QImage.Format.Format_RGB888,
                     ).copy()
                     self.frame_ready.emit(image, state, confidence)
+
+                if want_snapshot:
+                    # Encode a small raw-frame preview only while a remote viewer watches.
+                    last_snapshot = now
+                    height, width = frame.shape[:2]
+                    scale = min(1.0, 640.0 / max(1, width))
+                    snapshot_frame = (
+                        cv2.resize(
+                            frame,
+                            (max(1, int(width * scale)), max(1, int(height * scale))),
+                            interpolation=cv2.INTER_AREA,
+                        )
+                        if scale < 1.0
+                        else frame
+                    )
+                    encoded_ok, encoded = cv2.imencode(
+                        ".jpg", snapshot_frame, [cv2.IMWRITE_JPEG_QUALITY, 65]
+                    )
+                    if encoded_ok and encoded.nbytes <= 512 * 1024:
+                        self.snapshot_ready.emit(encoded.tobytes())
 
                 finished_footage = self.footage_recorder.update(
                     frame,
@@ -732,6 +765,7 @@ class CameraManager(QObject):
     camera_status_changed = Signal(str, str, str)
     camera_stats_changed = Signal(str, float, str)
     frame_ready = Signal(str, QImage, str, object)
+    snapshot_ready = Signal(str, bytes)
     model_status_changed = Signal(str, str, str)
     event_detected = Signal(str, str, float, str)
     footage_saved = Signal(str, str)
@@ -784,6 +818,10 @@ class CameraManager(QObject):
             lambda image, state, confidence, camera_id=camera.camera_id:
             self.frame_ready.emit(camera_id, image, state, confidence)
         )
+        analysis.snapshot_ready.connect(
+            lambda jpeg, camera_id=camera.camera_id:
+            self.snapshot_ready.emit(camera_id, jpeg)
+        )
         analysis.model_status.connect(
             lambda component, message, camera_id=camera.camera_id:
             self.model_status_changed.emit(camera_id, component, message)
@@ -819,6 +857,12 @@ class CameraManager(QObject):
         session = self._sessions.get(camera_id)
         if session is not None:
             session.options.set_preview_enabled(enabled)
+
+    def set_camera_snapshot(self, camera_id: str, enabled: bool) -> None:
+        """Enable low-rate JPEG snapshots only while a remote viewer watches."""
+        session = self._sessions.get(camera_id)
+        if session is not None:
+            session.options.set_snapshot_enabled(enabled)
 
     def set_camera_ai(self, camera_id: str, enabled: bool) -> None:
         session = self._sessions.get(camera_id)

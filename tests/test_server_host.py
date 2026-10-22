@@ -27,16 +27,19 @@ class FakeManager(QObject):
     model_status_changed = Signal(str, str, str)
     event_detected = Signal(str, str, float, str)
     footage_saved = Signal(str, str)
+    snapshot_ready = Signal(str, bytes)
 
     def __init__(self):
         super().__init__()
         self.default_preview = True
         self.started, self.stopped, self.ai, self.reconnected = [], [], {}, []
+        self.snapshot_enabled = {}
 
     def set_settings(self, settings): self.settings = settings
     def start_camera(self, camera): self.started.append(camera.camera_id)
     def stop_camera(self, camera_id): self.stopped.append(camera_id)
     def set_camera_ai(self, camera_id, enabled): self.ai[camera_id] = enabled
+    def set_camera_snapshot(self, camera_id, enabled): self.snapshot_enabled[camera_id] = enabled
     def reconnect(self, camera_id, camera=None): self.reconnected.append(camera_id)
     def stop_all(self): self.stopped.append("ALL")
 
@@ -180,6 +183,19 @@ def test_clip_outside_footage_folder_is_never_served(env):
     pump(env.app)
     env.repo.attach_incident_footage("INC-00001", str(secret))
     assert env.call("GET", "/incidents/INC-00001/clip")[0] == 404
+
+
+def test_snapshot_cache_is_camera_scoped_and_watch_can_stop(env):
+    env.call("POST", "/cameras", {"name": "Hall", "address": "rtsp://h/hall"})
+    env.manager.snapshot_ready.emit("CAM-001", b"jpeg-data")
+    pump(env.app)
+    status, payload = env.call("GET", "/cameras/CAM-001/snapshot")
+    assert status == 200 and payload == b"jpeg-data"
+    assert env.manager.snapshot_enabled["CAM-001"] is True
+    assert env.call("GET", "/cameras/CAM-404/snapshot")[0] == 404
+    status, _ = env.call("GET", "/cameras/CAM-001/snapshot?watch=0")
+    assert status == 204 and env.manager.snapshot_enabled["CAM-001"] is False
+    assert env.host.snapshot_bytes("CAM-001") is None
 
 
 def test_health_and_status_from_camera_signals(env):

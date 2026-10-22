@@ -85,6 +85,27 @@ class ServerHost:
         manager.event_detected.connect(self._on_event)
         manager.footage_saved.connect(self._on_footage)
         self._previous_status: dict[str, str] = {}
+        self._snapshot_lock = threading.Lock()
+        self._snapshots: dict[str, tuple[float, bytes]] = {}
+        manager.snapshot_ready.connect(self._on_snapshot)
+
+    # -- Qt-thread slots ------------------------------------------------
+    def _on_snapshot(self, camera_id: str, jpeg: bytes) -> None:
+        if not jpeg or len(jpeg) > 512 * 1024:
+            return
+        with self._snapshot_lock:
+            self._snapshots[camera_id] = (time.monotonic(), bytes(jpeg))
+
+    def snapshot_bytes(self, camera_id: str) -> bytes | None:
+        with self._snapshot_lock:
+            entry = self._snapshots.get(camera_id)
+            if entry is None:
+                return None
+            captured_at, jpeg = entry
+            if time.monotonic() - captured_at > 5.0:
+                self._snapshots.pop(camera_id, None)
+                return None
+            return jpeg
 
     # -- Qt-thread slots ------------------------------------------------
     def _on_status(self, camera_id: str, status: str, message: str) -> None:
@@ -213,6 +234,22 @@ class HostBackend:
     def list_cameras(self) -> list[dict]:
         return [self.host._camera_dict(c) for c in list(self.host.cameras.values())]
 
+    def validate_camera_snapshot(self, camera_id: str) -> None:
+        self._require(camera_id)
+
+    def set_camera_snapshot_enabled(self, camera_id: str, enabled: bool) -> None:
+        def work() -> None:
+            self._require(camera_id)
+            self.host.manager.set_camera_snapshot(camera_id, enabled)
+            if not enabled:
+                with self.host._snapshot_lock:
+                    self.host._snapshots.pop(camera_id, None)
+        self._on_qt(work)
+
+    def camera_snapshot(self, camera_id: str) -> bytes | None:
+        self._require(camera_id)
+        return self.host.snapshot_bytes(camera_id)
+
     @staticmethod
     def _incident(row: dict) -> dict:
         return {
@@ -280,6 +317,8 @@ class HostBackend:
         def work() -> None:
             self._require(camera_id)
             self.host.manager.stop_camera(camera_id)
+            with self.host._snapshot_lock:
+                self.host._snapshots.pop(camera_id, None)
             self.host.repository.remove_camera(camera_id)
             try:
                 self.host.vault.delete(camera_id)

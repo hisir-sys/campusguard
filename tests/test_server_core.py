@@ -181,6 +181,14 @@ class FakeBackend:
 
     def status(self): return {"version": "t"}
     def list_cameras(self): return [{"camera_id": "CAM-001"}]
+    def validate_camera_snapshot(self, camera_id):
+        if camera_id != "CAM-001": raise ApiError(404, "Unknown camera.")
+    def set_camera_snapshot_enabled(self, camera_id, enabled):
+        if camera_id != "CAM-001": raise ApiError(404, "Unknown camera.")
+        self.calls.append(("snapshot_watch", camera_id, enabled))
+    def camera_snapshot(self, camera_id):
+        if camera_id != "CAM-001": raise ApiError(404, "Unknown camera.")
+        return b"jpeg-bytes"
     def add_camera(self, spec):
         if not spec.get("name"): raise ApiError(400, "Camera name is missing.")
         self.calls.append(("add", spec)); return {"camera_id": "CAM-002", **spec}
@@ -279,6 +287,19 @@ def test_oversized_body_is_rejected_and_connection_closed(api):
     response.read()
     connection.close()
     assert response.status == 413 and response.getheader("Connection") == "close"
+
+
+def test_snapshot_endpoint_auth_size_watch_and_unknown_camera(api):
+    server, backend = api
+    status, response, data = request(server, "GET", "/api/v1/cameras/CAM-001/snapshot")
+    assert status == 200 and data == b"jpeg-bytes"
+    assert response.getheader("Content-Type") == "image/jpeg"
+    assert backend.calls[-1] == ("snapshot_watch", "CAM-001", True)
+    assert request(server, "GET", "/api/v1/cameras/CAM-404/snapshot")[0] == 404
+    assert request(server, "GET", "/api/v1/cameras/CAM-001/snapshot?watch=bad")[0] == 400
+    status, _, _ = request(server, "GET", "/api/v1/cameras/CAM-001/snapshot?watch=0")
+    assert status == 204 and backend.calls[-1] == ("snapshot_watch", "CAM-001", False)
+    assert request(server, "GET", "/api/v1/cameras/CAM-001/snapshot", token=None)[0] == 401
 
 
 def test_clip_streaming_and_ranges(api):

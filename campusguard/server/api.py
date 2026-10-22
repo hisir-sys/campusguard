@@ -17,6 +17,8 @@ API_PREFIX = "/api/v1"
 MAX_BODY_BYTES = 2 * 1024 * 1024
 FAILED_AUTH_LIMIT = 10
 FAILED_AUTH_WINDOW_SECONDS = 60.0
+MAX_SNAPSHOT_BYTES = 512 * 1024
+SNAPSHOT_MIN_INTERVAL_SECONDS = 0.5
 
 
 class ApiError(Exception):
@@ -51,6 +53,7 @@ _ROUTES: list[tuple[str, re.Pattern, str]] = [
     ("GET", re.compile(r"^/cameras$"), "list_cameras"),
     ("POST", re.compile(r"^/cameras$"), "add_camera"),
     ("POST", re.compile(r"^/cameras/import$"), "import_cameras"),
+    ("GET", re.compile(r"^/cameras/(?P<camera_id>[A-Za-z0-9_-]+)/snapshot$"), "snapshot"),
     ("DELETE", re.compile(r"^/cameras/(?P<camera_id>[A-Za-z0-9_-]+)$"), "remove_camera"),
     ("POST", re.compile(r"^/cameras/(?P<camera_id>[A-Za-z0-9_-]+)/ai$"), "set_camera_ai"),
     ("POST", re.compile(r"^/cameras/(?P<camera_id>[A-Za-z0-9_-]+)/reconnect$"), "reconnect_camera"),
@@ -180,6 +183,34 @@ class _Handler(BaseHTTPRequestHandler):
         text = self._read_body().decode("utf-8-sig", errors="replace")
         self._send_json(HTTPStatus.OK, self.backend.import_cameras(text))
 
+    def _route_snapshot(self, query, camera_id: str) -> None:
+        watch_values = query.get("watch", ["1"])
+        if len(watch_values) != 1 or watch_values[0] not in {"0", "1"}:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "'watch' must be 0 or 1.")
+        if watch_values[0] == "0":
+            self.backend.set_camera_snapshot_enabled(camera_id, False)
+            self.send_response(HTTPStatus.NO_CONTENT)
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        self.backend.validate_camera_snapshot(camera_id)
+        limiter = self.server.snapshot_limiter  # type: ignore[attr-defined]
+        if not limiter.allow(self.client_address[0], camera_id):
+            raise ApiError(HTTPStatus.TOO_MANY_REQUESTS, "Snapshot polling is limited to two requests per second per camera.")
+        self.backend.set_camera_snapshot_enabled(camera_id, True)
+        jpeg = self.backend.camera_snapshot(camera_id)
+        if not jpeg:
+            raise ApiError(HTTPStatus.SERVICE_UNAVAILABLE, "Snapshot is not ready yet; retry shortly.")
+        if len(jpeg) > MAX_SNAPSHOT_BYTES:
+            raise ApiError(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "Snapshot exceeds the size limit.")
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "image/jpeg")
+        self.send_header("Content-Length", str(len(jpeg)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(jpeg)
+
     def _route_remove_camera(self, query, camera_id: str) -> None:
         self.backend.remove_camera(camera_id)
         self._send_json(HTTPStatus.OK, {"removed": camera_id})
@@ -254,6 +285,26 @@ class _Handler(BaseHTTPRequestHandler):
                 remaining -= len(chunk)
 
 
+class _SnapshotRateLimiter:
+    """Limit each client to one snapshot request per camera every half-second."""
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._last: dict[tuple[str, str], float] = {}
+
+    def allow(self, address: str, camera_id: str) -> bool:
+        now = time.monotonic()
+        key = (address, camera_id)
+        with self._lock:
+            previous = self._last.get(key)
+            if previous is not None and now - previous < SNAPSHOT_MIN_INTERVAL_SECONDS:
+                return False
+            self._last[key] = now
+            if len(self._last) > 4096:
+                cutoff = now - 60.0
+                self._last = {item: stamp for item, stamp in self._last.items() if stamp >= cutoff}
+            return True
+
+
 class ApiServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
@@ -267,6 +318,7 @@ class ApiServer(ThreadingHTTPServer):
         self.backend = backend
         self.log = log
         self.limiter = _AuthLimiter()
+        self.snapshot_limiter = _SnapshotRateLimiter()
         self._thread: threading.Thread | None = None
         if tls_cert_file and tls_key_file:
             context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
