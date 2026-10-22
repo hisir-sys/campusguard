@@ -325,20 +325,28 @@ def test_run_server_full_start_serve_and_clean_stop(tmp_path, monkeypatch):
     shutdown_timer.start(30000)
 
     def client():
-        connection = None
+        deadline = time.monotonic() + 20
+        last_error = "The local API did not become ready before the test deadline."
         try:
-            time.sleep(0.6)
-            connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
-            connection.request("GET", "/api/v1/status", headers={"Authorization": f"Bearer {TOKEN}"})
-            response = connection.getresponse()
-            results["status"], results["body"] = response.status, json.loads(response.read())
-            connection.request("GET", "/api/v1/status")
-            results["anon"] = connection.getresponse().status
-        except Exception as error:
-            results["client_error"] = str(error)
+            while time.monotonic() < deadline:
+                connection = http.client.HTTPConnection("127.0.0.1", port, timeout=1)
+                try:
+                    connection.request("GET", "/api/v1/status", headers={"Authorization": f"Bearer {TOKEN}"})
+                    response = connection.getresponse()
+                    status_code, payload = response.status, response.read()
+                    if status_code != 200:
+                        raise RuntimeError(f"Authenticated status request returned HTTP {status_code}.")
+                    results["status"], results["body"] = status_code, json.loads(payload)
+                    connection.request("GET", "/api/v1/status")
+                    results["anon"] = connection.getresponse().status
+                    return
+                except (OSError, http.client.HTTPException, RuntimeError) as error:
+                    last_error = str(error)
+                    time.sleep(0.1)
+                finally:
+                    connection.close()
+            results["client_error"] = last_error
         finally:
-            if connection is not None:
-                connection.close()
             app.quit()
 
     threading.Thread(target=client, daemon=True).start()
