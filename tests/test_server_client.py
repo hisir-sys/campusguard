@@ -72,7 +72,7 @@ class FakeServerHandler(BaseHTTPRequestHandler):
         body = self.rfile.read(length)
         if self.path == "/api/v1/incidents/INC-1/status":
             payload = json.loads(body)
-            self.incident_status = payload.get("status", "NEW")
+            type(self).incident_status = payload.get("status", "NEW")
             self._json(200, {"public_id": "INC-1", "status": self.incident_status})
         elif self.path == "/api/v1/cameras/import":
             if b"name,address" not in body or b"rtsp://" not in body:
