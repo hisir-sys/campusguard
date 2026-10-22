@@ -332,12 +332,24 @@ def run_self_check(result_file: str | None) -> int:
         finally:
             runner.close()
 
+    def server() -> None:
+        import xml.etree.ElementTree as ET
+
+        import campusguard.server.host  # noqa: F401
+        from campusguard.server.cli import build_task_xml
+        from campusguard.server.csv_import import parse_cameras_csv
+
+        ET.fromstring(build_task_xml("C:\\x.exe", "--server", "A\\b").replace('encoding="UTF-16"', ""))
+        plan = parse_cameras_csv("name,address\nA,rtsp://10.0.0.1/s\n")
+        if len(plan.valid) != 1:
+            raise RuntimeError("server camera import self-test failed")
+
     def vault() -> None:
         import keyring
 
         keyring.get_keyring()
 
-    for name, func in (("fonts", fonts), ("svg", svg), ("models", models), ("ui", ui), ("ai-stack", ai_stack), ("engine", engine), ("keyring", vault)):
+    for name, func in (("fonts", fonts), ("svg", svg), ("models", models), ("ui", ui), ("ai-stack", ai_stack), ("engine", engine), ("server", server), ("keyring", vault)):
         check(name, func)
 
     message = "OK" if not problems else "FAIL\n" + "\n".join(problems)
@@ -350,6 +362,11 @@ def run_self_check(result_file: str | None) -> int:
 def main() -> int:
     if len(sys.argv) >= 2 and sys.argv[1] == "--self-check":
         return run_self_check(sys.argv[2] if len(sys.argv) > 2 else None)
+    from campusguard.server import cli
+
+    server_exit = cli.handle(sys.argv[1:])
+    if server_exit is not None:
+        return server_exit
     # Fractional display scaling (125%, 150%) stays sharp instead of being rounded.
     QGuiApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     app = QApplication(sys.argv)

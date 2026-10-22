@@ -93,7 +93,7 @@ def detect_hardware(refresh: bool = False) -> HardwareInfo:
         if cuda:
             properties = torch.cuda.get_device_properties(0)
             gpu_name = str(properties.name)
-            gpu_memory = properties.total_memory / 1024 ** 3
+            gpu_memory = float(properties.total_memory) / 1024 ** 3
     except Exception:  # no torch, broken driver, ... -> CPU
         cuda, gpu_name, gpu_memory = False, None, None
     _cached_hardware = HardwareInfo(os.cpu_count() or 1, _total_ram_gb(), cuda, gpu_name, gpu_memory)

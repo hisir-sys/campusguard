@@ -155,3 +155,31 @@ The app picks a profile automatically from the machine and the number of running
 Override (optional): set `CAMPUSGUARD_PROFILE=lite|standard|server` and/or `CAMPUSGUARD_SMART_ANALYSIS=0`, or put `{"profile": "server", "smart_analysis": true}` in `engine.json` inside the CampusGuard app-data folder.
 
 For many cameras, enter each camera's low-resolution *sub-stream* RTSP address (typically 640×360) instead of the main stream, and use the CUDA build of PyTorch on the server.
+
+## Server mode (headless, for a school server)
+
+One program, two ways to run it. The desktop app is unchanged. Server mode runs every camera with no window, records incidents and clips, and serves a token-protected API for viewers.
+
+```
+CampusGuard.exe --server-login      # once, as the Windows user that will run the server (same website account)
+CampusGuard.exe --server            # run in this console (Ctrl+C stops it)
+CampusGuard.exe --install-task      # start automatically at boot, restart on failure (asks for the Windows password)
+CampusGuard.exe --show-token        # print the address and access token
+CampusGuard.exe --remove-task
+```
+
+Settings live in `server.json` in the CampusGuard app-data folder (created on first start with a random access token):
+
+| key | default | meaning |
+|---|---|---|
+| `host` | `127.0.0.1` | set `0.0.0.0` to accept connections from other PCs on the school network (then also allow the port in Windows Firewall) |
+| `port` | `8765` | API port |
+| `retention_days_footage` / `retention_days_incidents` | 30 / 365 | older clips / incidents are deleted hourly |
+| `max_footage_gb` | 200 | oldest clips are deleted first when the footage folder grows past this |
+| `recheck_hours` | 6 | how often the website account approval is re-verified |
+| `tls_cert_file`, `tls_key_file` | empty | serve HTTPS; use this (or a VPN) if the API crosses anything other than a trusted LAN |
+
+API (`Authorization: Bearer <token>`, base path `/api/v1`, plus an open `GET /health`):
+`GET /status`, `GET|POST /cameras`, `POST /cameras/import` (CSV body: `name,type,address,username,password,ai_enabled`), `DELETE /cameras/{id}`, `POST /cameras/{id}/ai`, `POST /cameras/{id}/reconnect`, `GET /incidents?after_id=&limit=`, `GET /alerts`, `POST /incidents/{INC-id}/status`, `GET /incidents/{INC-id}/clip` (MP4, supports Range). Logs: `logs/server.log` in the app-data folder.
+
+Cameras are opened a few at a time at start-up, reconnect automatically with back-off, and `/cameras` shows per-camera health (`ok`, `stalled` if no frames for 15 s, `offline`, `connecting`).

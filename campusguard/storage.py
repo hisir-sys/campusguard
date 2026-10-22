@@ -263,6 +263,42 @@ class Repository:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def get_incident(self, public_id: str) -> dict[str, Any] | None:
+        with self._lock, self._connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM incidents WHERE public_id = ?", (public_id,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def list_incidents_after(self, after_id: int, limit: int = 200) -> list[dict[str, Any]]:
+        """Incidents newer than a row id, oldest first (for clients that poll)."""
+        with self._lock, self._connection() as connection:
+            rows = connection.execute(
+                "SELECT * FROM incidents WHERE id > ? ORDER BY id ASC LIMIT ?",
+                (int(after_id), max(1, limit)),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def purge_incidents_older_than(self, days: float) -> int:
+        """Delete incidents (and their alerts) older than `days`; returns how many."""
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds")
+        with self._lock, self._connection() as connection:
+            removed = connection.execute(
+                "DELETE FROM incidents WHERE happened_at < ?", (cutoff,)
+            ).rowcount
+            connection.execute("DELETE FROM notifications WHERE created_at < ?", (cutoff,))
+        return int(removed)
+
+    def forget_footage_paths(self, paths: list[str]) -> None:
+        """Clear the footage link of incidents whose clip file was deleted."""
+        if not paths:
+            return
+        with self._lock, self._connection() as connection:
+            connection.executemany(
+                "UPDATE incidents SET footage_path = NULL WHERE footage_path = ?",
+                [(str(path),) for path in paths],
+            )
+
     def attach_incident_footage(self, public_id: str, footage_path: str) -> None:
         with self._lock, self._connection() as connection:
             connection.execute(
