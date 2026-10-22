@@ -56,12 +56,22 @@ def _ensure_console() -> None:
 
 
 def _server_login_gui() -> int:
-    from PySide6.QtCore import QThread, Signal
+    from PySide6.QtCore import QObject, QThread, Signal, Slot
     from PySide6.QtWidgets import QApplication, QDialog, QFormLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout
     from campusguard import auth
 
     app = _prepare_qt(True)
-    dialog = QDialog()
+
+    class LoginDialog(QDialog):
+        worker_running = False
+
+        def closeEvent(self, event):
+            if self.worker_running:
+                event.ignore()
+            else:
+                event.accept()
+
+    dialog = LoginDialog()
     dialog.setWindowTitle("CampusGuard server sign-in")
     dialog.setMinimumWidth(420)
     layout = QVBoxLayout(dialog)
@@ -95,6 +105,37 @@ def _server_login_gui() -> int:
             except Exception as error:
                 self.failed.emit(str(error))
 
+    class LoginResultBridge(QObject):
+        @Slot(object)
+        def on_success(self, session):
+            try:
+                auth.save_session(session)
+                saved = auth.load_saved()
+                if not saved or saved.get("refresh_token") != session.refresh_token:
+                    raise RuntimeError("Credential storage did not confirm the saved sign-in.")
+            except Exception:
+                status.setText(
+                    "Sign-in succeeded, but Windows Credential Manager did not save the session. "
+                    "Check that credential storage is available, then try again."
+                )
+                submit.setEnabled(True)
+                dialog.worker_running = False
+                return
+            holder["success"] = True
+            password_input.clear()
+            status.setText(f"Signed in as {session.email}.")
+            dialog.worker_running = False
+            dialog.accept()
+
+        @Slot(str)
+        def on_failure(self, message: str):
+            password_input.clear()
+            status.setText(f"Sign-in failed: {message}")
+            submit.setEnabled(True)
+            dialog.worker_running = False
+
+    bridge = LoginResultBridge(dialog)
+
     def begin_login():
         email, password = email_input.text().strip(), password_input.text()
         if not email or not password:
@@ -102,34 +143,11 @@ def _server_login_gui() -> int:
             return
         submit.setEnabled(False)
         status.setText("Signing in securely…")
+        dialog.worker_running = True
         worker = LoginWorker(email, password)
         holder["worker"] = worker
-
-        def succeeded(session):
-            try:
-                auth.save_session(session)
-                saved = auth.load_saved()
-                if not saved or saved.get("refresh_token") != session.refresh_token:
-                    raise RuntimeError("Windows Credential Manager did not confirm the saved sign-in.")
-            except Exception:
-                status.setText(
-                    "Sign-in succeeded, but Windows Credential Manager did not save the session. "
-                    "Check that credential storage is available, then try again."
-                )
-                submit.setEnabled(True)
-                return
-            holder["success"] = True
-            password_input.clear()
-            status.setText(f"Signed in as {session.email}.")
-            dialog.accept()
-
-        def failed(message):
-            password_input.clear()
-            status.setText(f"Sign-in failed: {message}")
-            submit.setEnabled(True)
-
-        worker.succeeded.connect(succeeded)
-        worker.failed.connect(failed)
+        worker.succeeded.connect(bridge.on_success)
+        worker.failed.connect(bridge.on_failure)
         worker.finished.connect(worker.deleteLater)
         worker.start()
         password_input.clear()
