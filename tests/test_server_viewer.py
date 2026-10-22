@@ -39,6 +39,32 @@ def test_viewer_handles_zero_five_and_120_camera_cards(app):
     page.close()
 
 
+def test_incident_and_alert_rows_both_offer_status_actions(app):
+    page = ServerViewerPage(lambda: (_ for _ in ()).throw(AssertionError("Network must not run in this test.")))
+    page._closing = True
+    row = {
+        "public_id": "INC-00001",
+        "camera_name": "Hall",
+        "event": "FIGHT DETECTED",
+        "confidence": 0.9,
+        "severity": "HIGH",
+        "status": "NEW",
+        "has_footage": False,
+    }
+    page._populate_table(page.incidents_table, [row], allow_status_actions=True)
+    page._populate_table(page.alerts_table, [row], allow_status_actions=True)
+    for table in (page.incidents_table, page.alerts_table):
+        action_widget = table.cellWidget(0, 6)
+        assert action_widget is not None
+        selector = action_widget.findChild(__import__("PySide6.QtWidgets", fromlist=["QComboBox"]).QComboBox)
+        assert selector is not None
+        assert [selector.itemText(i) for i in range(selector.count())] == [
+            "Confirm", "Dismiss", "False alarm", "Resolve"
+        ]
+    page.shutdown()
+    page.close()
+
+
 def test_viewer_removes_stale_cards_without_rebuilding_existing_ones(app):
     page = ServerViewerPage(lambda: (_ for _ in ()).throw(AssertionError("Network must not run in this test.")))
     page._closing = True

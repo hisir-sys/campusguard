@@ -297,7 +297,7 @@ class ServerViewerPage(QWidget):
                 card.set_snapshot(jpeg)
         self._watched = set(data["watched"])
         self._populate_table(self.incidents_table, data["incidents"], allow_status_actions=True)
-        self._populate_table(self.alerts_table, data["alerts"])
+        self._populate_table(self.alerts_table, data["alerts"], allow_status_actions=True)
 
     def _sync_camera_cards(self, cameras: list[dict]) -> None:
         present = {str(camera.get("camera_id", "")) for camera in cameras}
