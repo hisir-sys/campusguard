@@ -187,8 +187,12 @@ def test_clip_outside_footage_folder_is_never_served(env):
 
 def test_snapshot_cache_is_camera_scoped_and_watch_can_stop(env):
     env.call("POST", "/cameras", {"name": "Hall", "address": "rtsp://h/hall"})
+    status, _ = env.call("GET", "/cameras/CAM-001/snapshot")
+    assert status == 503  # first request enables the watcher; the next frame arrives asynchronously
+    assert env.manager.snapshot_enabled["CAM-001"] is True
     env.manager.snapshot_ready.emit("CAM-001", b"jpeg-data")
     pump(env.app)
+    time.sleep(0.51)  # respect the API's two-requests-per-second limit
     status, payload = env.call("GET", "/cameras/CAM-001/snapshot")
     assert status == 200 and payload == b"jpeg-data"
     assert env.manager.snapshot_enabled["CAM-001"] is True

@@ -176,6 +176,7 @@ class FakeBackend:
     def __init__(self, root: Path):
         self.root = root
         self.calls = []
+        self.snapshot_payload = b"jpeg-bytes"
         self.clip = root / "clip.mp4"
         self.clip.write_bytes(bytes(range(256)) * 4)       # 1024 bytes
 
@@ -188,7 +189,7 @@ class FakeBackend:
         self.calls.append(("snapshot_watch", camera_id, enabled))
     def camera_snapshot(self, camera_id):
         if camera_id != "CAM-001": raise ApiError(404, "Unknown camera.")
-        return b"jpeg-bytes"
+        return self.snapshot_payload
     def add_camera(self, spec):
         if not spec.get("name"): raise ApiError(400, "Camera name is missing.")
         self.calls.append(("add", spec)); return {"camera_id": "CAM-002", **spec}
@@ -297,8 +298,12 @@ def test_snapshot_endpoint_auth_size_watch_and_unknown_camera(api):
     assert status == 200 and data == b"jpeg-bytes"
     assert response.getheader("Content-Type") == "image/jpeg"
     assert backend.calls[-1] == ("snapshot_watch", "CAM-001", True)
+    assert request(server, "GET", "/api/v1/cameras/CAM-001/snapshot")[0] == 429
     assert request(server, "GET", "/api/v1/cameras/CAM-404/snapshot")[0] == 404
     assert request(server, "GET", "/api/v1/cameras/CAM-001/snapshot?watch=bad")[0] == 400
+    time.sleep(0.51)
+    backend.snapshot_payload = b"x" * (512 * 1024 + 1)
+    assert request(server, "GET", "/api/v1/cameras/CAM-001/snapshot")[0] == 413
     status, _, _ = request(server, "GET", "/api/v1/cameras/CAM-001/snapshot?watch=0")
     assert status == 204 and backend.calls[-1] == ("snapshot_watch", "CAM-001", False)
     assert request(server, "GET", "/api/v1/cameras/CAM-001/snapshot", token=None)[0] == 401

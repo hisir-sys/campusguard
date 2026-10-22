@@ -29,7 +29,7 @@ excludes = [
     "PySide6.Qt3DAnimation", "PySide6.Qt3DExtras",
     "PySide6.QtQuick", "PySide6.QtQuick3D", "PySide6.QtQuickWidgets", "PySide6.QtQuickControls2",
     "PySide6.QtQml", "PySide6.QtCharts", "PySide6.QtDataVisualization", "PySide6.QtGraphs",
-    "PySide6.QtMultimedia", "PySide6.QtMultimediaWidgets", "PySide6.QtPdf", "PySide6.QtPdfWidgets",
+    "PySide6.QtPdf", "PySide6.QtPdfWidgets",
     "PySide6.QtDesigner", "PySide6.QtHelp", "PySide6.QtBluetooth", "PySide6.QtNfc",
     "PySide6.QtSensors", "PySide6.QtSerialPort", "PySide6.QtSql", "PySide6.QtTest",
     "PySide6.QtLocation", "PySide6.QtPositioning", "PySide6.QtRemoteObjects",

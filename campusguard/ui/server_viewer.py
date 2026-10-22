@@ -162,6 +162,11 @@ class ServerViewerPage(QWidget):
         self.camera_layout = QVBoxLayout(self.camera_content)
         self.camera_layout.setContentsMargins(2, 2, 8, 8)
         self.camera_layout.setSpacing(8)
+        self.empty_cameras_label = QLabel("No server cameras configured. Add a camera or import a CSV file.")
+        self.empty_cameras_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.empty_cameras_label.setWordWrap(True)
+        self.empty_cameras_label.setProperty("muted", True)
+        self.camera_layout.addWidget(self.empty_cameras_label)
         self.camera_layout.addStretch(1)
         self.camera_scroll.setWidget(self.camera_content)
         camera_root.addWidget(self.camera_scroll, 1)
@@ -299,6 +304,7 @@ class ServerViewerPage(QWidget):
 
     def _sync_camera_cards(self, cameras: list[dict]) -> None:
         present = {str(camera.get("camera_id", "")) for camera in cameras}
+        self.empty_cameras_label.setVisible(not present)
         for camera_id in list(self._cards):
             if camera_id not in present:
                 card = self._cards.pop(camera_id)

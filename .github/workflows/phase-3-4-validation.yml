@@ -1,0 +1,57 @@
+name: CampusGuard Phase 3-4 Validation
+
+on:
+  push:
+    branches:
+      - phase-3-4
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install CPU AI runtime and test tools
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -r requirements.txt pytest
+
+      - name: Compile all application and test modules
+        shell: pwsh
+        run: python -m compileall -q campusguard main.py tests scripts
+
+      - name: Run the complete test suite
+        shell: pwsh
+        run: python -m pytest -q
+
+      - name: Render viewer in dark/light themes and 0/5/120-camera layouts
+        shell: pwsh
+        run: python scripts/render_server_viewer.py --output artifacts/ui-renders
+
+      - name: Upload UI render screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: CampusGuard-Phase-3-4-UI-Renders
+          path: artifacts/ui-renders/*.png
+          if-no-files-found: warn
