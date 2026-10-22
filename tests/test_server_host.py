@@ -13,6 +13,11 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import QCoreApplication, QObject, QTimer, Signal
 from PySide6.QtWidgets import QApplication
 
+# Keep one QApplication wrapper alive for the entire pytest process. If the last
+# reference is dropped between fixtures, a later server test can create a bare
+# QCoreApplication and the viewer tests then cannot create QWidget instances.
+_TEST_APP = QApplication.instance() or QApplication(sys.argv[:1])
+
 from campusguard.server.api import ApiServer
 from campusguard.server.config import ServerConfig
 from campusguard.server.host import HostBackend, ServerHost
