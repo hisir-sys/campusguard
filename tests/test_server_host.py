@@ -11,6 +11,7 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import QCoreApplication, QObject, Signal
+from PySide6.QtWidgets import QApplication
 
 from campusguard.server.api import ApiServer
 from campusguard.server.config import ServerConfig
@@ -55,7 +56,9 @@ class FakeVault:
 
 @pytest.fixture()
 def env(tmp_path, monkeypatch):
-    app = QCoreApplication.instance() or QCoreApplication(sys.argv[:1])
+    # Use QApplication for the shared process: later viewer tests create widgets.
+    # QApplication is also a QCoreApplication, so server-loop tests can reuse it.
+    app = QApplication.instance() or QApplication(sys.argv[:1])
     import campusguard.storage as storage
     monkeypatch.setattr(storage, "application_data_dir", lambda: tmp_path)
     repo = storage.Repository(tmp_path / "campusguard.db")
