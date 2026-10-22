@@ -10,7 +10,7 @@ from pathlib import Path
 from xml.sax.saxutils import escape
 
 TASK_NAME = "CampusGuard Server"
-SERVER_FLAGS = {"--server", "--server-login", "--show-token", "--install-task", "--remove-task"}
+SERVER_FLAGS = {"--server", "--server-login", "--show-token", "--install-task", "--remove-task", "--configure-server", "--server-status"}
 
 
 def attach_parent_console() -> None:
@@ -285,6 +285,8 @@ def _option(argv: list[str], name: str) -> str | None:
 def server_login() -> int:
     from campusguard import auth
 
+    if sys.stdin is None or sys.stdout is None:
+        return _server_login_gui()
     print("CampusGuard server sign-in (use the account approved on the website).")
     email = input("Email: ").strip()
     password = getpass.getpass("Password: ")
@@ -305,13 +307,21 @@ def show_token() -> int:
     from campusguard.server.config import load_config
     from campusguard.storage import application_data_dir
 
-    config = load_config(application_data_dir())
-    print(f"Address: {config.host}:{config.port}")
-    print(f"Access token: {config.token}")
+    if sys.stdout is None or sys.stdin is None:
+        return _show_token_gui()
+    try:
+        _prepare_qt(False)
+        config = load_config(application_data_dir())
+    except Exception as error:
+        print(f"Could not load the server token securely: {error}")
+        return 1
+    print(f"Listening address: {config.host}:{config.port}")
+    print(f"Access token (keep private): {config.token}")
     return 0
 
 
 def install_task() -> int:
+    _ensure_console()
     if sys.platform != "win32":
         print("Automatic start is only available on Windows.")
         return 1
@@ -338,6 +348,7 @@ def install_task() -> int:
 
 
 def remove_task() -> int:
+    _ensure_console()
     if sys.platform != "win32":
         return 1
     return int(subprocess.run(["schtasks", "/Delete", "/TN", TASK_NAME, "/F"]).returncode)
@@ -349,6 +360,10 @@ def handle(argv: list[str]) -> int | None:
     if not flags:
         return None
     attach_parent_console()
+    if "--configure-server" in flags:
+        return configure_server(argv)
+    if "--server-status" in flags:
+        return server_status()
     if "--server-login" in flags:
         return server_login()
     if "--show-token" in flags:
