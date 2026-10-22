@@ -399,7 +399,12 @@ def run_server(host_override: str | None = None, port_override: int | None = Non
         return EXIT_NOT_SIGNED_IN
     log.info("signed in as %s", session.email)
 
-    config = load_config(data_dir)
+    vault = CredentialVault()
+    try:
+        config = load_config(data_dir, vault=vault)
+    except RuntimeError as error:
+        log.error("Secure server configuration unavailable: %s", error)
+        return 1
     if host_override:
         config.host = host_override
     if port_override:
@@ -407,10 +412,11 @@ def run_server(host_override: str | None = None, port_override: int | None = Non
 
     from campusguard.camera_runtime import CameraManager   # imports torch: after the cheap checks
 
-    repository = Repository()
+    configured_footage = Path(config.footage_dir).expanduser().resolve() if config.footage_dir else None
+    repository = Repository(footage_dir=configured_footage)
     invoker = MainThreadInvoker()
-    manager = CameraManager(CredentialVault(), footage_dir=repository.footage_dir)
-    host = ServerHost(repository, CredentialVault(), manager, config, invoker)
+    manager = CameraManager(vault, footage_dir=repository.footage_dir)
+    host = ServerHost(repository, vault, manager, config, invoker)
     try:
         api = ApiServer(config.host, config.port, config.token, HostBackend(host), log=log.info,
                         tls_cert_file=config.tls_cert_file, tls_key_file=config.tls_key_file)
@@ -419,7 +425,7 @@ def run_server(host_override: str | None = None, port_override: int | None = Non
         return 1
     api.start()
     scheme = "https" if config.tls_cert_file and config.tls_key_file else "http"
-    log.info("API listening on %s://%s:%d/api/v1 (token in %s)", scheme, config.host, api.port, data_dir / "server.json")
+    log.info("API listening on %s://%s:%d/api/v1 (access token stored in Windows Credential Manager)", scheme, config.host, api.port)
 
     exit_code = {"value": 0}
 

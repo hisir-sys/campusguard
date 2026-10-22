@@ -20,19 +20,42 @@ TOKEN = "t" * 32
 
 
 # ---------------------------------------------------------------- config
+class MemoryVault:
+    def __init__(self):
+        self.token = ""
+
+    def load_server_token(self):
+        return self.token
+
+    def save_server_token(self, token):
+        self.token = token
+
+
 def test_config_creates_token_once_and_clamps_values(tmp_path):
-    first = load_config(tmp_path)
+    vault = MemoryVault()
+    first = load_config(tmp_path, vault=vault)
     assert len(first.token) >= 32 and first.host == "127.0.0.1" and first.port == 8765
-    assert load_config(tmp_path).token == first.token
-    (tmp_path / "server.json").write_text(json.dumps({**json.loads((tmp_path / "server.json").read_text()), "port": 99999, "retention_days_footage": -5, "host": " 0.0.0.0 "}))
-    again = load_config(tmp_path)
+    saved = json.loads((tmp_path / "server.json").read_text(encoding="utf-8"))
+    assert "token" not in saved and "token" not in json.dumps(saved).lower()
+    assert load_config(tmp_path, vault=vault).token == first.token
+    (tmp_path / "server.json").write_text(json.dumps({**saved, "port": 99999, "retention_days_footage": -5, "host": " 0.0.0.0 "}))
+    again = load_config(tmp_path, vault=vault)
     assert again.port == 65535 and again.retention_days_footage == 1 and again.host == "0.0.0.0"
     assert again.token == first.token
 
 
+def test_legacy_json_token_migrates_to_vault(tmp_path):
+    legacy = "legacy-server-token-" + ("x" * 32)
+    (tmp_path / "server.json").write_text(json.dumps({"token": legacy, "port": 8765}), encoding="utf-8")
+    vault = MemoryVault()
+    config = load_config(tmp_path, vault=vault)
+    assert config.token == legacy and vault.token == legacy
+    assert "token" not in json.loads((tmp_path / "server.json").read_text(encoding="utf-8"))
+
+
 def test_config_survives_garbage_file(tmp_path):
     (tmp_path / "server.json").write_text("{ not json")
-    assert len(load_config(tmp_path).token) >= 32
+    assert len(load_config(tmp_path, vault=MemoryVault()).token) >= 32
     assert normalise({"port": "abc"}).port == 8765
 
 

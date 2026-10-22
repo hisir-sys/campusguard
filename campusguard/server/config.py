@@ -19,6 +19,7 @@ class ServerConfig:
     recheck_hours: float = 6.0        # how often the licence/account is re-verified
     tls_cert_file: str = ""
     tls_key_file: str = ""
+    footage_dir: str = ""
 
 
 def _clamp_int(value, low, high, default):
@@ -47,11 +48,12 @@ def normalise(values: dict) -> ServerConfig:
         recheck_hours=_clamp_float(values.get("recheck_hours"), 0.25, 168.0, base.recheck_hours),
         tls_cert_file=str(values.get("tls_cert_file", "")).strip(),
         tls_key_file=str(values.get("tls_key_file", "")).strip(),
+        footage_dir=str(values.get("footage_dir", "")).strip(),
     )
 
 
-def load_config(data_dir: Path) -> ServerConfig:
-    """Read server.json (creating it, with a fresh random token, on first run)."""
+def load_config(data_dir: Path, vault=None) -> ServerConfig:
+    """Load settings and migrate the API token into Windows Credential Manager."""
     path = data_dir / "server.json"
     values: dict = {}
     try:
@@ -61,11 +63,27 @@ def load_config(data_dir: Path) -> ServerConfig:
     except (OSError, ValueError):
         values = {}
     config = normalise(values)
-    if len(config.token) < 24:
-        config.token = secrets.token_urlsafe(32)
-        save_config(data_dir, config)
-    elif not path.exists():
-        save_config(data_dir, config)
+    if vault is None:
+        from campusguard.credentials import CredentialVault
+        vault = CredentialVault()
+    legacy_token = config.token
+    try:
+        stored_token = vault.load_server_token()
+        if stored_token:
+            config.token = stored_token
+        elif len(legacy_token) >= 24:
+            # Preserve existing installations by migrating their old JSON token once.
+            vault.save_server_token(legacy_token)
+            config.token = legacy_token
+        else:
+            config.token = secrets.token_urlsafe(32)
+            vault.save_server_token(config.token)
+    except Exception as error:
+        raise RuntimeError(
+            "Windows Credential Manager is unavailable; CampusGuard cannot safely load or save the server token."
+        ) from error
+    # Always rewrite normalized settings; save_config deliberately omits the token.
+    save_config(data_dir, config)
     return config
 
 
@@ -73,7 +91,9 @@ def save_config(data_dir: Path, config: ServerConfig) -> None:
     data_dir.mkdir(parents=True, exist_ok=True)
     path = data_dir / "server.json"
     temporary = path.with_suffix(".json.tmp")
-    temporary.write_text(json.dumps(asdict(config), indent=2), encoding="utf-8")
+    values = asdict(config)
+    values.pop("token", None)
+    temporary.write_text(json.dumps(values, indent=2), encoding="utf-8")
     try:
         os.chmod(temporary, 0o600)
     except OSError:

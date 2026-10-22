@@ -168,7 +168,7 @@ CampusGuard.exe --show-token        # print the address and access token
 CampusGuard.exe --remove-task
 ```
 
-Settings live in `server.json` in the CampusGuard app-data folder (created on first start with a random access token):
+Non-secret settings live in `server.json` in the CampusGuard app-data folder. The API token is stored in Windows Credential Manager, not in JSON, SQLite or logs. Existing installations migrate their legacy JSON token into the vault on the next server start:
 
 | key | default | meaning |
 |---|---|---|
@@ -176,6 +176,7 @@ Settings live in `server.json` in the CampusGuard app-data folder (created on fi
 | `port` | `8765` | API port |
 | `retention_days_footage` / `retention_days_incidents` | 30 / 365 | older clips / incidents are deleted hourly |
 | `max_footage_gb` | 200 | oldest clips are deleted first when the footage folder grows past this |
+| `footage_dir` | app-data `footage` folder | optional custom folder for saved incident clips |
 | `recheck_hours` | 6 | how often the website account approval is re-verified |
 | `tls_cert_file`, `tls_key_file` | empty | serve HTTPS; use this (or a VPN) if the API crosses anything other than a trusted LAN |
 

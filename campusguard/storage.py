@@ -23,10 +23,11 @@ def application_data_dir() -> Path:
 class Repository:
     """SQLite-backed storage for cameras, incidents, alerts, notifications, and settings."""
 
-    def __init__(self, database_path: Path | None = None) -> None:
+    def __init__(self, database_path: Path | None = None, footage_dir: Path | None = None) -> None:
         self.data_dir = application_data_dir()
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.database_path = database_path or self.data_dir / "campusguard.db"
+        self._footage_dir = Path(footage_dir).expanduser() if footage_dir is not None else None
         self._lock = threading.RLock()
         self._initialize()
 
@@ -47,7 +48,7 @@ class Repository:
 
     @property
     def footage_dir(self) -> Path:
-        directory = self.data_dir / "footage"
+        directory = self._footage_dir or (self.data_dir / "footage")
         directory.mkdir(parents=True, exist_ok=True)
         return directory
 
