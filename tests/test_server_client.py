@@ -153,6 +153,6 @@ def test_client_streams_clip_and_reports_csv_import_errors(fake_server, tmp_path
     destination = tmp_path / "incident.mp4"
     assert client.stream_clip_to_file("INC-1", destination) == destination
     assert destination.read_bytes() == FakeServerHandler.clip_bytes
-    assert client.import_cameras(b"name,address\\nOffice,rtsp://camera/stream\\n")["imported"] == 1
+    assert client.import_cameras(b"name,address\nOffice,rtsp://camera/stream\n")["imported"] == 1
     with pytest.raises(ServerConnectionError, match="invalid stream address"):
-        client.import_cameras(b"name,address\\nOffice,not-a-stream\\n")
+        client.import_cameras(b"name,address\nOffice,not-a-stream\n")
