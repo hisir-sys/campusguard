@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-from PySide6.QtCore import QCoreApplication, QObject, Signal
+from PySide6.QtCore import QCoreApplication, QObject, QTimer, Signal
 from PySide6.QtWidgets import QApplication
 
 from campusguard.server.api import ApiServer
@@ -317,21 +317,31 @@ def test_run_server_full_start_serve_and_clean_stop(tmp_path, monkeypatch):
     (tmp_path / "server.json").write_text(json.dumps({"port": port, "token": TOKEN}))
     app = QApplication.instance() or QApplication(sys.argv[:1])
     results = {}
+    # Prevent a regression from hanging the whole test suite if the local API
+    # fails before the helper client can request application shutdown.
+    QTimer.singleShot(10000, app.quit)
 
     def client():
-        time.sleep(0.6)
-        connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
-        connection.request("GET", "/api/v1/status", headers={"Authorization": f"Bearer {TOKEN}"})
-        response = connection.getresponse()
-        results["status"], results["body"] = response.status, json.loads(response.read())
-        connection.request("GET", "/api/v1/status")
-        results["anon"] = connection.getresponse().status
-        connection.close()
-        QCoreApplication.instance().quit()          # (thread-safe in Qt)
+        connection = None
+        try:
+            time.sleep(0.6)
+            connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+            connection.request("GET", "/api/v1/status", headers={"Authorization": f"Bearer {TOKEN}"})
+            response = connection.getresponse()
+            results["status"], results["body"] = response.status, json.loads(response.read())
+            connection.request("GET", "/api/v1/status")
+            results["anon"] = connection.getresponse().status
+        except Exception as error:
+            results["client_error"] = str(error)
+        finally:
+            if connection is not None:
+                connection.close()
+            app.quit()
 
     threading.Thread(target=client, daemon=True).start()
     code = host_module.run_server()
     assert code == 0
+    assert "client_error" not in results, results.get("client_error")
     assert results["status"] == 200 and results["body"]["cameras"]["total"] == 0 and results["anon"] == 401
     assert (tmp_path / "logs" / "server.log").is_file()
     for name in ("campusguard.camera_runtime", "campusguard.ai_pipeline", "campusguard.model_registry",
