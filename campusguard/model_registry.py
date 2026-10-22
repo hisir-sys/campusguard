@@ -15,6 +15,7 @@ from torch import nn
 from campusguard.model_manifest import MODEL_MANIFESTS
 from campusguard.model_paths import with_aliases
 from campusguard.model_adapters import get_model_input_adapter
+from campusguard.storage import application_data_dir
 
 Status = Callable[[str, str], None]
 
@@ -131,14 +132,20 @@ class VideoClassifier:
             # Resolve checkpoints independently of PowerShell/shortcut working
             # directory. PyInstaller extracts bundled assets under _MEIPASS.
             bundle_root = getattr(sys, "_MEIPASS", None)
+            data_root = application_data_dir()
             for candidate in with_aliases(raw_path):
                 bundled_path = Path(bundle_root) / candidate if bundle_root else None
                 project_path = Path(__file__).resolve().parents[1] / candidate
+                data_paths = (data_root / candidate, data_root / "models" / candidate.name)
                 if bundled_path is not None and bundled_path.is_file():
                     path = bundled_path
                     break
                 if project_path.is_file():
                     path = project_path
+                    break
+                data_path = next((item for item in data_paths if item.is_file()), None)
+                if data_path is not None:
+                    path = data_path
                     break
         return path
 

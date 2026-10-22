@@ -56,4 +56,16 @@ def test_existing_file_is_never_replaced_by_alias(tmp_path, monkeypatch):
 def test_unknown_missing_file_is_returned_unchanged(tmp_path, monkeypatch):
     pipeline = _resolver(tmp_path)
     monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path), raising=False)
+    monkeypatch.setattr(pipeline, "application_data_dir", lambda: tmp_path / "app-data")
     assert pipeline.resolve_model_path("models/nope.pt") == Path("models/nope.pt")
+
+
+def test_authorized_weights_can_live_in_app_data(tmp_path, monkeypatch):
+    pipeline = _resolver(tmp_path)
+    monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path / "bundle"), raising=False)
+    data_root = tmp_path / "app-data"
+    model = data_root / "models" / "yolo11n.pt"
+    model.parent.mkdir(parents=True)
+    model.write_bytes(b"authorized test fixture")
+    monkeypatch.setattr(pipeline, "application_data_dir", lambda: data_root)
+    assert pipeline.resolve_model_path("models/yolo11n.pt") == model

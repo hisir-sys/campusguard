@@ -16,6 +16,7 @@ import torch
 
 from campusguard.engine.batching import BatchRunner
 from campusguard.model_paths import with_aliases
+from campusguard.storage import application_data_dir
 from campusguard.model_registry import (
     EnhancedEnsemble,
     MODEL_CACHE_LOCK,
@@ -94,6 +95,7 @@ def resolve_model_path(value: str) -> Path:
 
     bundle_root = getattr(sys, "_MEIPASS", None)
     project_root = Path(__file__).resolve().parents[1]
+    data_root = application_data_dir()
     for candidate in with_aliases(raw):
         # PyInstaller extracts bundled data below _MEIPASS at runtime.
         if bundle_root:
@@ -106,6 +108,11 @@ def resolve_model_path(value: str) -> Path:
         project_file = project_root / candidate
         if project_file.is_file():
             return project_file
+
+        # The server installer omits weights; authorized files can live here.
+        for data_file in (data_root / candidate, data_root / "models" / candidate.name):
+            if data_file.is_file():
+                return data_file
 
     return raw
 
