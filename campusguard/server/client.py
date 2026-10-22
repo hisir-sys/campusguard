@@ -12,7 +12,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 MAX_JSON_RESPONSE_BYTES = 8 * 1024 * 1024
 CLIP_CHUNK_BYTES = 256 * 1024
@@ -169,7 +169,9 @@ class RemoteServerClient:
     def set_incident_status(self, public_id: str, status: str) -> dict:
         return self._json(self._request(f"/api/v1/incidents/{public_id}/status", "POST", {"status": status})[1])
 
-    def stream_clip_to_file(self, public_id: str, destination: str | Path) -> Path:
+    def stream_clip_to_file(
+        self, public_id: str, destination: str | Path, cancelled: Callable[[], bool] | None = None
+    ) -> Path:
         """Copy the server's chunked MP4 response to a local temp file for Qt playback."""
         url = self.base_url + f"/api/v1/incidents/{public_id}/clip"
         request = urllib.request.Request(url, headers={"Authorization": f"Bearer {self.token}", "Accept": "video/mp4"})
@@ -179,10 +181,22 @@ class RemoteServerClient:
                 if response.headers.get_content_type() != "video/mp4":
                     raise ServerConnectionError("The server did not return an MP4 clip.")
                 while True:
+                    if cancelled is not None and cancelled():
+                        raise ServerConnectionError("Clip download cancelled.")
                     chunk = response.read(CLIP_CHUNK_BYTES)
                     if not chunk:
                         break
                     output.write(chunk)
+        except urllib.error.HTTPError as error:
+            path.unlink(missing_ok=True)
+            if error.code == 401:
+                raise ServerConnectionError("Access denied: the token is wrong or server access has been lost.") from None
+            if error.code == 404:
+                raise ServerConnectionError("No saved clip exists for this incident.") from None
+            raise ServerConnectionError(f"The server rejected the clip request (HTTP {error.code}).") from None
+        except ServerConnectionError:
+            path.unlink(missing_ok=True)
+            raise
         except (OSError, urllib.error.URLError, TimeoutError) as error:
             path.unlink(missing_ok=True)
             if isinstance(error, urllib.error.URLError) and isinstance(error.reason, (ssl.SSLCertVerificationError, ssl.CertificateError)):

@@ -198,6 +198,16 @@ def test_snapshot_cache_is_camera_scoped_and_watch_can_stop(env):
     assert env.host.snapshot_bytes("CAM-001") is None
 
 
+def test_snapshot_watch_expires_if_viewer_disappears(env):
+    env.call("POST", "/cameras", {"name": "Hall", "address": "rtsp://h/hall"})
+    env.call("GET", "/cameras/CAM-001/snapshot")
+    assert env.manager.snapshot_enabled["CAM-001"] is True
+    env.host._snapshot_watchers["CAM-001"] = time.monotonic() - 20
+    env.host._expire_snapshot_watchers()
+    assert env.manager.snapshot_enabled["CAM-001"] is False
+    assert "CAM-001" not in env.host._snapshot_watchers
+
+
 def test_health_and_status_from_camera_signals(env):
     env.call("POST", "/cameras", {"name": "Hall", "address": "rtsp://h/hall"})
     env.manager.camera_status_changed.emit("CAM-001", "LIVE", "")

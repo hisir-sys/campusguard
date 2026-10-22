@@ -505,7 +505,7 @@ class MainWindow(QMainWindow):
         self.camera_manager = None
         self._camera_engine_module = None
         self._camera_engine_error = None
-        self._camera_engine_importing = True
+        self._camera_engine_importing = self.settings.connection_mode == "local"
         self._build_ui()
         apply_theme(self, self.settings.theme)
         self.top_bar.set_theme(self.settings.theme)

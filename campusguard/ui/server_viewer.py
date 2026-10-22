@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import tempfile
+import threading
 import uuid
 from pathlib import Path
 from typing import Callable
@@ -121,6 +122,7 @@ class ServerViewerPage(QWidget):
         self._watched: set[str] = set()
         self._cards: dict[str, _CameraCard] = {}
         self._clip_paths: set[Path] = set()
+        self._clip_cancel = threading.Event()
 
         root = QVBoxLayout(self)
         root.setContentsMargins(24, 24, 24, 112)
@@ -205,11 +207,10 @@ class ServerViewerPage(QWidget):
     def hideEvent(self, event) -> None:
         super().hideEvent(event)
         self._poll_timer.stop()
-        if self._watched:
-            if self._worker is not None and self._worker.isRunning():
-                self._stop_after_worker = True
-            else:
-                self._stop_snapshots()
+        if self._worker is not None and self._worker.isRunning():
+            self._stop_after_worker = True
+        elif self._watched:
+            self._stop_snapshots()
 
     def refresh(self) -> None:
         if self._closing or (self._worker is not None and self._worker.isRunning()):
@@ -219,6 +220,7 @@ class ServerViewerPage(QWidget):
             if card.isVisible() and not card.visibleRegion().isEmpty()
         }
         previously_watched = set(self._watched)
+        self._watched.update(visible)  # track attempts too, so a hide/failure can stop them
 
         def operation():
             client = self._client_provider()
@@ -350,6 +352,7 @@ class ServerViewerPage(QWidget):
 
     def _play_clip(self, public_id: str) -> None:
         destination = Path(tempfile.gettempdir()) / f"campusguard-{uuid.uuid4().hex}.mp4"
+        self._clip_cancel.clear()
         def success(path: object) -> None:
             clip_path = Path(path)
             self._clip_paths.add(clip_path)
@@ -357,7 +360,9 @@ class ServerViewerPage(QWidget):
             self._player.setSource(QUrl.fromLocalFile(str(clip_path)))
             self._player.play()
         self.connection_status.setText(f"Downloading incident {public_id} in chunks for playback…")
-        self._run(lambda: self._client_provider().stream_clip_to_file(public_id, destination), success)
+        self._run(lambda: self._client_provider().stream_clip_to_file(
+            public_id, destination, cancelled=self._clip_cancel.is_set
+        ), success)
 
     def _add_camera_dialog(self) -> None:
         dialog = QDialog(self)
@@ -442,6 +447,7 @@ class ServerViewerPage(QWidget):
 
     def shutdown(self) -> None:
         self._closing = True
+        self._clip_cancel.set()
         self._poll_timer.stop()
         self._player.stop()
         self._player.setSource(QUrl())

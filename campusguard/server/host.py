@@ -87,6 +87,11 @@ class ServerHost:
         self._previous_status: dict[str, str] = {}
         self._snapshot_lock = threading.Lock()
         self._snapshots: dict[str, tuple[float, bytes]] = {}
+        self._snapshot_watchers: dict[str, float] = {}
+        self._snapshot_watchdog = QTimer()
+        self._snapshot_watchdog.setInterval(2000)
+        self._snapshot_watchdog.timeout.connect(self._expire_snapshot_watchers)
+        self._snapshot_watchdog.start()
         manager.snapshot_ready.connect(self._on_snapshot)
 
     # -- Qt-thread slots ------------------------------------------------
@@ -94,7 +99,19 @@ class ServerHost:
         if not jpeg or len(jpeg) > 512 * 1024:
             return
         with self._snapshot_lock:
+            if camera_id not in self._snapshot_watchers:
+                return
             self._snapshots[camera_id] = (time.monotonic(), bytes(jpeg))
+
+    def _expire_snapshot_watchers(self) -> None:
+        now = time.monotonic()
+        with self._snapshot_lock:
+            expired = [camera_id for camera_id, seen in self._snapshot_watchers.items() if now - seen > 10.0]
+            for camera_id in expired:
+                self._snapshot_watchers.pop(camera_id, None)
+                self._snapshots.pop(camera_id, None)
+        for camera_id in expired:
+            self.manager.set_camera_snapshot(camera_id, False)
 
     def snapshot_bytes(self, camera_id: str) -> bytes | None:
         with self._snapshot_lock:
@@ -198,6 +215,7 @@ class ServerHost:
 
     def stop_all(self) -> None:
         self._start_timer.stop()
+        self._snapshot_watchdog.stop()
         self.manager.stop_all()
 
 
@@ -240,10 +258,13 @@ class HostBackend:
     def set_camera_snapshot_enabled(self, camera_id: str, enabled: bool) -> None:
         def work() -> None:
             self._require(camera_id)
-            self.host.manager.set_camera_snapshot(camera_id, enabled)
-            if not enabled:
-                with self.host._snapshot_lock:
+            with self.host._snapshot_lock:
+                if enabled:
+                    self.host._snapshot_watchers[camera_id] = time.monotonic()
+                else:
+                    self.host._snapshot_watchers.pop(camera_id, None)
                     self.host._snapshots.pop(camera_id, None)
+            self.host.manager.set_camera_snapshot(camera_id, enabled)
         self._on_qt(work)
 
     def camera_snapshot(self, camera_id: str) -> bytes | None:
@@ -319,6 +340,7 @@ class HostBackend:
             self.host.manager.stop_camera(camera_id)
             with self.host._snapshot_lock:
                 self.host._snapshots.pop(camera_id, None)
+                self.host._snapshot_watchers.pop(camera_id, None)
             self.host.repository.remove_camera(camera_id)
             try:
                 self.host.vault.delete(camera_id)
