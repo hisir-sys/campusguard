@@ -97,7 +97,9 @@ class RemoteServerClient:
                 if error.code == 429:
                     raise ServerConnectionError("The server is rate-limiting requests. Wait briefly and retry.") from None
                 if error.code == 503:
-                    raise ServerConnectionError(message or "The server is online but this camera snapshot is not ready yet.") from None
+                    if path.endswith("/snapshot"):
+                        raise ServerConnectionError(message or "The server is online but this camera snapshot is not ready yet.") from None
+                    raise ServerConnectionError(message or "The server is temporarily unavailable. Retrying automatically in the background.") from None
                 if error.code == 404:
                     raise ServerConnectionError(message or "The requested camera or incident was not found.") from None
                 if error.code >= 500:
