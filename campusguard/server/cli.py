@@ -108,8 +108,14 @@ def _server_login_gui() -> int:
         def succeeded(session):
             try:
                 auth.save_session(session)
-            except Exception as error:
-                status.setText(f"Sign-in succeeded, but the session could not be saved securely: {error}")
+                saved = auth.load_saved()
+                if not saved or saved.get("refresh_token") != session.refresh_token:
+                    raise RuntimeError("Windows Credential Manager did not confirm the saved sign-in.")
+            except Exception:
+                status.setText(
+                    "Sign-in succeeded, but Windows Credential Manager did not save the session. "
+                    "Check that credential storage is available, then try again."
+                )
                 submit.setEnabled(True)
                 return
             holder["success"] = True
@@ -299,6 +305,11 @@ def server_login() -> int:
         print(f"Could not reach the sign-in service: {error}")
         return 1
     auth.save_session(session)
+    saved = auth.load_saved()
+    if not saved or saved.get("refresh_token") != session.refresh_token:
+        print("Sign-in succeeded, but Windows Credential Manager did not save the session.")
+        print("Check that credential storage is available, then try again.")
+        return 1
     print(f"Signed in as {session.email}. You can now start the server with --server.")
     return 0
 
