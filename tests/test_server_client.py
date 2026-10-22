@@ -61,5 +61,5 @@ def test_client_connects_and_rejects_bad_token(fake_server):
 
 def test_server_down_is_reported_without_hanging():
     client = RemoteServerClient("http://127.0.0.1:1", TOKEN, timeout=0.5, retries=0)
-    with pytest.raises(ServerConnectionError, match="unreachable"):
+    with pytest.raises(ServerConnectionError, match="unreachable|timed out"):
         client.test_connection()

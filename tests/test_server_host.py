@@ -45,10 +45,12 @@ class FakeManager(QObject):
 
 
 class FakeVault:
-    def __init__(self): self.saved = {}
+    def __init__(self): self.saved = {}; self.api_token = ""
     def save(self, camera_id, credentials): self.saved[camera_id] = credentials
     def load(self, camera_id): return self.saved.get(camera_id, CameraCredentials())
     def delete(self, camera_id): self.saved.pop(camera_id, None)
+    def load_api_token(self): return self.api_token
+    def save_api_token(self, token): self.api_token = token
 
 
 @pytest.fixture()
@@ -128,7 +130,7 @@ def test_bulk_import_staggers_camera_start(env):
     status, body = env.call("POST", "/cameras/import", raw=rows.encode())
     assert status == 200 and body["added"] == 10 and len(body["errors"]) == 1
     assert len(env.repo.list_cameras()) == 10
-    pump(env.app, 0.1)
+    pump(env.app, 0.7)  # the production start queue ticks every 600 ms
     assert 0 < len(env.manager.started) <= 4                    # first batch only
     pump(env.app, 2.2)
     assert sorted(env.manager.started) == sorted(c.camera_id for c in env.repo.list_cameras())
