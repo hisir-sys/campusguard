@@ -28,6 +28,218 @@ def attach_parent_console() -> None:
         pass
 
 
+def _prepare_qt(gui: bool):
+    """Set the same Qt app-data identity before reading server configuration."""
+    if gui:
+        from PySide6.QtWidgets import QApplication
+        app = QApplication.instance() or QApplication(sys.argv[:1])
+    else:
+        from PySide6.QtCore import QCoreApplication
+        app = QCoreApplication.instance() or QCoreApplication(sys.argv[:1])
+    app.setOrganizationName("CampusGuard")
+    app.setApplicationName("CampusGuard")
+    return app
+
+
+def _ensure_console() -> None:
+    """Open a visible console for commands that require terminal input/output."""
+    if sys.platform != "win32" or (sys.stdin is not None and sys.stdout is not None):
+        return
+    try:
+        import ctypes
+        if ctypes.windll.kernel32.AllocConsole():  # type: ignore[attr-defined]
+            sys.stdout = open("CONOUT$", "w", buffering=1, encoding="utf-8")
+            sys.stderr = sys.stdout
+            sys.stdin = open("CONIN$", "r", encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _server_login_gui() -> int:
+    from PySide6.QtCore import QThread, Signal
+    from PySide6.QtWidgets import QApplication, QDialog, QFormLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout
+    from campusguard import auth
+
+    app = _prepare_qt(True)
+    dialog = QDialog()
+    dialog.setWindowTitle("CampusGuard server sign-in")
+    dialog.setMinimumWidth(420)
+    layout = QVBoxLayout(dialog)
+    layout.addWidget(QLabel("Sign in with the CampusGuard website account approved for this school."))
+    form = QFormLayout()
+    email_input = QLineEdit()
+    email_input.setPlaceholderText("name@school.org")
+    password_input = QLineEdit()
+    password_input.setEchoMode(QLineEdit.EchoMode.Password)
+    form.addRow("Email", email_input)
+    form.addRow("Password", password_input)
+    layout.addLayout(form)
+    status = QLabel("")
+    status.setWordWrap(True)
+    layout.addWidget(status)
+    submit = QPushButton("Sign in")
+    layout.addWidget(submit)
+    holder = {"worker": None, "success": False}
+
+    class LoginWorker(QThread):
+        succeeded = Signal(object)
+        failed = Signal(str)
+
+        def __init__(self, email: str, password: str):
+            super().__init__(dialog)
+            self.email, self.password = email, password
+
+        def run(self):
+            try:
+                self.succeeded.emit(auth.login(self.email, self.password))
+            except Exception as error:
+                self.failed.emit(str(error))
+
+    def begin_login():
+        email, password = email_input.text().strip(), password_input.text()
+        if not email or not password:
+            status.setText("Enter both your email and password.")
+            return
+        submit.setEnabled(False)
+        status.setText("Signing in securely…")
+        worker = LoginWorker(email, password)
+        holder["worker"] = worker
+
+        def succeeded(session):
+            try:
+                auth.save_session(session)
+            except Exception as error:
+                status.setText(f"Sign-in succeeded, but the session could not be saved securely: {error}")
+                submit.setEnabled(True)
+                return
+            holder["success"] = True
+            password_input.clear()
+            status.setText(f"Signed in as {session.email}.")
+            dialog.accept()
+
+        def failed(message):
+            password_input.clear()
+            status.setText(f"Sign-in failed: {message}")
+            submit.setEnabled(True)
+
+        worker.succeeded.connect(succeeded)
+        worker.failed.connect(failed)
+        worker.finished.connect(worker.deleteLater)
+        worker.start()
+        password_input.clear()
+
+    submit.clicked.connect(begin_login)
+    email_input.returnPressed.connect(begin_login)
+    password_input.returnPressed.connect(begin_login)
+    dialog.exec()
+    worker = holder["worker"]
+    if worker is not None and worker.isRunning():
+        worker.wait(10000)
+    return 0 if holder["success"] else 1
+
+
+def _show_token_gui() -> int:
+    from PySide6.QtWidgets import QApplication, QCheckBox, QDialog, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QVBoxLayout
+    from campusguard.server.config import load_config
+    from campusguard.storage import application_data_dir
+
+    app = _prepare_qt(True)
+    try:
+        config = load_config(application_data_dir())
+    except Exception as error:
+        QMessageBox.critical(None, "CampusGuard token unavailable", str(error))
+        return 1
+    dialog = QDialog()
+    dialog.setWindowTitle("CampusGuard server access token")
+    dialog.setMinimumWidth(560)
+    layout = QVBoxLayout(dialog)
+    layout.addWidget(QLabel(
+        "Keep this token private. Anyone who has it may access the server API. "
+        "The token is stored in Windows Credential Manager and is not written to logs."
+    ))
+    address = "All network interfaces" if config.host == "0.0.0.0" else config.host
+    layout.addWidget(QLabel(f"Server listening address: {address}:{config.port}"))
+    if config.host == "0.0.0.0":
+        layout.addWidget(QLabel("Connect from another PC using this server's LAN IP address, not 0.0.0.0."))
+    token_input = QLineEdit(config.token)
+    token_input.setEchoMode(QLineEdit.EchoMode.Password)
+    token_input.setReadOnly(True)
+    layout.addWidget(token_input)
+    reveal = QCheckBox("Reveal token on screen")
+    reveal.toggled.connect(lambda checked: token_input.setEchoMode(
+        QLineEdit.EchoMode.Normal if checked else QLineEdit.EchoMode.Password
+    ))
+    layout.addWidget(reveal)
+    buttons = QHBoxLayout()
+    copy_button = QPushButton("Copy token")
+    close_button = QPushButton("Close")
+    buttons.addWidget(copy_button)
+    buttons.addStretch(1)
+    buttons.addWidget(close_button)
+    layout.addLayout(buttons)
+    copy_button.clicked.connect(lambda: (app.clipboard().setText(config.token), copy_button.setText("Copied")))
+    close_button.clicked.connect(dialog.accept)
+    dialog.exec()
+    return 0
+
+
+def configure_server(argv: list[str]) -> int:
+    """Apply non-secret installer settings without starting AI or the HTTP server."""
+    try:
+        _prepare_qt(False)
+        from campusguard.server.config import load_config, save_config
+        from campusguard.storage import application_data_dir
+        import math
+
+        data_dir = application_data_dir()
+        config = load_config(data_dir)
+        host = _option(argv, "--host")
+        if host is not None:
+            if host not in {"127.0.0.1", "0.0.0.0"}:
+                raise ValueError("Host must be 127.0.0.1 or 0.0.0.0.")
+            config.host = host
+        port = _option(argv, "--port")
+        if port is not None:
+            parsed_port = int(port)
+            if not 1 <= parsed_port <= 65535:
+                raise ValueError("Port must be between 1 and 65535.")
+            config.port = parsed_port
+        footage = _option(argv, "--footage-dir")
+        if footage:
+            footage_path = Path(footage).expanduser().resolve()
+            footage_path.mkdir(parents=True, exist_ok=True)
+            config.footage_dir = str(footage_path)
+        limit = _option(argv, "--max-footage-gb")
+        if limit is not None:
+            parsed_limit = float(limit)
+            if not math.isfinite(parsed_limit) or not 1.0 <= parsed_limit <= 100000.0:
+                raise ValueError("Footage size limit must be between 1 and 100000 GB.")
+            config.max_footage_gb = parsed_limit
+        save_config(data_dir, config)
+        return 0
+    except Exception as error:
+        if sys.stdout is not None:
+            print(f"Could not save server settings: {error}")
+        return 1
+
+
+def server_status() -> int:
+    from PySide6.QtWidgets import QApplication, QMessageBox
+    from campusguard.server.config import load_config
+    from campusguard.storage import application_data_dir
+
+    app = _prepare_qt(True)
+    try:
+        config = load_config(application_data_dir())
+    except Exception as error:
+        QMessageBox.critical(None, "CampusGuard server status", str(error))
+        return 1
+    from campusguard.server.status_window import ServerStatusWindow
+    window = ServerStatusWindow(config, config.token)
+    window.show()
+    return app.exec()
+
+
 def build_task_xml(command: str, arguments: str, user: str) -> str:
     """Windows Task Scheduler definition: start at boot, restart if it stops."""
     return f"""<?xml version="1.0" encoding="UTF-16"?>
