@@ -342,7 +342,7 @@ class ServerViewerPage(QWidget):
             update_button = QPushButton("Update", actions)
             update_button.clicked.connect(
                 lambda _checked=False, pid=public_id, combo=status_select:
-                self._update_incident_status(pid, str(combo.currentData())
+                self._update_incident_status(pid, str(combo.currentData()))
             )
             action_layout.addWidget(status_select)
             action_layout.addWidget(update_button)
