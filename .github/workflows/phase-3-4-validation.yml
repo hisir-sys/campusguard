@@ -40,6 +40,10 @@ jobs:
         shell: pwsh
         run: python -m compileall -q campusguard main.py tests scripts
 
+      - name: Import all application modules and smoke-start main.py
+        shell: pwsh
+        run: python scripts/startup_smoke.py
+
       - name: Diagnose server client and viewer tests independently
         shell: pwsh
         continue-on-error: true

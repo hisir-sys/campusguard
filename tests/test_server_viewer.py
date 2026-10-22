@@ -5,7 +5,7 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QComboBox
 
 from campusguard.ui.server_viewer import ServerViewerPage
 
@@ -56,13 +56,39 @@ def test_incident_and_alert_rows_both_offer_status_actions(app):
     for table in (page.incidents_table, page.alerts_table):
         action_widget = table.cellWidget(0, 6)
         assert action_widget is not None
-        selector = action_widget.findChild(__import__("PySide6.QtWidgets", fromlist=["QComboBox"]).QComboBox)
+        selector = action_widget.findChild(QComboBox)
         assert selector is not None
         assert [selector.itemText(i) for i in range(selector.count())] == [
             "Confirm", "Dismiss", "False alarm", "Resolve"
         ]
     page.shutdown()
     page.close()
+
+
+def test_server_status_window_shows_health_and_last_error(app, monkeypatch):
+    from campusguard.server.config import ServerConfig
+    from campusguard.server.status_window import ServerStatusWindow
+
+    # Prevent the constructor's queued refresh from making a real network call.
+    monkeypatch.setattr(ServerStatusWindow, "refresh", lambda self: None)
+    window = ServerStatusWindow(ServerConfig(token="t" * 32), "t" * 32)
+    window._on_result({
+        "status": {
+            "version": "test",
+            "uptime_seconds": 7,
+            "cameras": {"total": 3, "ok": 1, "stalled": 1, "offline": 1, "connecting": 0},
+        },
+        "last_error": "test camera warning",
+    })
+    assert "Running" in window.state.text()
+    assert "3 total" in window.counts.text()
+    assert "1 stalled" in window.counts.text()
+    assert "test camera warning" in window.last_error.text()
+
+    window._on_error("connection refused")
+    assert "not reachable" in window.state.text()
+    assert "connection refused" in window.state.text()
+    window.close()
 
 
 def test_viewer_removes_stale_cards_without_rebuilding_existing_ones(app):
