@@ -42,7 +42,7 @@ jobs:
 
       - name: Run the complete test suite
         shell: pwsh
-        run: python -m pytest -vv -ra --tb=short
+        run: python -m pytest -ra --tb=short
 
       - name: Render viewer in dark/light themes and 0/5/120-camera layouts
         shell: pwsh

@@ -14,9 +14,9 @@ class SettingsTests(unittest.TestCase):
             settings = AppSettings.from_dict({"violence_model": key})
             self.assertEqual(settings.violence_model, key)
 
-    def test_enhanced_is_not_operational(self):
+    def test_enhanced_falls_back_to_operational_default(self):
         settings = AppSettings.from_dict({"violence_model": "enhanced"})
-        self.assertEqual(settings.violence_model, "mc3")
+        self.assertEqual(settings.violence_model, "fdsc_mc3")
 
     def test_mc3_fight_class_is_verified_from_manifest(self):
         profile = MODEL_PROFILES["mc3"]
@@ -113,13 +113,13 @@ class InteractionTests(unittest.TestCase):
 
 
 class DecisionTests(unittest.TestCase):
-    def test_stable_predictions_trigger_event(self):
+    def test_qualifying_prediction_triggers_once_until_normal_release(self):
         decision = FightDecision(0.65)
-        self.assertIsNone(decision.update("FIGHT DETECTED", 0.90))
-        self.assertIsNone(decision.update("FIGHT DETECTED", 0.90))
-        decision.update("FIGHT DETECTED", 0.90)
         event = decision.update("FIGHT DETECTED", 0.90)
         self.assertEqual(event, ("FIGHT DETECTED", 0.90, "HIGH"))
+        for _ in range(3):
+            self.assertIsNone(decision.update("FIGHT DETECTED", 0.90))
+        self.assertTrue(decision.event_latched)
 
     def test_normal_resets_event_latch(self):
         decision = FightDecision(0.65)
