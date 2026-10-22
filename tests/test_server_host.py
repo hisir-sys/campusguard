@@ -278,7 +278,11 @@ def test_run_server_full_start_serve_and_clean_stop(tmp_path, monkeypatch):
     monkeypatch.setattr(host_module, "application_data_dir", lambda: tmp_path)
     monkeypatch.setattr(storage, "application_data_dir", lambda: tmp_path)
     monkeypatch.setattr(host_module.auth, "resume", lambda: SimpleNamespace_(email="admin@school.org"))
-    monkeypatch.setattr(host_module, "Repository", lambda: storage.Repository(tmp_path / "campusguard.db"))
+    monkeypatch.setattr(
+        host_module,
+        "Repository",
+        lambda footage_dir=None: storage.Repository(tmp_path / "campusguard.db", footage_dir=footage_dir),
+    )
     monkeypatch.setattr(host_module, "CredentialVault", FakeVault)
     monkeypatch.setattr(runtime, "CameraManager", lambda vault, footage_dir=None: FakeManager())
     with socket.socket() as probe:

@@ -176,15 +176,12 @@ class ServerViewerPage(QWidget):
         self.alerts_table = self._make_table()
         self.tabs.addTab(self.alerts_table, "Alerts")
 
-        self.video_widget = QVideoWidget()
-        self.video_widget.setMinimumHeight(180)
-        self.video_widget.setMaximumHeight(300)
-        self.video_widget.hide()
-        root.addWidget(self.video_widget)
-        self._audio = QAudioOutput(self)
-        self._player = QMediaPlayer(self)
-        self._player.setAudioOutput(self._audio)
-        self._player.setVideoOutput(self.video_widget)
+        # Multimedia backends can be unavailable on headless PCs and CI.
+        # Create the player only when a user actually opens a saved clip.
+        self._root_layout = root
+        self.video_widget: QVideoWidget | None = None
+        self._audio: QAudioOutput | None = None
+        self._player: QMediaPlayer | None = None
         self._poll_timer = QTimer(self)
         self._poll_timer.setInterval(2500)
         self._poll_timer.timeout.connect(self.refresh)
@@ -356,12 +353,26 @@ class ServerViewerPage(QWidget):
     def _update_incident_status(self, public_id: str, status: str) -> None:
         self._run(lambda: self._client_provider().set_incident_status(public_id, status), lambda _result: self.refresh())
 
+    def _ensure_media_player(self) -> None:
+        if self._player is not None:
+            return
+        self.video_widget = QVideoWidget(self)
+        self.video_widget.setMinimumHeight(180)
+        self.video_widget.setMaximumHeight(300)
+        self._root_layout.addWidget(self.video_widget)
+        self._audio = QAudioOutput(self)
+        self._player = QMediaPlayer(self)
+        self._player.setAudioOutput(self._audio)
+        self._player.setVideoOutput(self.video_widget)
+
     def _play_clip(self, public_id: str) -> None:
         destination = Path(tempfile.gettempdir()) / f"campusguard-{uuid.uuid4().hex}.mp4"
         self._clip_cancel.clear()
         def success(path: object) -> None:
             clip_path = Path(path)
             self._clip_paths.add(clip_path)
+            self._ensure_media_player()
+            assert self.video_widget is not None and self._player is not None
             self.video_widget.show()
             self._player.setSource(QUrl.fromLocalFile(str(clip_path)))
             self._player.play()
@@ -455,8 +466,9 @@ class ServerViewerPage(QWidget):
         self._closing = True
         self._clip_cancel.set()
         self._poll_timer.stop()
-        self._player.stop()
-        self._player.setSource(QUrl())
+        if self._player is not None:
+            self._player.stop()
+            self._player.setSource(QUrl())
         if self._worker is not None and self._worker.isRunning():
             self._worker.requestInterruption()
             self._worker.wait(9000)
