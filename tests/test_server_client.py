@@ -84,6 +84,8 @@ class FakeServerHandler(BaseHTTPRequestHandler):
 
 @pytest.fixture()
 def fake_server():
+    FakeServerHandler.online = True
+    FakeServerHandler.incident_status = "NEW"
     server = ThreadingHTTPServer(("127.0.0.1", 0), FakeServerHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
