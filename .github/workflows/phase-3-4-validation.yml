@@ -40,9 +40,14 @@ jobs:
         shell: pwsh
         run: python -m compileall -q campusguard main.py tests scripts
 
+      - name: Diagnose server client and viewer tests independently
+        shell: pwsh
+        continue-on-error: true
+        run: python -m pytest tests/test_server_client.py tests/test_server_viewer.py -vv -ra --tb=long
+
       - name: Run the complete test suite
         shell: pwsh
-        run: python -m pytest -ra --tb=short
+        run: python -m pytest -ra --tb=long
 
       - name: Render viewer in dark/light themes and 0/5/120-camera layouts
         shell: pwsh
