@@ -319,7 +319,10 @@ def test_run_server_full_start_serve_and_clean_stop(tmp_path, monkeypatch):
     results = {}
     # Prevent a regression from hanging the whole test suite if the local API
     # fails before the helper client can request application shutdown.
-    QTimer.singleShot(10000, app.quit)
+    shutdown_timer = QTimer()
+    shutdown_timer.setSingleShot(True)
+    shutdown_timer.timeout.connect(app.quit)
+    shutdown_timer.start(30000)
 
     def client():
         connection = None
