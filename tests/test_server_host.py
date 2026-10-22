@@ -183,6 +183,26 @@ def test_event_becomes_incident_with_footage_and_api_access(env):
     assert env.call("POST", "/incidents/INC-09999/status", {"status": "RESOLVED"})[0] == 404
 
 
+def test_viewer_incident_decisions_persist_and_update_open_count(env):
+    env.call("POST", "/cameras", {"name": "Hall", "address": "rtsp://h/hall"})
+    env.manager.event_detected.emit("CAM-001", "FIGHT DETECTED", 0.9, "HIGH")
+    pump(env.app)
+    assert env.repo.open_incident_count() == 1
+
+    env.repo.update_incident_status("INC-00001", "CONFIRMED")
+    assert env.repo.get_incident("INC-00001")["status"] == "CONFIRMED"
+    assert env.repo.open_incident_count() == 1
+    assert env.repo.list_alerts()[0]["acknowledged"] == 1
+
+    env.repo.update_incident_status("INC-00001", "DISMISSED")
+    assert env.repo.open_incident_count() == 0
+    assert env.repo.list_alerts()[0]["acknowledged"] == 1
+
+    env.repo.update_incident_status("INC-00001", "FALSE_ALARM")
+    assert env.repo.get_incident("INC-00001")["status"] == "FALSE_ALARM"
+    assert env.repo.open_incident_count() == 0
+
+
 def test_clip_outside_footage_folder_is_never_served(env):
     secret = env.tmp / "secret.mp4"
     secret.write_bytes(b"secret")

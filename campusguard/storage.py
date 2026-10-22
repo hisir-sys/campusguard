@@ -308,13 +308,24 @@ class Repository:
             )
 
     def update_incident_status(self, public_id: str, status: str) -> None:
-        if status not in {"NEW", "ACKNOWLEDGED", "RESOLVED"}:
+        allowed = {"NEW", "ACKNOWLEDGED", "RESOLVED", "CONFIRMED", "DISMISSED", "FALSE_ALARM"}
+        if status not in allowed:
             raise ValueError(f"Unsupported incident status: {status}")
         with self._lock, self._connection() as connection:
+            row = connection.execute(
+                "SELECT id FROM incidents WHERE public_id = ?", (public_id,)
+            ).fetchone()
+            if row is None:
+                return
             connection.execute(
                 "UPDATE incidents SET status = ? WHERE public_id = ?",
                 (status, public_id),
             )
+            # Any explicit operator decision acknowledges the associated alert.
+            if status != "NEW":
+                connection.execute(
+                    "UPDATE alerts SET acknowledged = 1 WHERE incident_id = ?", (row["id"],)
+                )
 
     def list_alerts(self, limit: int = 500) -> list[dict[str, Any]]:
         with self._lock, self._connection() as connection:
@@ -363,11 +374,11 @@ class Repository:
             return int(connection.execute("SELECT COUNT(*) FROM incidents").fetchone()[0])
 
     def open_incident_count(self) -> int:
-        """Count incidents that are still open for operator review."""
+        """Count incidents that still need operator review or follow-up."""
         with self._lock, self._connection() as connection:
             return int(
                 connection.execute(
-                    "SELECT COUNT(*) FROM incidents WHERE status != 'RESOLVED'"
+                    "SELECT COUNT(*) FROM incidents WHERE status NOT IN ('RESOLVED', 'DISMISSED', 'FALSE_ALARM')"
                 ).fetchone()[0]
             )
 
