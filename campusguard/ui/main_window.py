@@ -41,6 +41,8 @@ from campusguard.ui.history_pages import AlertsPage, IncidentsPage
 from campusguard.ui.icons import set_icon_theme
 from campusguard.ui.screen_fit import compute_fit
 from campusguard.ui.settings_page import SettingsPage
+from campusguard.ui.server_viewer import ServerViewerPage
+from campusguard.server.client import RemoteServerClient
 from campusguard.ui.severity_alert import SeverityAlertToast
 from campusguard.ui.theme import get_palette, rgba
 
@@ -508,10 +510,16 @@ class MainWindow(QMainWindow):
         apply_theme(self, self.settings.theme)
         self.top_bar.set_theme(self.settings.theme)
 
+        try:
+            self.settings_page.set_server_token(self.vault.load_server_token())
+        except Exception:
+            self.settings_page.set_connection_test_result(
+                "Windows Credential Manager is unavailable; the server token could not be loaded.", False
+            )
         self._sync_cameras()
         self.dashboard.update_model_configuration(self.settings)
         self._update_operator_button()
-        self.navigate("dashboard")
+        self.navigate("server-viewer" if self.settings.connection_mode == "server" else "dashboard")
         self._update_alert_badge()
         self._refresh_timer = QTimer(self)
         self._refresh_timer.setInterval(1500)
@@ -522,7 +530,8 @@ class MainWindow(QMainWindow):
         # Starting them after the event loop begins guarantees the Dashboard
         # can render immediately, even when a camera or AI model takes time
         # to initialize.
-        self._begin_camera_engine_import()
+        if self.settings.connection_mode == "local":
+            self._begin_camera_engine_import()
 
         self._add_shortcut("Ctrl+1", lambda: self.navigate("dashboard"))
         self._add_shortcut("Ctrl+2", lambda: self.navigate("cameras"))
@@ -556,6 +565,8 @@ class MainWindow(QMainWindow):
         if self._camera_engine_importing or getattr(self, "_closing", False):
             return
         self._camera_engine_poll.stop()
+        if self.settings.connection_mode == "server":
+            return
 
         if self._camera_engine_error is not None:
             error = self._camera_engine_error
@@ -635,6 +646,7 @@ class MainWindow(QMainWindow):
         self.incidents_page = IncidentsPage(self.repository)
         self.alerts_page = AlertsPage(self.repository)
         self.settings_page = SettingsPage(self.settings)
+        self.server_viewer_page = ServerViewerPage(self._remote_client)
         self.info_pages = self._build_information_pages()
 
         self._pages = {
@@ -643,6 +655,7 @@ class MainWindow(QMainWindow):
             "incidents": self.incidents_page,
             "alerts": self.alerts_page,
             "settings": self.settings_page,
+            "server-viewer": self.server_viewer_page,
             **self.info_pages,
         }
 
@@ -1063,6 +1076,31 @@ class MainWindow(QMainWindow):
         self.incidents_page.clear_footage_requested.connect(self._clear_footage_storage)
         self.alerts_page.clear_all_requested.connect(self._clear_all_history)
         self.settings_page.settings_changed.connect(self._save_settings)
+        self.settings_page.server_connection_test_requested.connect(self._test_server_connection)
+        self.settings_page.server_token_changed.connect(self._save_server_token)
+
+    def _remote_client(self) -> RemoteServerClient:
+        return RemoteServerClient(self.settings.server_address, self.vault.load_server_token(), timeout=1.0, retries=0)
+
+    def _save_server_token(self, token: str) -> None:
+        try:
+            self.vault.save_server_token(token)
+            self.settings_page.set_connection_test_result("Server token saved in Windows Credential Manager.", True)
+        except Exception:
+            self.settings_page.set_connection_test_result(
+                "Could not save the token to Windows Credential Manager. Check Windows credential storage.", False
+            )
+
+    def _test_server_connection(self, address: str, token: str) -> None:
+        self.settings_page.set_connection_test_result("Testing the server connection…", False)
+        def work():
+            return RemoteServerClient(address, token, timeout=3.0, retries=1).test_connection()
+        def success(status):
+            cameras = status.get("cameras", {})
+            self.settings_page.set_connection_test_result(
+                f"Connected to CampusGuard server {status.get('version', '')}. Camera count: {cameras.get('total', 'unknown')}.", True
+            )
+        self._run(work, success, lambda error: self.settings_page.set_connection_test_result(str(error), False))
 
     def _connect_camera_manager(self) -> None:
         self.camera_manager.camera_status_changed.connect(self._on_camera_status)
@@ -1236,6 +1274,7 @@ class MainWindow(QMainWindow):
         # Rebuild palette-captured information cards only when the theme changes;
         # ordinary settings edits remain in-place and responsive.
         previous_theme = self.settings.theme
+        previous_mode = self.settings.connection_mode
         self.settings = AppSettings.from_dict(settings.to_dict())
         self.repository.save_settings(self.settings)
         if self.camera_manager is not None:
@@ -1247,7 +1286,27 @@ class MainWindow(QMainWindow):
         if previous_theme != self.settings.theme:
             self._rebuild_information_pages()
         self.settings_page.set_saved()
-        self.statusBar().showMessage("Settings saved and applied to camera workers.", 1800)
+        if previous_mode != self.settings.connection_mode:
+            if self.settings.connection_mode == "server":
+                timer = getattr(self, "_camera_engine_poll", None)
+                if timer is not None:
+                    timer.stop()
+                if self.camera_manager is not None:
+                    self.camera_manager.stop_all(timeout_ms=5000)
+                    self.camera_manager = None
+                self.navigate("server-viewer")
+            else:
+                self.navigate("dashboard")
+                if self.camera_manager is None:
+                    if self._camera_engine_importing:
+                        timer = getattr(self, "_camera_engine_poll", None)
+                        if timer is not None:
+                            timer.start()
+                    else:
+                        self._camera_engine_importing = True
+                        self._camera_engine_error = None
+                        self._begin_camera_engine_import()
+        self.statusBar().showMessage("Settings saved and applied to the selected connection mode.", 1800)
 
     def _switch_violence_model(self, model_key: str) -> None:
         allowed = {"fdsc_mc3", "mc3", "x3d"}
@@ -1606,6 +1665,8 @@ class MainWindow(QMainWindow):
         # Stop everything that could create camera workers after the window is gone
         # (matters when the user logs out while the AI engine is still importing).
         self._closing = True
+        if hasattr(self, "server_viewer_page"):
+            self.server_viewer_page.shutdown()
         for timer_name in ("_camera_engine_poll", "_refresh_timer"):
             timer = getattr(self, timer_name, None)
             if timer is not None:

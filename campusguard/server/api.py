@@ -238,8 +238,8 @@ class _Handler(BaseHTTPRequestHandler):
     def _route_set_incident_status(self, query, public_id: str) -> None:
         data = self._read_json()
         status = data.get("status")
-        if status not in {"NEW", "ACKNOWLEDGED", "RESOLVED"}:
-            raise ApiError(HTTPStatus.BAD_REQUEST, "'status' must be NEW, ACKNOWLEDGED or RESOLVED.")
+        if status not in {"NEW", "ACKNOWLEDGED", "RESOLVED", "CONFIRMED", "DISMISSED", "FALSE_ALARM"}:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "'status' must be NEW, ACKNOWLEDGED, RESOLVED, CONFIRMED, DISMISSED or FALSE_ALARM.")
         self.backend.set_incident_status(public_id, status)
         self._send_json(HTTPStatus.OK, {"public_id": public_id, "status": status})
 

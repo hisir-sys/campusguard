@@ -160,6 +160,9 @@ class RemoteServerClient:
     def remove_camera(self, camera_id: str) -> None:
         self._request(f"/api/v1/cameras/{camera_id}", "DELETE")
 
+    def reconnect_camera(self, camera_id: str) -> None:
+        self._request(f"/api/v1/cameras/{camera_id}/reconnect", "POST", {})
+
     def import_cameras(self, csv_bytes: bytes) -> dict:
         return self._json(self._request("/api/v1/cameras/import", "POST", raw=csv_bytes, content_type="text/csv; charset=utf-8")[1])
 

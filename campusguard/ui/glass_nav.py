@@ -1005,6 +1005,7 @@ class BottomBar(GlassBar):
         ("Incidents", "incidents", "file-warning"),
         ("Alerts", "alerts", "bell"),
         ("Settings", "settings", "settings"),
+        ("Server", "server-viewer", "server"),
     )
 
     def __init__(self, parent: QWidget | None = None) -> None:

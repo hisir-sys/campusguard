@@ -273,6 +273,8 @@ def test_incident_routes_and_validation(api):
     assert request(server, "POST", "/api/v1/incidents/INC-00001/status", {"status": "RESOLVED"})[0] == 200
     assert backend.calls[-1] == ("status", "INC-00001", "RESOLVED")
     assert request(server, "POST", "/api/v1/incidents/INC-00001/status", {"status": "DELETE"})[0] == 400
+    for decision in ("CONFIRMED", "DISMISSED", "FALSE_ALARM"):
+        assert request(server, "POST", "/api/v1/incidents/INC-00001/status", {"status": decision})[0] == 200
     assert request(server, "POST", "/api/v1/incidents/../status", {"status": "NEW"})[0] == 404
 
 
