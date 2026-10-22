@@ -315,7 +315,7 @@ def test_run_server_full_start_serve_and_clean_stop(tmp_path, monkeypatch):
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
     (tmp_path / "server.json").write_text(json.dumps({"port": port, "token": TOKEN}))
-    app = QCoreApplication.instance() or QCoreApplication(sys.argv[:1])
+    app = QApplication.instance() or QApplication(sys.argv[:1])
     results = {}
 
     def client():
