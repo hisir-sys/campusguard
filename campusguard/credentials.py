@@ -14,6 +14,8 @@ class CredentialVault:
     USERNAME_KEY = "credential-pair"
     SERVER_TOKEN_SERVICE = "CampusGuard remote server"
     SERVER_TOKEN_KEY = "access-token"
+    API_TOKEN_SERVICE = "CampusGuard local server"
+    API_TOKEN_KEY = "access-token"
 
     def save(self, camera_id: str, credentials: CameraCredentials) -> None:
         if not credentials.username and not credentials.password:
@@ -46,6 +48,20 @@ class CredentialVault:
     def delete_server_token(self) -> None:
         try:
             keyring.delete_password(self.SERVER_TOKEN_SERVICE, self.SERVER_TOKEN_KEY)
+        except keyring.errors.PasswordDeleteError:
+            pass
+
+    def save_api_token(self, token: str) -> None:
+        """Store this machine's own server API token in a separate vault entry."""
+        if token:
+            keyring.set_password(self.API_TOKEN_SERVICE, self.API_TOKEN_KEY, token)
+
+    def load_api_token(self) -> str:
+        return keyring.get_password(self.API_TOKEN_SERVICE, self.API_TOKEN_KEY) or ""
+
+    def delete_api_token(self) -> None:
+        try:
+            keyring.delete_password(self.API_TOKEN_SERVICE, self.API_TOKEN_KEY)
         except keyring.errors.PasswordDeleteError:
             pass
 

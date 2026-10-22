@@ -30,6 +30,12 @@ class MemoryVault:
     def save_server_token(self, token):
         self.token = token
 
+    def load_api_token(self):
+        return self.token
+
+    def save_api_token(self, token):
+        self.token = token
+
 
 def test_config_creates_token_once_and_clamps_values(tmp_path):
     vault = MemoryVault()

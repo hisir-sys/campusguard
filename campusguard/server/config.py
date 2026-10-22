@@ -68,16 +68,16 @@ def load_config(data_dir: Path, vault=None) -> ServerConfig:
         vault = CredentialVault()
     legacy_token = config.token
     try:
-        stored_token = vault.load_server_token()
+        stored_token = vault.load_api_token()
         if stored_token:
             config.token = stored_token
         elif len(legacy_token) >= 24:
             # Preserve existing installations by migrating their old JSON token once.
-            vault.save_server_token(legacy_token)
+            vault.save_api_token(legacy_token)
             config.token = legacy_token
         else:
             config.token = secrets.token_urlsafe(32)
-            vault.save_server_token(config.token)
+            vault.save_api_token(config.token)
     except Exception as error:
         raise RuntimeError(
             "Windows Credential Manager is unavailable; CampusGuard cannot safely load or save the server token."
