@@ -1,5 +1,16 @@
 # CampusGuard Desktop — Update Notes
 
+## Phase 3–4: remote desktop client and school server installer
+
+- Added a token-protected remote server viewer with camera health, polled JPEG previews, incident/alert actions, clip playback, camera management and CSV import. Local mode remains the default and uses the existing desktop workflow.
+- Added a bounded HTTP client with timeouts, retry/backoff for GET requests, clear authentication/network/TLS errors, and remote server-token storage in Windows Credential Manager.
+- Added a camera-scoped snapshot endpoint with authentication, rate limiting, response size limits, and watcher expiry.
+- Added a separate Inno Setup server installer, per-user installation, footage folder and storage-cap setup, optional LAN firewall rule, server sign-in/token/status shortcuts, and an uninstall prompt that preserves data by default.
+- Added a Windows CI validation workflow for Python 3.14, compile checks, the full pytest suite, dark/light viewer renders at 0/5/120 cameras, and a dedicated server-installer artifact.
+- The installer intentionally excludes model checkpoints. The model weights are not part of the server-installer deliverable; schools must provide licensed checkpoints. Note: the repository's current models/ tree still contains checkpoint files, so repository-level model licensing/redistribution should be reviewed separately before making the source repository public.
+- **Verification limits:** automated Windows CI does not test a real school RTSP/NVR deployment, actual Windows Task Scheduler boot credentials, UAC/firewall behavior on a school PC, or sustained 100–120 camera throughput. Those require manual validation on the target hardware.
+
+
 ## Python 3.14 migration
 
 - `requirements.txt` minimum versions bumped to the first release of each

@@ -48,6 +48,43 @@ jobs:
         shell: pwsh
         run: python scripts/render_server_viewer.py --output artifacts/ui-renders
 
+      - name: Install Windows packaging tools
+        shell: pwsh
+        run: |
+          python -m pip install pyinstaller pillow
+          python scripts/generate_app_icon.py
+          if (-not (Test-Path "models")) { New-Item -ItemType Directory -Force models | Out-Null }
+          python -m PyInstaller --noconfirm --clean CampusGuard.spec
+
+      - name: Build dedicated school-server installer
+        shell: pwsh
+        env:
+          APP_VERSION: ${{ github.run_number }}
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+          }
+          if (-not (Test-Path $iscc)) { throw "Inno Setup was not found." }
+          & $iscc "/DAppVersion=0.$env:APP_VERSION" "installer\CampusGuardServer.iss"
+          if ($LASTEXITCODE -ne 0) { throw "CampusGuard Server installer compilation failed." }
+          $installer = "dist\CampusGuard-Server-Setup.exe"
+          if (-not (Test-Path $installer)) { throw "CampusGuard-Server-Setup.exe was not produced." }
+          $size = (Get-Item $installer).Length
+          Write-Host "CampusGuard Server installer size: $size bytes"
+          if ($size -lt 1000000) { throw "Server installer is unexpectedly small." }
+          (Get-FileHash $installer -Algorithm SHA256).Hash | Set-Content "dist\CampusGuard-Server-Setup.sha256"
+
+      - name: Upload server installer artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: CampusGuard-Server-Installer
+          path: |
+            dist/CampusGuard-Server-Setup.exe
+            dist/CampusGuard-Server-Setup.sha256
+          if-no-files-found: warn
+
       - name: Upload UI render screenshots
         if: always()
         uses: actions/upload-artifact@v4

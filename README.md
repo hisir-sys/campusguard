@@ -125,6 +125,43 @@ classifier produces a stable above-threshold result.
 - **No incidents:** confirm that a compatible MC3-18 checkpoint is loaded,
   camera AI is enabled, and the model returns a stable above-threshold event.
 
+
+
+## School server installer (Phase 4)
+
+The school-server installer is separate from the everyday desktop installer. Download the **CampusGuard-Server-Installer** artifact from a successful Phase 3–4 validation run, or use the compiled CampusGuard-Server-Setup.exe provided by your CampusGuard administrator. The server installer is built for Windows 10/11 x64 and does not install Python separately. The package contains the application runtime, but intentionally excludes model checkpoints; schools must supply model files they are licensed to use.
+
+### Install on the school server PC
+
+1. Run the server installer. It installs into the current Windows user's local Programs folder and creates the CampusGuard app-data folders.
+2. Choose a dedicated footage folder with enough free space. Set the maximum footage size (default 200 GB); when the cap is exceeded, the oldest clips are removed first. Incident records are retained for 365 days by default and clips for 30 days.
+3. Leave **Allow connections from other PCs** unchecked for local-only use. If office PCs must connect, enable it only on a trusted school LAN or VPN. The installer then configures the server to listen on 0.0.0.0 and requests a Windows Firewall rule for the selected TCP port. If the firewall elevation is cancelled or fails, it switches back to local-only mode. Do not expose the API directly to the public internet. Plain HTTP does not encrypt the token; use HTTPS or a VPN when traffic crosses an untrusted network.
+4. Sign in using the approved CampusGuard website account. The account and approval are rechecked every six hours. Run the **CampusGuard Server Sign In** shortcut later if the sign-in must be renewed.
+5. If selected, the installer registers a Windows Task Scheduler job for the same Windows user. Windows asks for that user's password so the task can start at boot while the user is signed out. Confirm the task is registered before relying on unattended operation.
+6. If the installer starts the server, the access-token window shows the token masked. Reveal it only when needed and share it only with trusted CampusGuard client PCs. The token is stored in Windows Credential Manager, not in server.json or the logs. You can open **CampusGuard Server Status** later to check reachability, camera health counts, and the most recent logged warning/error.
+
+### Add licensed model files
+
+Copy the model checkpoints you are licensed to use into:
+
+    %APPDATA%\CampusGuard\CampusGuard\models\
+
+Use the filenames expected by the current model configuration, normally yolo11n.pt (person detector), yolo11n-pose.pt (pose estimator), and one supported fight classifier such as fight_mc3_18.pth or model_16_m3_0.8888.pth. The server resolves relative models paths from this folder when a checkpoint is not bundled beside the application. Restart the server after adding or replacing weights. Missing weights are reported as model errors; CampusGuard must not pretend that a missing model is detecting fights.
+
+### Connect a desktop client from another PC
+
+1. On the server PC, open **CampusGuard Server Status** and confirm it reports the server is reachable.
+2. Find the server PC's private LAN IP address in Windows Settings or with ipconfig. Do not use 0.0.0.0 as the address clients connect to.
+3. On the client PC, install and open CampusGuard, sign in with an approved account, then open **Settings → Connection mode** and choose **Server**.
+4. Enter http://SERVER-LAN-IP:8765 only on a trusted LAN, or the configured https:// address when TLS is set up. Paste the token from the server's token window and choose **Test connection**. The token is saved in Windows Credential Manager on the client PC.
+5. Open the server viewer to manage cameras, review incidents/alerts, and play saved clips. If the server is unavailable, the viewer shows a reconnecting state; it does not switch to fake detections.
+
+### Server commands and recovery
+
+From the Start Menu shortcuts, you can sign in, show the token, open status, start the server, install the boot task, or remove it. The corresponding executable flags are --server-login, --show-token, --server-status, --server, --install-task, and --remove-task. Logs are in %APPDATA%\CampusGuard\CampusGuard\logs\server.log. The uninstall asks whether to delete server data; choose **No** to keep the database and footage. Choosing **Yes** deletes the app-data folder and the selected footage folder and cannot be undone.
+
+**Real-world checks still required before school deployment:** test the boot task under the actual school Windows account, verify any firewall prompt with IT, confirm the server PC's IP/port from a second PC, and measure throughput with the school's real RTSP/NVR streams. The CI installer build does not prove camera-scale performance or the Windows boot-task credentials.
+
 ## Source layout
 
 ```text

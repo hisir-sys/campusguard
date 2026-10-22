@@ -14,7 +14,7 @@ AppPublisher=CampusGuard
 AppPublisherURL=https://campusguardweb.vercel.app
 AppSupportURL=https://campusguardweb.vercel.app
 PrivilegesRequired=lowest
-DefaultDirName={autopf}\CampusGuard Server
+DefaultDirName={localappdata}\Programs\CampusGuard Server
 DefaultGroupName=CampusGuard Server
 DisableProgramGroupPage=yes
 LicenseFile=terms.txt
@@ -40,7 +40,7 @@ Name: "{userappdata}\CampusGuard\CampusGuard\footage"; Flags: uninsneveruninstal
 [Files]
 ; Keep the existing PyInstaller runtime, but omit detector/pose/fight model files.
 ; Schools must provide weights they are licensed to use.
-Source: "..\dist\CampusGuard\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "models\*;_internal\models\*"
+Source: "..\dist\CampusGuard\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "models\*;models\*\*;_internal\models\*;_internal\models\*\*"
 
 [Icons]
 Name: "{autoprograms}\CampusGuard Server Status"; Filename: "{app}\CampusGuard.exe"; Parameters: "--server-status"; WorkingDir: "{app}"
