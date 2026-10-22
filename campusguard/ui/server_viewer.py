@@ -296,7 +296,7 @@ class ServerViewerPage(QWidget):
             if card is not None:
                 card.set_snapshot(jpeg)
         self._watched = set(data["watched"])
-        self._populate_table(self.incidents_table, data["incidents"])
+        self._populate_table(self.incidents_table, data["incidents"], allow_status_actions=True)
         self._populate_table(self.alerts_table, data["alerts"])
 
     def _sync_camera_cards(self, cameras: list[dict]) -> None:
@@ -319,35 +319,44 @@ class ServerViewerPage(QWidget):
             else:
                 card.set_camera(camera)
 
-    def _populate_table(self, table: QTableWidget, rows: list[dict]) -> None:
+    def _populate_table(
+        self, table: QTableWidget, rows: list[dict], *, allow_status_actions: bool = False
+    ) -> None:
         table.setUpdatesEnabled(False)
         table.setRowCount(len(rows))
         for index, row in enumerate(rows):
             public_id = str(row.get("public_id", ""))
+            try:
+                confidence = float(row.get("confidence", 0) or 0)
+            except (TypeError, ValueError):
+                confidence = 0.0
             values = [public_id, str(row.get("camera_name", "")), str(row.get("event", "")),
-                      f"{float(row.get('confidence', 0) or 0):.0%}", str(row.get("severity", "")),
-                      str(row.get("status", ""))]
+                      f"{confidence:.0%}", str(row.get("severity", "")), str(row.get("status", ""))]
             for col, value in enumerate(values):
                 table.setItem(index, col, QTableWidgetItem(value))
             actions = QWidget(table)
             action_layout = QHBoxLayout(actions)
             action_layout.setContentsMargins(3, 2, 3, 2)
-            status_select = QComboBox(actions)
-            for label, status in (("Confirm", "CONFIRMED"), ("Dismiss", "DISMISSED"),
-                                  ("False alarm", "FALSE_ALARM"), ("Resolve", "RESOLVED")):
-                status_select.addItem(label, status)
-            update_button = QPushButton("Update", actions)
-            update_button.clicked.connect(
-                lambda _checked=False, pid=public_id, combo=status_select:
-                self._update_incident_status(pid, str(combo.currentData()))
-            )
-            action_layout.addWidget(status_select)
-            action_layout.addWidget(update_button)
-            if row.get("has_footage"):
+            if allow_status_actions:
+                status_select = QComboBox(actions)
+                for label, status in (("Confirm", "CONFIRMED"), ("Dismiss", "DISMISSED"),
+                                      ("False alarm", "FALSE_ALARM"), ("Resolve", "RESOLVED")):
+                    status_select.addItem(label, status)
+                update_button = QPushButton("Update", actions)
+                update_button.clicked.connect(
+                    lambda _checked=False, pid=public_id, combo=status_select:
+                    self._update_incident_status(pid, str(combo.currentData()))
+                )
+                action_layout.addWidget(status_select)
+                action_layout.addWidget(update_button)
+            if row.get("has_footage") and public_id:
                 play = QPushButton("Play clip", actions)
                 play.clicked.connect(lambda _checked=False, pid=public_id: self._play_clip(pid))
                 action_layout.addWidget(play)
-            table.setCellWidget(index, 6, actions)
+            if action_layout.count():
+                table.setCellWidget(index, 6, actions)
+            else:
+                table.removeCellWidget(index, 6)
         table.setUpdatesEnabled(True)
 
     def _update_incident_status(self, public_id: str, status: str) -> None:
