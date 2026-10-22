@@ -314,12 +314,30 @@ def run_self_check(result_file: str | None) -> int:
         import torchvision  # noqa: F401
         import ultralytics  # noqa: F401
 
+    def engine() -> None:
+        import numpy as np
+
+        from campusguard.engine.batching import BatchRunner
+        from campusguard.engine.gate import CameraScheduler
+        from campusguard.engine.hardware import detect_hardware, resolve_profile
+
+        profile = resolve_profile("auto", detect_hardware(), 1)
+        plan = CameraScheduler(profile.smart_analysis).plan(np.zeros((90, 160, 3), np.uint8), True, False)
+        if not plan.analyze:
+            raise RuntimeError("engine scheduler did not schedule the first frame")
+        runner = BatchRunner(lambda items: list(items))
+        try:
+            if runner.submit(7) != 7:
+                raise RuntimeError("batch runner returned a wrong result")
+        finally:
+            runner.close()
+
     def vault() -> None:
         import keyring
 
         keyring.get_keyring()
 
-    for name, func in (("fonts", fonts), ("svg", svg), ("models", models), ("ui", ui), ("ai-stack", ai_stack), ("keyring", vault)):
+    for name, func in (("fonts", fonts), ("svg", svg), ("models", models), ("ui", ui), ("ai-stack", ai_stack), ("engine", engine), ("keyring", vault)):
         check(name, func)
 
     message = "OK" if not problems else "FAIL\n" + "\n".join(problems)

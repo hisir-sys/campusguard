@@ -14,6 +14,7 @@ import cv2
 import numpy as np
 import torch
 
+from campusguard.engine.batching import BatchRunner
 from campusguard.model_paths import with_aliases
 from campusguard.model_registry import (
     EnhancedEnsemble,
@@ -30,6 +31,59 @@ Event = tuple[str, float, str]
 # Identical detector/pose weights are shared between camera pipelines. Per-camera
 # tracking and temporal state remain on each VisionPipeline instance.
 _SHARED_YOLO_MODELS: weakref.WeakValueDictionary = weakref.WeakValueDictionary()
+# One batching worker per shared detector (server profile, CUDA only): frames
+# from many cameras are grouped into a single GPU call.
+_DETECTOR_BATCHERS: dict[int, tuple[weakref.ReferenceType, BatchRunner]] = {}
+DETECTOR_MAX_BATCH = 8
+DETECTOR_MAX_WAIT_SECONDS = 0.008
+
+
+def _detector_batcher(model, device) -> BatchRunner:
+    with MODEL_CACHE_LOCK:
+        entry = _DETECTOR_BATCHERS.get(id(model))
+        if entry is not None:
+            ref, runner = entry
+            if ref() is model and runner.usable:
+                return runner
+        for key, (old_ref, old_runner) in list(_DETECTOR_BATCHERS.items()):
+            if old_ref() is None or not old_runner.usable:
+                old_runner.close()
+                del _DETECTOR_BATCHERS[key]
+        model_ref = weakref.ref(model)
+        device_text = str(device)
+
+        def run_batch(frames: list) -> list:
+            target = model_ref()
+            if target is None:
+                raise RuntimeError("detector was released")
+            results: list = [None] * len(frames)
+            groups: dict[tuple, list[int]] = {}
+            for index, frame in enumerate(frames):
+                groups.setdefault(frame.shape, []).append(index)
+            with model_inference_lock(target):
+                for indexes in groups.values():
+                    batch_results = target.predict(
+                        [frames[i] for i in indexes],
+                        classes=[0],
+                        conf=PERSON_DETECTION_CONFIDENCE,
+                        device=device_text,
+                        verbose=False,
+                    )
+                    if len(batch_results) != len(indexes):
+                        raise RuntimeError("detector returned an unexpected batch size")
+                    for index, result in zip(indexes, batch_results):
+                        results[index] = result
+            return results
+
+        runner = BatchRunner(
+            run_batch,
+            max_batch=DETECTOR_MAX_BATCH,
+            max_wait=DETECTOR_MAX_WAIT_SECONDS,
+            alive=lambda: model_ref() is not None,
+            name="campusguard-detector-batch",
+        )
+        _DETECTOR_BATCHERS[id(model)] = (model_ref, runner)
+        return runner
 
 
 def resolve_model_path(value: str) -> Path:
@@ -208,6 +262,8 @@ class VisionPipeline:
         self.settings = settings
         self.detector = None
         self.pose_model = None
+        # Set by the engine (server profile): batch person detection across cameras.
+        self.batch_detector = False
         self.device = self._select_device(settings.device)
         self.classifiers: dict[str, VideoClassifier] = {}
         self.ensemble: EnhancedEnsemble | None = None
@@ -491,6 +547,19 @@ class VisionPipeline:
         self.last_process_fps = 1.0 / max(perf_counter() - process_started, 1e-6)
         return annotated, state, confidence, event
 
+    @property
+    def fight_model_ready(self) -> bool:
+        key = self.settings.violence_model
+        model = self._selected_model("fdsc_mc3" if key == "enhanced" else key)
+        return model is not None and model.ready
+
+    def enter_idle(self) -> None:
+        """Quiet scene: drop all temporal state so the next movement starts clean."""
+        self._reset_tracking_state()
+        self._clear_involvement([])
+        self.cached_people.clear()
+        self.last_state, self.last_confidence = "NORMAL", None
+
     def render_cached(
         self,
         frame: np.ndarray,
@@ -593,15 +662,22 @@ class VisionPipeline:
         # would mix identities between cameras if detector weights were shared.
         # Run stateless detection and keep fallback tracking inside this camera's
         # VisionPipeline instead.
-        with model_inference_lock(self.detector):
-            results = self.detector.predict(
-                annotated,
-                classes=[0],
-                conf=PERSON_DETECTION_CONFIDENCE,
-                device=str(self.device),
-                verbose=False,
-            )
-        if not results or results[0].boxes is None:
+        results = None
+        if self.batch_detector and self.device.type == "cuda":
+            try:
+                results = [_detector_batcher(self.detector, self.device).submit(annotated)]
+            except Exception:
+                results = None  # fall back to a direct call below
+        if results is None:
+            with model_inference_lock(self.detector):
+                results = self.detector.predict(
+                    annotated,
+                    classes=[0],
+                    conf=PERSON_DETECTION_CONFIDENCE,
+                    device=str(self.device),
+                    verbose=False,
+                )
+        if not results or results[0] is None or results[0].boxes is None:
             return []
 
         boxes = results[0].boxes

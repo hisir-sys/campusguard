@@ -140,3 +140,18 @@ campusguard-desktop/
 ├── requirements.txt
 └── setup_windows.bat
 ```
+## Analysis engine profiles (Lite / Standard / Server)
+
+The app picks a profile automatically from the machine and the number of running cameras:
+
+| Profile | Chosen when | Behaviour |
+|---|---|---|
+| Lite | no GPU and ≤4 CPU cores or <8 GB RAM | motion gate, light analysis |
+| Standard | normal PC, or a GPU PC with ≤16 cameras | motion gate |
+| Server | NVIDIA GPU and more than 16 cameras | motion gate, analysis at ≤960 px wide, GPU-batched person detection, capped evidence pre-buffer, preview ≤10 fps |
+
+**Smart analysis (all profiles):** every camera runs a tiny motion check; the detector, pose and fight models only run while the scene is moving (plus a 5–6 s hangover, and whenever an event or recording is in progress). Unclear cases count as motion, so the gate can only add analysis, never skip it. When a camera cannot keep up, its analysis stride rises (2 → up to 4) and returns to 2 when load drops.
+
+Override (optional): set `CAMPUSGUARD_PROFILE=lite|standard|server` and/or `CAMPUSGUARD_SMART_ANALYSIS=0`, or put `{"profile": "server", "smart_analysis": true}` in `engine.json` inside the CampusGuard app-data folder.
+
+For many cameras, enter each camera's low-resolution *sub-stream* RTSP address (typically 640×360) instead of the main stream, and use the CUDA build of PyTorch on the server.

@@ -23,6 +23,8 @@ class FightFootageRecorder:
         self.frame_size: tuple[int, int] | None = None
         self.fps = 25.0
         self.prebuffer: deque[np.ndarray] = deque(maxlen=60)
+        # Optional memory cap for the lead-in (server profile, many cameras).
+        self.max_prebuffer_bytes: int | None = None
 
     @property
     def active(self) -> bool:
@@ -52,6 +54,10 @@ class FightFootageRecorder:
                 self.prebuffer = deque(self.prebuffer, maxlen=target)
         if frame is not None and frame.size:
             self.prebuffer.append(frame.copy())
+            if self.max_prebuffer_bytes:
+                keep = max(2, int(self.max_prebuffer_bytes // max(1, frame.nbytes)))
+                while len(self.prebuffer) > keep:
+                    self.prebuffer.popleft()
 
         if event_started and not self.active:
             self._start(frame, source_fps)

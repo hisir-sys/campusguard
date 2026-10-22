@@ -10,6 +10,14 @@ from PySide6.QtCore import QObject, QThread, QTimer, Signal
 from PySide6.QtGui import QImage
 
 from campusguard.ai_pipeline import VisionPipeline
+from campusguard.engine.gate import CameraScheduler
+from campusguard.engine.hardware import (
+    detect_hardware,
+    read_engine_override,
+    resolve_profile,
+    smart_analysis_enabled,
+)
+from campusguard.engine.registry import ACTIVE_CAMERAS
 from campusguard.footage import FightFootageRecorder
 from campusguard.storage import application_data_dir
 from campusguard.credentials import CredentialVault
@@ -223,6 +231,7 @@ class RuntimeOptions:
         self._settings = settings
         self._ai_enabled = ai_enabled
         self._source_fps = 30.0
+        self._preview_enabled = True
 
     def snapshot(self) -> tuple[AppSettings, bool]:
         with self._lock:
@@ -240,6 +249,15 @@ class RuntimeOptions:
         with self._lock:
             if fps > 0:
                 self._source_fps = float(fps)
+
+    def set_preview_enabled(self, enabled: bool) -> None:
+        with self._lock:
+            self._preview_enabled = bool(enabled)
+
+    @property
+    def preview_enabled(self) -> bool:
+        with self._lock:
+            return self._preview_enabled
 
     @property
     def source_fps(self) -> float:
@@ -394,6 +412,9 @@ class FrameAnalysisThread(QThread):
     event_detected = Signal(str, float, str)
     footage_saved = Signal(str)
 
+    PROFILE_REFRESH_SECONDS = 5.0
+    BUSY_STATES = frozenset({"FIGHT DETECTED", "POSSIBLE ALTERCATION"})
+
     def __init__(
         self,
         mailbox: LatestFrameMailbox,
@@ -406,12 +427,23 @@ class FrameAnalysisThread(QThread):
         self.footage_recorder = FightFootageRecorder(
             footage_dir or (application_data_dir() / "footage")
         )
-
     def run(self) -> None:
+        ACTIVE_CAMERAS.enter()
+        try:
+            self._run_analysis()
+        finally:
+            ACTIVE_CAMERAS.leave()
+
+    def _run_analysis(self) -> None:
         latest_sequence = 0
-        analysis_frame_index = 0
         last_state = "MODEL NOT LOADED"
         last_confidence = None
+        last_preview = 0.0
+        next_profile_check = 0.0
+        preview_interval = 0.0
+        max_width: int | None = None
+        engine_dir = application_data_dir()
+        scheduler = CameraScheduler()
 
         def report_model_status(component: str, message: str) -> None:
             self.model_status.emit(component, message)
@@ -431,49 +463,112 @@ class FrameAnalysisThread(QThread):
                 continue
             latest_sequence = sequence
             settings, camera_ai_enabled = self.options.snapshot()
+            now = time.monotonic()
 
             try:
-                analysis_frame_index += 1
-                should_analyze = (
+                if now >= next_profile_check:
+                    # Re-evaluated regularly: the camera count (and so the
+                    # automatic profile) changes as cameras are added.
+                    next_profile_check = now + self.PROFILE_REFRESH_SECONDS
+                    profile = resolve_profile(
+                        read_engine_override(engine_dir),
+                        detect_hardware(),
+                        ACTIVE_CAMERAS.count,
+                    )
+                    scheduler.configure(
+                        smart_analysis_enabled(engine_dir) and profile.smart_analysis,
+                        profile.motion_hangover_s,
+                        profile.gate_hz,
+                    )
+                    max_width = profile.max_analysis_width
+                    preview_interval = (
+                        1.0 / profile.preview_max_fps if profile.preview_max_fps > 0 else 0.0
+                    )
+                    self.footage_recorder.max_prebuffer_bytes = profile.prebuffer_bytes
+                    if pipeline is not None:
+                        pipeline.batch_detector = profile.batch_detector
+
+                # Analysis may run on a smaller copy (server profile); evidence
+                # footage below always uses the original full-resolution frame.
+                # The copy is made lazily: most frames of a quiet camera need none.
+                analysis_cache: list = []
+
+                def analysis_frame_for():
+                    if not analysis_cache:
+                        if max_width and frame.shape[1] > max_width:
+                            scale = max_width / float(frame.shape[1])
+                            analysis_cache.append(
+                                cv2.resize(
+                                    frame,
+                                    (max_width, max(1, int(round(frame.shape[0] * scale)))),
+                                    interpolation=cv2.INTER_AREA,
+                                )
+                            )
+                        else:
+                            analysis_cache.append(frame)
+                    return analysis_cache[0]
+
+                gate_allowed = (
                     pipeline is not None
-                    and (analysis_frame_index == 1 or analysis_frame_index % 2 == 0)
+                    and camera_ai_enabled
+                    and last_state != "MODEL ERROR"
+                    and pipeline.fight_model_ready
                 )
+                busy = last_state in self.BUSY_STATES or self.footage_recorder.active
+                plan = scheduler.plan(frame, gate_allowed, busy)
+                want_preview = self.options.preview_enabled and (
+                    preview_interval <= 0.0 or now - last_preview >= preview_interval
+                )
+                processed = None
 
                 if pipeline is None:
                     processed = frame.copy()
                     state = "MODEL NOT LOADED"
                     confidence = None
                     event = None
-                elif should_analyze:
+                elif not plan.active:
+                    # Quiet scene: no detector / pose / fight model work at all.
+                    if plan.entered_idle:
+                        pipeline.enter_idle()
+                    last_state, last_confidence = "NORMAL", None
+                    state, confidence, event = "NORMAL", None, None
+                    if want_preview:
+                        processed = pipeline.render_cached(analysis_frame_for(), state, confidence)
+                elif plan.analyze:
+                    started = time.monotonic()
                     processed, state, confidence, event = pipeline.process(
-                        frame,
+                        analysis_frame_for(),
                         settings,
                         camera_ai_enabled,
                         settings.tracking_enabled,
                         settings.pose_enabled,
                     )
+                    scheduler.record(time.monotonic() - started)
                     last_state = state
                     last_confidence = confidence
                 else:
                     state = last_state
                     confidence = last_confidence
                     event = None
-                    processed = pipeline.render_cached(
-                        frame,
-                        state,
-                        confidence,
-                    )
+                    if want_preview:
+                        processed = pipeline.render_cached(
+                            analysis_frame_for(),
+                            state,
+                            confidence,
+                        )
 
-                rgb = cv2.cvtColor(processed, cv2.COLOR_BGR2RGB)
-                height, width = rgb.shape[:2]
-                image = QImage(
-                    rgb.data,
-                    width,
-                    height,
-                    int(rgb.strides[0]),
-                    QImage.Format.Format_RGB888,
-                ).copy()
-                self.frame_ready.emit(image, state, confidence)
+                if processed is not None and want_preview:
+                    last_preview = now
+                    rgb = cv2.cvtColor(processed, cv2.COLOR_BGR2RGB)
+                    height, width = rgb.shape[:2]
+                    image = QImage(
+                        rgb.data,
+                        width,
+                        height,
+                        int(rgb.strides[0]),
+                        QImage.Format.Format_RGB888,
+                    ).copy()
+                    self.frame_ready.emit(image, state, confidence)
 
                 finished_footage = self.footage_recorder.update(
                     frame,
@@ -760,6 +855,12 @@ class CameraManager(QObject):
         self._settings = settings
         for session in self._sessions.values():
             session.options.update_settings(settings)
+
+    def set_camera_preview(self, camera_id: str, enabled: bool) -> None:
+        """Stop/resume sending live frames to the UI for a camera nobody is watching."""
+        session = self._sessions.get(camera_id)
+        if session is not None:
+            session.options.set_preview_enabled(enabled)
 
     def set_camera_ai(self, camera_id: str, enabled: bool) -> None:
         session = self._sessions.get(camera_id)
