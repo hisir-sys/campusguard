@@ -35,6 +35,7 @@ def render(app: QApplication, output: Path, theme: str, count: int) -> float:
     set_icon_theme(theme)
     page = ServerViewerPage(lambda: (_ for _ in ()).throw(RuntimeError("Rendering never contacts a server.")))
     apply_theme(page, theme)
+    page._closing = True  # suppress showEvent polling; rendering never contacts a server
     banner = QLabel("UI RENDER TEST  ·  SYNTHETIC FIXTURES  ·  NOT LIVE CAMERA DATA")
     banner.setAlignment(Qt.AlignmentFlag.AlignCenter)
     banner.setWordWrap(True)

@@ -19,8 +19,8 @@ for package in ("cv2", "torch", "torchvision", "ultralytics", "pytorchvideo", "k
     binaries += package_binaries
     hiddenimports += package_hidden
 
-# The app only uses QtCore, QtGui, QtWidgets and QtSvg. PySide6's own PyInstaller
-# hooks bundle exactly the modules that are imported (plus their plugins), so we
+# The app uses QtCore, QtGui, QtWidgets, QtSvg and QtMultimedia for clip playback.
+# PySide6's own PyInstaller hooks bundle exactly the imported modules and plugins, so we
 # no longer use collect_all("PySide6"), which copied every Qt module.
 excludes = [
     "PySide6.QtWebEngineCore", "PySide6.QtWebEngineWidgets", "PySide6.QtWebEngineQuick",
