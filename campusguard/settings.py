@@ -20,6 +20,8 @@ class AppSettings:
     violence_model: str = "fdsc_mc3"
     device: str = "auto"
     fight_positive_class: int = 0
+    connection_mode: str = "local"
+    server_address: str = ""
 
     @classmethod
     def from_dict(cls, values: dict[str, Any]) -> "AppSettings":
@@ -49,6 +51,8 @@ class AppSettings:
             ),
             device=candidate.device if candidate.device in {"auto", "cpu", "cuda"} else "auto",
             fight_positive_class=0 if int(candidate.fight_positive_class) == 0 else 1,
+            connection_mode=candidate.connection_mode if candidate.connection_mode in {"local", "server"} else "local",
+            server_address=str(candidate.server_address).strip()[:2048],
         )
 
     def to_dict(self) -> dict[str, Any]:

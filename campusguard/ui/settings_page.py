@@ -12,6 +12,8 @@ from PySide6.QtWidgets import (
     QLabel,
     QScrollArea,
     QSpinBox,
+    QLineEdit,
+    QPushButton,
     QVBoxLayout,
     QWidget,
 )
@@ -48,6 +50,8 @@ class SettingsSection(QFrame):
 
 class SettingsPage(QWidget):
     settings_changed = Signal(object)
+    server_connection_test_requested = Signal(str, str)
+    server_token_changed = Signal(str)
 
     def __init__(self, settings: AppSettings, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -200,6 +204,45 @@ class SettingsPage(QWidget):
         content_layout.addWidget(appearance_section)
 
         # ------------------------------------------------------------------
+        # CONNECTION MODE
+        # ------------------------------------------------------------------
+        connection_section = SettingsSection(
+            "CONNECTION MODE",
+            "Local mode keeps using this PC. Server mode connects to a school server over HTTP or HTTPS. Prefer HTTPS or a trusted school LAN/VPN.",
+        )
+        connection_form = QFormLayout()
+        connection_form.setHorizontalSpacing(24)
+        connection_form.setVerticalSpacing(12)
+        self.connection_mode_input = QComboBox()
+        self.connection_mode_input.addItem("Local PC", "local")
+        self.connection_mode_input.addItem("School server", "server")
+        self.connection_mode_input.setCurrentIndex(max(0, self.connection_mode_input.findData(settings.connection_mode)))
+        self.server_address_input = QLineEdit(settings.server_address)
+        self.server_address_input.setPlaceholderText("https://school-server:8765")
+        self.server_token_input = QLineEdit()
+        self.server_token_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.server_token_input.setPlaceholderText("Stored securely in Windows Credential Manager")
+        self.test_server_button = QPushButton("Test connection")
+        self.connection_test_status = QLabel("Local mode does not contact a server.")
+        self.connection_test_status.setWordWrap(True)
+        self.connection_test_status.setProperty("muted", True)
+        connection_form.addRow("Connection mode", self.connection_mode_input)
+        connection_form.addRow("Server address", self.server_address_input)
+        connection_form.addRow("Server token", self.server_token_input)
+        connection_form.addRow("", self.test_server_button)
+        connection_section.body.addLayout(connection_form)
+        connection_section.body.addWidget(self.connection_test_status)
+        content_layout.addWidget(connection_section)
+        self.connection_mode_input.currentIndexChanged.connect(self._emit_settings)
+        self.server_address_input.editingFinished.connect(self._emit_settings)
+        self.server_token_input.textEdited.connect(self.server_token_changed.emit)
+        self.test_server_button.clicked.connect(
+            lambda: self.server_connection_test_requested.emit(
+                self.server_address_input.text().strip(), self.server_token_input.text()
+            )
+        )
+
+        # ------------------------------------------------------------------
         # SYSTEM STATUS
         # ------------------------------------------------------------------
         status_section = SettingsSection(
@@ -322,6 +365,8 @@ class SettingsPage(QWidget):
             violence_model="fdsc_mc3",
             device=str(self.device_input.currentData()),
             fight_positive_class=self._initial_settings.fight_positive_class,
+            connection_mode=str(self.connection_mode_input.currentData()),
+            server_address=self.server_address_input.text().strip(),
         )
 
         self._refresh_status_cards()
@@ -352,5 +397,14 @@ class SettingsPage(QWidget):
             self.theme_input.setCurrentIndex(index)
             self.theme_input.blockSignals(False)
 
+    def set_server_token(self, token: str) -> None:
+        self.server_token_input.setText(token)
+
+    def set_connection_test_result(self, message: str, success: bool = False) -> None:
+        self.connection_test_status.setText(message)
+        self.connection_test_status.setProperty("connectionOk", bool(success))
+        self.connection_test_status.style().unpolish(self.connection_test_status)
+        self.connection_test_status.style().polish(self.connection_test_status)
+
     def set_saved(self) -> None:
-        self.save_label.setText("Saved to the local database.")
+        self.save_label.setText("Changes saved locally.")
