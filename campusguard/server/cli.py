@@ -57,17 +57,13 @@ def _ensure_console() -> None:
 
 def _server_login_gui() -> int:
     from PySide6.QtCore import QObject, QThread, Signal, Slot
-    from PySide6.QtWidgets import QApplication, QDialog, QFormLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout
+    from PySide6.QtWidgets import QDialog, QFormLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout
     from campusguard import auth
 
-    app = _prepare_qt(True)
+    _prepare_qt(True)
 
     class LoginDialog(QDialog):
         worker_running = False
-
-        def reject(self):
-            if not self.worker_running:
-                super().reject()
 
         def closeEvent(self, event):
             if self.worker_running:
