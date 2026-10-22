@@ -33,7 +33,7 @@ def test_viewer_handles_zero_five_and_120_camera_cards(app):
     for count in (0, 5, 120):
         page._sync_camera_cards([fixture_camera(i + 1) for i in range(count)])
         assert len(page._cards) == count
-        assert page.empty_cameras_label.isVisible() is (count == 0)
+        assert page.empty_cameras_label.isHidden() is (count != 0)
         app.processEvents()
     page.shutdown()
     page.close()
