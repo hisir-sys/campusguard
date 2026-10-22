@@ -126,6 +126,9 @@ def test_add_list_remove_camera_with_credentials(env):
 
 
 def test_bulk_import_staggers_camera_start(env):
+    # Use a wider interval than the assertion window so a slow CI runner cannot
+    # advance into the second batch before the first-batch assertion.
+    env.host._start_timer.setInterval(1200)
     rows = "name,address\n" + "".join(f"Cam {i},rtsp://10.1.0.{i}/s2\n" for i in range(1, 11)) + "Bad,http://x\n"
     status, body = env.call("POST", "/cameras/import", raw=rows.encode())
     assert status == 200 and body["added"] == 10 and len(body["errors"]) == 1

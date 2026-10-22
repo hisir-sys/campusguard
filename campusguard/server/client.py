@@ -120,6 +120,10 @@ class RemoteServerClient:
             except (socket.timeout, TimeoutError):
                 if attempt + 1 >= attempts:
                     raise ServerConnectionError("The server connection timed out. Retrying automatically in the background.") from None
+            except OSError:
+                # Some Windows socket failures escape urllib as raw OSError subclasses.
+                if attempt + 1 >= attempts:
+                    raise ServerConnectionError("The server is unreachable or is not accepting connections. Retrying automatically in the background.") from None
             if attempt + 1 < attempts:
                 time.sleep(0.25 * (2 ** attempt))
         raise ServerConnectionError("The server is unreachable.")
