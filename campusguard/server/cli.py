@@ -65,6 +65,10 @@ def _server_login_gui() -> int:
     class LoginDialog(QDialog):
         worker_running = False
 
+        def reject(self):
+            if not self.worker_running:
+                super().reject()
+
         def closeEvent(self, event):
             if self.worker_running:
                 event.ignore()
