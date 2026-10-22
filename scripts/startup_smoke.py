@@ -9,6 +9,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 # Executing a script by path places its folder (scripts/) first on sys.path.
 # Add the repository root so imports behave the same as running from the project.
 if str(ROOT) not in sys.path:
