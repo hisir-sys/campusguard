@@ -198,10 +198,11 @@ For many cameras, enter each camera's low-resolution *sub-stream* RTSP address (
 One program, two ways to run it. The desktop app is unchanged. Server mode runs every camera with no window, records incidents and clips, and serves a token-protected API for viewers.
 
 ```
-CampusGuard.exe --server-login      # once, as the Windows user that will run the server (same website account)
+CampusGuard.exe --server-login      # sign in as the Windows user that will run the server
 CampusGuard.exe --server            # run in this console (Ctrl+C stops it)
 CampusGuard.exe --install-task      # start automatically at boot, restart on failure (asks for the Windows password)
-CampusGuard.exe --show-token        # print the address and access token
+CampusGuard.exe --show-token        # opens a masked token window in the windowed app; prints only from a console
+CampusGuard.exe --server-status     # open the local server status window
 CampusGuard.exe --remove-task
 ```
 
