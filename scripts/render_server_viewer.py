@@ -5,8 +5,14 @@ The generated screenshots are explicitly marked as synthetic UI fixtures, never 
 from __future__ import annotations
 
 import argparse
+import sys
 import time
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+# Running a script by file path sets scripts/ as sys.path[0], not the repo root.
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QLabel
