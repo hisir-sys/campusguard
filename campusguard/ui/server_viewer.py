@@ -9,8 +9,13 @@ from typing import Callable
 
 from PySide6.QtCore import QThread, QTimer, Qt, QUrl, Signal
 from PySide6.QtGui import QImage, QPixmap
-from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
-from PySide6.QtMultimediaWidgets import QVideoWidget
+try:  # Multimedia can be missing or fail to load; never let that stop the app starting.
+    from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
+    from PySide6.QtMultimediaWidgets import QVideoWidget
+    MULTIMEDIA_AVAILABLE = True
+except Exception:  # pragma: no cover - depends on the Qt install
+    QAudioOutput = QMediaPlayer = QVideoWidget = None  # type: ignore[assignment,misc]
+    MULTIMEDIA_AVAILABLE = False
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
     QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QScrollArea,
@@ -362,17 +367,24 @@ class ServerViewerPage(QWidget):
     def _update_incident_status(self, public_id: str, status: str) -> None:
         self._run(lambda: self._client_provider().set_incident_status(public_id, status), lambda _result: self.refresh())
 
-    def _ensure_media_player(self) -> None:
+    def _ensure_media_player(self) -> bool:
         if self._player is not None:
-            return
-        self.video_widget = QVideoWidget(self)
-        self.video_widget.setMinimumHeight(180)
-        self.video_widget.setMaximumHeight(300)
-        self._root_layout.addWidget(self.video_widget)
-        self._audio = QAudioOutput(self)
-        self._player = QMediaPlayer(self)
-        self._player.setAudioOutput(self._audio)
-        self._player.setVideoOutput(self.video_widget)
+            return True
+        if not MULTIMEDIA_AVAILABLE:
+            return False
+        try:
+            video_widget = QVideoWidget(self)
+            video_widget.setMinimumHeight(180)
+            video_widget.setMaximumHeight(300)
+            audio = QAudioOutput(self)
+            player = QMediaPlayer(self)
+            player.setAudioOutput(audio)
+            player.setVideoOutput(video_widget)
+        except Exception:
+            return False
+        self._root_layout.addWidget(video_widget)
+        self.video_widget, self._audio, self._player = video_widget, audio, player
+        return True
 
     def _play_clip(self, public_id: str) -> None:
         destination = Path(tempfile.gettempdir()) / f"campusguard-{uuid.uuid4().hex}.mp4"
@@ -380,7 +392,9 @@ class ServerViewerPage(QWidget):
         def success(path: object) -> None:
             clip_path = Path(path)
             self._clip_paths.add(clip_path)
-            self._ensure_media_player()
+            if not self._ensure_media_player():
+                self.connection_status.setText("Video playback is unavailable on this PC. The clip was downloaded to: " + str(clip_path))
+                return
             assert self.video_widget is not None and self._player is not None
             self.video_widget.show()
             self._player.setSource(QUrl.fromLocalFile(str(clip_path)))

@@ -1100,7 +1100,22 @@ class MainWindow(QMainWindow):
             self.settings_page.set_connection_test_result(
                 f"Connected to CampusGuard server {status.get('version', '')}. Camera count: {cameras.get('total', 'unknown')}.", True
             )
-        self._run(work, success, lambda error: self.settings_page.set_connection_test_result(str(error), False))
+        self._run_background(work, success, lambda error: self.settings_page.set_connection_test_result(str(error), False))
+
+    def _run_background(self, operation, on_success, on_failure) -> None:
+        """Run a blocking call on a worker thread and deliver the result on the UI thread."""
+        from campusguard.ui.server_viewer import _ServerTask
+
+        busy = getattr(self, "_bg_task", None)
+        if busy is not None and busy.isRunning():
+            return
+        task = _ServerTask(operation, self)
+        task.succeeded.connect(on_success)
+        task.failed.connect(on_failure)
+        task.finished.connect(lambda: setattr(self, "_bg_task", None))
+        task.finished.connect(task.deleteLater)
+        self._bg_task = task
+        task.start()
 
     def _connect_camera_manager(self) -> None:
         self.camera_manager.camera_status_changed.connect(self._on_camera_status)
