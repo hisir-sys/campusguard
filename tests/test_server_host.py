@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-from PySide6.QtCore import QCoreApplication, QObject, QTimer, Signal
+from PySide6.QtCore import QCoreApplication, QMetaObject, QObject, Qt, QTimer, Signal
 from PySide6.QtWidgets import QApplication
 
 # Keep one QApplication wrapper alive for the entire pytest process. If the last
@@ -352,7 +352,7 @@ def test_run_server_full_start_serve_and_clean_stop(tmp_path, monkeypatch):
                     connection.close()
             results["client_error"] = last_error
         finally:
-            app.quit()
+            QMetaObject.invokeMethod(app, "quit", Qt.ConnectionType.QueuedConnection)
 
     threading.Thread(target=client, daemon=True).start()
     code = host_module.run_server()
