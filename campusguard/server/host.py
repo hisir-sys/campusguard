@@ -88,6 +88,10 @@ class ServerHost:
         self._snapshot_lock = threading.Lock()
         self._snapshots: dict[str, tuple[float, bytes]] = {}
         self._snapshot_watchers: dict[str, float] = {}
+        # Multiple desktops may view the same camera at once. Keep live-stream
+        # leases separate from low-rate overview snapshot leases.
+        self._stream_watchers: dict[str, int] = {}
+        self._stream_last_seen: dict[str, float] = {}
         self._snapshot_watchdog = QTimer()
         self._snapshot_watchdog.setInterval(2000)
         self._snapshot_watchdog.timeout.connect(self._expire_snapshot_watchers)
@@ -99,18 +103,41 @@ class ServerHost:
         if not jpeg or len(jpeg) > 512 * 1024:
             return
         with self._snapshot_lock:
-            if camera_id not in self._snapshot_watchers:
+            if camera_id not in self._snapshot_watchers and camera_id not in self._stream_watchers:
                 return
             self._snapshots[camera_id] = (time.monotonic(), bytes(jpeg))
 
     def _expire_snapshot_watchers(self) -> None:
         now = time.monotonic()
         with self._snapshot_lock:
-            expired = [camera_id for camera_id, seen in self._snapshot_watchers.items() if now - seen > 10.0]
-            for camera_id in expired:
+            expired_overview = [
+                camera_id for camera_id, seen in self._snapshot_watchers.items()
+                if now - seen > 10.0
+            ]
+            for camera_id in expired_overview:
                 self._snapshot_watchers.pop(camera_id, None)
+            expired_streams = [
+                camera_id for camera_id, seen in self._stream_last_seen.items()
+                if now - seen > 10.0
+            ]
+            for camera_id in expired_streams:
+                self._stream_last_seen.pop(camera_id, None)
+                self._stream_watchers.pop(camera_id, None)
+            candidates = set(expired_overview) | set(expired_streams)
+            disable = [
+                camera_id for camera_id in candidates
+                if camera_id not in self._snapshot_watchers
+                and camera_id not in self._stream_watchers
+            ]
+            reset_rate = [
+                camera_id for camera_id in candidates
+                if camera_id not in self._stream_watchers
+            ]
+            for camera_id in disable:
                 self._snapshots.pop(camera_id, None)
-        for camera_id in expired:
+        for camera_id in reset_rate:
+            self.manager.set_camera_snapshot_rate(camera_id, 2.0)
+        for camera_id in disable:
             self.manager.set_camera_snapshot(camera_id, False)
 
     def snapshot_bytes(self, camera_id: str) -> bytes | None:
@@ -271,8 +298,39 @@ class HostBackend:
                     self.host._snapshot_watchers[camera_id] = time.monotonic()
                 else:
                     self.host._snapshot_watchers.pop(camera_id, None)
+                keep_enabled = enabled or camera_id in self.host._stream_watchers
+                if not keep_enabled:
                     self.host._snapshots.pop(camera_id, None)
-            self.host.manager.set_camera_snapshot(camera_id, enabled)
+            self.host.manager.set_camera_snapshot(camera_id, keep_enabled)
+        self._on_qt(work)
+
+    def begin_camera_stream(self, camera_id: str) -> None:
+        def work() -> None:
+            self._require(camera_id)
+            now = time.monotonic()
+            with self.host._snapshot_lock:
+                self.host._stream_watchers[camera_id] = self.host._stream_watchers.get(camera_id, 0) + 1
+                self.host._stream_last_seen[camera_id] = now
+            self.host.manager.set_camera_snapshot_rate(camera_id, 10.0)
+            self.host.manager.set_camera_snapshot(camera_id, True)
+        self._on_qt(work)
+
+    def end_camera_stream(self, camera_id: str) -> None:
+        def work() -> None:
+            with self.host._snapshot_lock:
+                count = self.host._stream_watchers.get(camera_id, 0)
+                if count <= 1:
+                    self.host._stream_watchers.pop(camera_id, None)
+                    self.host._stream_last_seen.pop(camera_id, None)
+                    remaining = 0
+                else:
+                    remaining = count - 1
+                    self.host._stream_watchers[camera_id] = remaining
+                keep_enabled = remaining > 0 or camera_id in self.host._snapshot_watchers
+                if not keep_enabled:
+                    self.host._snapshots.pop(camera_id, None)
+            self.host.manager.set_camera_snapshot_rate(camera_id, 10.0 if remaining > 0 else 2.0)
+            self.host.manager.set_camera_snapshot(camera_id, keep_enabled)
         self._on_qt(work)
 
     def set_camera_snapshot_rate(self, camera_id: str, fps: float) -> None:
@@ -285,8 +343,8 @@ class HostBackend:
         # Streaming handlers run on HTTP worker threads; refreshing this lease
         # only touches the protected watcher map and must not block the Qt loop.
         with self.host._snapshot_lock:
-            if camera_id in self.host._snapshot_watchers:
-                self.host._snapshot_watchers[camera_id] = time.monotonic()
+            if camera_id in self.host._stream_watchers:
+                self.host._stream_last_seen[camera_id] = time.monotonic()
 
     def camera_snapshot(self, camera_id: str) -> bytes | None:
         self._require(camera_id)
