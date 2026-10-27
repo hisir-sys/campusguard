@@ -60,6 +60,7 @@ class _LiveFeedDialog(QDialog):
         self._last_image: QImage | None = None
         self.setWindowTitle(f"CampusGuard Live · {camera.get('name', camera.get('camera_id', 'Camera'))}")
         self.resize(1200, 760)
+        self.setWindowState(self.windowState() | Qt.WindowState.WindowMaximized)
         layout = QVBoxLayout(self)
         header = QHBoxLayout()
         title = QLabel(f"{camera.get('name', 'Camera')}  ·  {camera.get('camera_id', '')}")
@@ -107,7 +108,7 @@ class _LiveFeedDialog(QDialog):
 
     def closeEvent(self, event) -> None:
         self._worker.requestInterruption()
-        self._worker.wait(8000)
+        self._worker.wait(12000)
         super().closeEvent(event)
 
 
