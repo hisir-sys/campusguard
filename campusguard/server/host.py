@@ -142,6 +142,14 @@ class ServerHost:
         camera = self.cameras.get(camera_id)
         if camera is None:
             return
+        if event == "UPDATE":
+            public_id = self.recorder.update_assessment(camera_id, confidence)
+            if public_id:
+                log.info(
+                    "incident %s peak confidence updated to %.0f%% on %s",
+                    public_id, confidence * 100, camera.name,
+                )
+            return
         cooldown = self.repository.get_settings().alert_cooldown_seconds
         incident = self.recorder.record_event(camera, event, confidence, cooldown)
         if incident is not None:
