@@ -7,3 +7,4 @@ torchvision>=0.24
 ultralytics>=8.4
 keyring>=25.5
 pytorchvideo>=0.1.5
+pytest>=8.0
