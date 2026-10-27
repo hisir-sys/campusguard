@@ -135,15 +135,17 @@ def test_add_list_remove_camera_with_credentials(env):
 
 
 def test_bulk_import_staggers_camera_start(env):
-    # Use a wider interval than the assertion window so a slow CI runner cannot
-    # advance into the second batch before the first-batch assertion.
-    env.host._start_timer.setInterval(1200)
+    # Keep the first-batch assertion deterministic even if importing ten cameras
+    # takes longer than one production timer interval on a busy CI runner.
+    env.host._start_timer.setInterval(5000)
     rows = "name,address\n" + "".join(f"Cam {i},rtsp://10.1.0.{i}/s2\n" for i in range(1, 11)) + "Bad,http://x\n"
     status, body = env.call("POST", "/cameras/import", raw=rows.encode())
     assert status == 200 and body["added"] == 10 and len(body["errors"]) == 1
     assert len(env.repo.list_cameras()) == 10
-    pump(env.app, 0.7)  # the production start queue ticks every 600 ms
+    pump(env.app, 0.2)
     assert 0 < len(env.manager.started) <= 4                    # first batch only
+    # Restore the production cadence and drain the remaining batches.
+    env.host._start_timer.setInterval(START_INTERVAL_MS)
     pump(env.app, 2.2)
     assert sorted(env.manager.started) == sorted(c.camera_id for c in env.repo.list_cameras())
 
