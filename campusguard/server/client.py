@@ -185,7 +185,7 @@ class RemoteServerClient:
                 headers: dict[str, str] = {}
                 while True:
                     line = response.readline()
-                    if not line or line in (b"\\r\\n", b"\\n"):
+                    if not line or line in (b"\r\n", b"\n"):
                         break
                     key, separator, value = line.decode("ascii", errors="ignore").partition(":")
                     if separator:
