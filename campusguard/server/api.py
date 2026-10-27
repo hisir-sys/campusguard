@@ -212,10 +212,10 @@ class _Handler(BaseHTTPRequestHandler):
                 jpeg = self.backend.camera_snapshot(camera_id)
                 if jpeg and jpeg != last_jpeg and len(jpeg) <= MAX_SNAPSHOT_BYTES:
                     self.wfile.write(
-                        b"--frame\\r\\n"
-                        b"Content-Type: image/jpeg\\r\\n"
-                        + f"Content-Length: {len(jpeg)}\\r\\n\\r\\n".encode("ascii")
-                        + jpeg + b"\\r\\n"
+                        b"--frame\r\n"
+                        b"Content-Type: image/jpeg\r\n"
+                        + f"Content-Length: {len(jpeg)}\r\n\r\n".encode("ascii")
+                        + jpeg + b"\r\n"
                     )
                     self.wfile.flush()
                     last_jpeg = jpeg
