@@ -193,14 +193,14 @@ class _Handler(BaseHTTPRequestHandler):
         enabled = False
         try:
             self.backend.validate_camera_snapshot(camera_id)
-            self.backend.set_camera_snapshot_rate(camera_id, 10.0)
-            self.backend.set_camera_snapshot_enabled(camera_id, True)
+            self.backend.begin_camera_stream(camera_id)
             enabled = True
         except Exception:
             limiter.release(address)
             raise
 
         last_jpeg: bytes | None = None
+        last_frame_at = time.monotonic()
         try:
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
@@ -219,6 +219,10 @@ class _Handler(BaseHTTPRequestHandler):
                     )
                     self.wfile.flush()
                     last_jpeg = jpeg
+                    last_frame_at = time.monotonic()
+                elif time.monotonic() - last_frame_at > 8.0:
+                    # Release stream capacity when a camera stops producing frames.
+                    break
                 time.sleep(0.05)
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
             # Client closed the live view or the network dropped.
@@ -228,8 +232,7 @@ class _Handler(BaseHTTPRequestHandler):
         finally:
             if enabled:
                 try:
-                    self.backend.set_camera_snapshot_enabled(camera_id, False)
-                    self.backend.set_camera_snapshot_rate(camera_id, 2.0)
+                    self.backend.end_camera_stream(camera_id)
                 except Exception:
                     pass
             limiter.release(address)
