@@ -121,6 +121,19 @@ class DecisionTests(unittest.TestCase):
             self.assertIsNone(decision.update("FIGHT DETECTED", 0.90))
         self.assertTrue(decision.event_latched)
 
+    def test_higher_confidence_updates_same_latched_event(self):
+        decision = FightDecision(0.65)
+        self.assertEqual(
+            decision.update("FIGHT DETECTED", 0.80),
+            ("FIGHT DETECTED", 0.80, "HIGH"),
+        )
+        self.assertEqual(
+            decision.update("FIGHT DETECTED", 0.94),
+            ("UPDATE", 0.94, "HIGH"),
+        )
+        self.assertIsNone(decision.update("FIGHT DETECTED", 0.91))
+        self.assertEqual(decision.peak_confidence, 0.94)
+
     def test_normal_resets_event_latch(self):
         decision = FightDecision(0.65)
         for _ in range(FightDecision.TRIGGER_PREDICTIONS):
