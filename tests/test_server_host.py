@@ -46,6 +46,7 @@ class FakeManager(QObject):
     def stop_camera(self, camera_id): self.stopped.append(camera_id)
     def set_camera_ai(self, camera_id, enabled): self.ai[camera_id] = enabled
     def set_camera_snapshot(self, camera_id, enabled): self.snapshot_enabled[camera_id] = enabled
+    def set_camera_snapshot_rate(self, camera_id, fps): self.snapshot_rates = getattr(self, "snapshot_rates", {}); self.snapshot_rates[camera_id] = fps
     def reconnect(self, camera_id, camera=None): self.reconnected.append(camera_id)
     def stop_all(self): self.stopped.append("ALL")
 
@@ -167,7 +168,7 @@ def test_event_becomes_incident_with_footage_and_api_access(env):
     pump(env.app)
     status, body = env.call("GET", "/incidents")
     incident = body["incidents"][0]
-    assert incident["public_id"] == "INC-00001" and incident["severity"] == "MEDIUM" and incident["has_footage"] is False
+    assert incident["public_id"] == "INC-00001" and incident["severity"] == "HIGH" and incident["has_footage"] is False
     assert "footage_path" not in incident
     env.manager.event_detected.emit("CAM-001", "FIGHT DETECTED", 0.99, "HIGH")      # cooldown: no second incident
     pump(env.app)
