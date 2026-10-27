@@ -1510,7 +1510,12 @@ class MainWindow(QMainWindow):
         severity: str,
     ) -> None:
         score = confidence * 100.0 if confidence <= 1.0 else confidence
-        severity = "LOW" if score < 85.0 else "MEDIUM" if score < 95.0 else "HIGH"
+        severity = (
+            "LOW" if score < 70.0
+            else "MEDIUM" if score < 85.0
+            else "HIGH" if score < 95.0
+            else "CRITICAL"
+        )
         incident = self.repository.create_incident(
             camera,
             event,
@@ -1546,7 +1551,44 @@ class MainWindow(QMainWindow):
         if camera is None:
             return
         score = confidence * 100.0 if confidence <= 1.0 else confidence
-        severity = "LOW" if score < 85.0 else "MEDIUM" if score < 95.0 else "HIGH"
+        severity = (
+            "LOW" if score < 70.0
+            else "MEDIUM" if score < 85.0
+            else "HIGH" if score < 95.0
+            else "CRITICAL"
+        )
+
+        # UPDATE is a higher-confidence observation of the same latched fight,
+        # not a new incident and not a new footage recording.
+        if event == "UPDATE":
+            public_id = self._pending_footage_incidents.get(camera_id)
+            if public_id is None:
+                return
+            existing = self.repository.get_incident(public_id)
+            existing_confidence = (
+                float(existing.get("confidence", 0.0)) if existing else 0.0
+            )
+            existing_score = (
+                existing_confidence * 100.0
+                if existing_confidence <= 1.0 else existing_confidence
+            )
+            if score > existing_score:
+                self.repository.update_incident_assessment(
+                    public_id, confidence, severity
+                )
+                self._severity_alert.update_alert(
+                    public_id, "FIGHT DETECTED", camera.name, confidence
+                )
+                self.statusBar().showMessage(
+                    f"{severity} alert updated: fight confidence peaked at {score:.1f}% on {camera.name}.",
+                    8000,
+                )
+                self.incidents_page.refresh()
+                self.alerts_page.refresh()
+                self.dashboard.refresh_summary()
+                self._update_alert_badge()
+            return
+
         incident = self.repository.create_incident(
             camera,
             event,
@@ -1555,7 +1597,36 @@ class MainWindow(QMainWindow):
             self.settings.alert_cooldown_seconds,
         )
         if incident is None:
+            # Cooldown prevents duplicate rows, not operator awareness. Reuse
+            # the existing incident ID and still show the new detection.
+            latest = next(
+                (
+                    row for row in self.repository.list_incidents()
+                    if row.get("camera_id") == camera_id
+                ),
+                None,
+            )
+            if latest is not None:
+                public_id = str(latest["public_id"])
+                previous = float(latest.get("confidence", 0.0))
+                previous_score = previous * 100.0 if previous <= 1.0 else previous
+                if score > previous_score:
+                    self.repository.update_incident_assessment(
+                        public_id, confidence, severity
+                    )
+                self._severity_alert.show_alert(
+                    public_id, event, camera.name, confidence
+                )
+            self.statusBar().showMessage(
+                f"{severity} fight detection on {camera.name}; duplicate incident suppressed by cooldown.",
+                12000,
+            )
+            self.incidents_page.refresh()
+            self.alerts_page.refresh()
+            self.dashboard.refresh_summary()
+            self._update_alert_badge()
             return
+
         self._pending_footage_incidents[camera_id] = str(
             incident["public_id"]
         )
@@ -1563,7 +1634,7 @@ class MainWindow(QMainWindow):
             str(incident["public_id"]), event, camera.name, confidence
         )
         self.statusBar().showMessage(
-            f"{severity} alert: {event} on {camera.name} ({confidence:.0%}).",
+            f"{severity} alert: {event} on {camera.name} ({score:.1f}%).",
             12000,
         )
         self.incidents_page.refresh()
