@@ -169,3 +169,12 @@ def test_update_selection():
     assert select_update(release("9"), "5")["url"] == "https://x/CampusGuard-Setup.exe"
     assert select_update(release("5"), "5") is None
     assert select_update(release("9", assets=("CampusGuard.exe", "checksum.txt")), "5") is None
+
+
+def test_updater_log_never_raises(monkeypatch, tmp_path):
+    import campusguard.storage as storage
+    from campusguard import updater
+
+    monkeypatch.setattr(storage, "application_data_dir", lambda: tmp_path)
+    updater._log("hello")
+    assert "hello" in (tmp_path / "updater.log").read_text(encoding="utf-8")

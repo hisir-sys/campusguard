@@ -240,23 +240,38 @@ class AppController:
     def _begin_update_check(self) -> None:
         from campusguard import updater
 
-        self._run(updater.prepare_update, self._offer_update)
+        # Only the small version check runs first; the large installer is downloaded
+        # after the user agrees, so the popup appears within seconds.
+        self._run(updater.check_for_update, self._offer_update)
 
-    def _offer_update(self, result) -> None:
-        if not result or self.window is None:
+    def _offer_update(self, info) -> None:
+        if not info or self.window is None:
             return
-        info, installer = result
-        from campusguard import updater
-
         answer = QMessageBox.question(
             self.window,
-            "CampusGuard update ready",
-            f"CampusGuard update {info['version']} has been downloaded and verified.\n\n"
-            "Install it now? CampusGuard will close and reopen automatically.",
+            "CampusGuard update available",
+            f"CampusGuard update {info['version']} is available.\n\n"
+            "Download and install it now? CampusGuard will close and reopen automatically.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes,
         )
         if answer != QMessageBox.StandardButton.Yes:
+            return
+        from campusguard import updater
+
+        self.window.statusBar().showMessage("Downloading the CampusGuard update…")
+        self._run(
+            lambda: updater.download_installer(info["url"], info["checksum_url"]),
+            self._install_update,
+        )
+
+    def _install_update(self, installer) -> None:
+        if self.window is None:
+            return
+        from campusguard import updater
+
+        if not installer:
+            QMessageBox.warning(self.window, "Update", "The update could not be downloaded or verified. Please try again later.")
             return
         if not updater.launch_installer(installer):
             QMessageBox.warning(self.window, "Update", "The installer could not be started. Please try again later.")
@@ -349,7 +364,13 @@ def run_self_check(result_file: str | None) -> int:
 
         keyring.get_keyring()
 
-    for name, func in (("fonts", fonts), ("svg", svg), ("models", models), ("ui", ui), ("ai-stack", ai_stack), ("engine", engine), ("server", server), ("keyring", vault)):
+    def version() -> None:
+        from campusguard.build_info import BUILD_VERSION
+
+        if getattr(sys, "frozen", False) and BUILD_VERSION == "dev":
+            raise RuntimeError("build version was not baked into the app; auto-update would never trigger")
+
+    for name, func in (("version", version), ("fonts", fonts), ("svg", svg), ("models", models), ("ui", ui), ("ai-stack", ai_stack), ("engine", engine), ("server", server), ("keyring", vault)):
         check(name, func)
 
     message = "OK" if not problems else "FAIL\n" + "\n".join(problems)

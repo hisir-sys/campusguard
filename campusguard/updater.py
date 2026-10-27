@@ -27,6 +27,24 @@ _USER_AGENT = "CampusGuard-Updater/2.0"
 _MIN_INSTALLER_BYTES = 1_000_000
 
 
+def _log(message: str) -> None:
+    """Append one line to updater.log in the app-data folder (never raises)."""
+    try:
+        import time
+
+        from campusguard.storage import application_data_dir
+
+        folder = application_data_dir()
+        folder.mkdir(parents=True, exist_ok=True)
+        log_path = folder / "updater.log"
+        if log_path.exists() and log_path.stat().st_size > 200_000:
+            log_path.write_text("", encoding="utf-8")
+        with log_path.open("a", encoding="utf-8") as handle:
+            handle.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {message}\n")
+    except Exception:
+        pass
+
+
 def _request(url: str, timeout: float = 10.0):
     return urlopen(
         Request(url, headers={"Accept": "application/vnd.github+json", "User-Agent": _USER_AGENT}),
@@ -62,13 +80,17 @@ def select_update(release: dict, current_version: str) -> dict | None:
 
 def check_for_update() -> dict | None:
     if BUILD_VERSION == "dev" or not getattr(sys, "frozen", False):
+        _log(f"update check skipped (version={BUILD_VERSION!r}, frozen={getattr(sys, 'frozen', False)})")
         return None
     try:
         with _request(_API_URL) as response:
             release = json.loads(response.read().decode("utf-8"))
-    except Exception:
+    except Exception as error:
+        _log(f"update check failed: {type(error).__name__}: {error}")
         return None
-    return select_update(release, BUILD_VERSION)
+    update = select_update(release, BUILD_VERSION)
+    _log(f"installed={BUILD_VERSION} latest={str(release.get('body', '')).strip()!r} update={'yes' if update else 'no'}")
+    return update
 
 
 def download_installer(url: str, checksum_url: str) -> Path | None:
@@ -78,6 +100,7 @@ def download_installer(url: str, checksum_url: str) -> Path | None:
             checksum_text = response.read().decode("utf-8").strip()
         expected = checksum_text.split()[0].lower()
         if len(expected) != 64:
+            _log("download aborted: checksum.txt is not a SHA-256 value")
             return None
         folder = Path(tempfile.gettempdir()) / "CampusGuardUpdate"
         folder.mkdir(parents=True, exist_ok=True)
@@ -93,9 +116,12 @@ def download_installer(url: str, checksum_url: str) -> Path | None:
                 digest.update(chunk)
         if digest.hexdigest().lower() != expected:
             target.unlink(missing_ok=True)
+            _log("download rejected: SHA-256 mismatch")
             return None
+        _log("installer downloaded and verified")
         return target
-    except Exception:
+    except Exception as error:
+        _log(f"download failed: {type(error).__name__}: {error}")
         return None
 
 
