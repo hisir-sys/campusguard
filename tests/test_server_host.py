@@ -145,7 +145,7 @@ def test_bulk_import_staggers_camera_start(env):
     pump(env.app, 0.2)
     assert 0 < len(env.manager.started) <= 4                    # first batch only
     # Restore the production cadence and drain the remaining batches.
-    env.host._start_timer.setInterval(START_INTERVAL_MS)
+    env.host._start_timer.setInterval(600)
     pump(env.app, 2.2)
     assert sorted(env.manager.started) == sorted(c.camera_id for c in env.repo.list_cameras())
 
