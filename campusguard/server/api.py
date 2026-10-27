@@ -200,13 +200,13 @@ class _Handler(BaseHTTPRequestHandler):
             limiter.release(address)
             raise
 
-        self.send_response(HTTPStatus.OK)
-        self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("Connection", "close")
-        self.end_headers()
         last_jpeg: bytes | None = None
         try:
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Connection", "close")
+            self.end_headers()
             while True:
                 self.backend.touch_camera_snapshot(camera_id)
                 jpeg = self.backend.camera_snapshot(camera_id)
