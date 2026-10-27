@@ -275,6 +275,19 @@ class HostBackend:
             self.host.manager.set_camera_snapshot(camera_id, enabled)
         self._on_qt(work)
 
+    def set_camera_snapshot_rate(self, camera_id: str, fps: float) -> None:
+        def work() -> None:
+            self._require(camera_id)
+            self.host.manager.set_camera_snapshot_rate(camera_id, fps)
+        self._on_qt(work)
+
+    def touch_camera_snapshot(self, camera_id: str) -> None:
+        # Streaming handlers run on HTTP worker threads; refreshing this lease
+        # only touches the protected watcher map and must not block the Qt loop.
+        with self.host._snapshot_lock:
+            if camera_id in self.host._snapshot_watchers:
+                self.host._snapshot_watchers[camera_id] = time.monotonic()
+
     def camera_snapshot(self, camera_id: str) -> bytes | None:
         self._require(camera_id)
         return self.host.snapshot_bytes(camera_id)
