@@ -9,7 +9,12 @@ from campusguard.settings import CameraConfig
 
 def severity_for(confidence: float) -> str:
     score = confidence * 100.0 if confidence <= 1.0 else confidence
-    return "LOW" if score < 85.0 else "MEDIUM" if score < 95.0 else "HIGH"
+    return (
+        "LOW" if score < 70.0
+        else "MEDIUM" if score < 85.0
+        else "HIGH" if score < 95.0
+        else "CRITICAL"
+    )
 
 
 class IncidentRecorder:
