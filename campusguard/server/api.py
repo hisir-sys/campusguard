@@ -53,6 +53,7 @@ _ROUTES: list[tuple[str, re.Pattern, str]] = [
     ("GET", re.compile(r"^/cameras$"), "list_cameras"),
     ("POST", re.compile(r"^/cameras$"), "add_camera"),
     ("POST", re.compile(r"^/cameras/import$"), "import_cameras"),
+    ("GET", re.compile(r"^/cameras/(?P<camera_id>[A-Za-z0-9_-]+)/stream$"), "stream"),
     ("GET", re.compile(r"^/cameras/(?P<camera_id>[A-Za-z0-9_-]+)/snapshot$"), "snapshot"),
     ("DELETE", re.compile(r"^/cameras/(?P<camera_id>[A-Za-z0-9_-]+)$"), "remove_camera"),
     ("POST", re.compile(r"^/cameras/(?P<camera_id>[A-Za-z0-9_-]+)/ai$"), "set_camera_ai"),
@@ -183,6 +184,56 @@ class _Handler(BaseHTTPRequestHandler):
         text = self._read_body().decode("utf-8-sig", errors="replace")
         self._send_json(HTTPStatus.OK, self.backend.import_cameras(text))
 
+    def _route_stream(self, query, camera_id: str) -> None:
+        """Stream selected camera frames as authenticated multipart MJPEG."""
+        limiter = self.server.stream_limiter  # type: ignore[attr-defined]
+        address = self.client_address[0]
+        if not limiter.acquire(address):
+            raise ApiError(HTTPStatus.TOO_MANY_REQUESTS, "Too many live streams from this client. Close another live view first.")
+        enabled = False
+        try:
+            self.backend.validate_camera_snapshot(camera_id)
+            self.backend.set_camera_snapshot_rate(camera_id, 10.0)
+            self.backend.set_camera_snapshot_enabled(camera_id, True)
+            enabled = True
+        except Exception:
+            limiter.release(address)
+            raise
+
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        last_jpeg: bytes | None = None
+        try:
+            while True:
+                self.backend.touch_camera_snapshot(camera_id)
+                jpeg = self.backend.camera_snapshot(camera_id)
+                if jpeg and jpeg != last_jpeg and len(jpeg) <= MAX_SNAPSHOT_BYTES:
+                    self.wfile.write(
+                        b"--frame\\r\\n"
+                        b"Content-Type: image/jpeg\\r\\n"
+                        + f"Content-Length: {len(jpeg)}\\r\\n\\r\\n".encode("ascii")
+                        + jpeg + b"\\r\\n"
+                    )
+                    self.wfile.flush()
+                    last_jpeg = jpeg
+                time.sleep(0.05)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
+            # Client closed the live view or the network dropped.
+            pass
+        except Exception as error:
+            self.server.log(f"live stream stopped for {camera_id}: {error!r}")  # type: ignore[attr-defined]
+        finally:
+            if enabled:
+                try:
+                    self.backend.set_camera_snapshot_enabled(camera_id, False)
+                    self.backend.set_camera_snapshot_rate(camera_id, 2.0)
+                except Exception:
+                    pass
+            limiter.release(address)
+
     def _route_snapshot(self, query, camera_id: str) -> None:
         watch_values = query.get("watch", ["1"])
         if len(watch_values) != 1 or watch_values[0] not in {"0", "1"}:
@@ -305,6 +356,31 @@ class _SnapshotRateLimiter:
             return True
 
 
+class _StreamLimiter:
+    """Bound concurrent live streams per desktop to protect server capacity."""
+    MAX_PER_ADDRESS = 4
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._active: dict[str, int] = {}
+
+    def acquire(self, address: str) -> bool:
+        with self._lock:
+            active = self._active.get(address, 0)
+            if active >= self.MAX_PER_ADDRESS:
+                return False
+            self._active[address] = active + 1
+            return True
+
+    def release(self, address: str) -> None:
+        with self._lock:
+            active = self._active.get(address, 0)
+            if active <= 1:
+                self._active.pop(address, None)
+            else:
+                self._active[address] = active - 1
+
+
 class ApiServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
@@ -319,6 +395,7 @@ class ApiServer(ThreadingHTTPServer):
         self.log = log
         self.limiter = _AuthLimiter()
         self.snapshot_limiter = _SnapshotRateLimiter()
+        self.stream_limiter = _StreamLimiter()
         self._thread: threading.Thread | None = None
         if tls_cert_file and tls_key_file:
             context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
