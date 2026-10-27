@@ -16,10 +16,10 @@ class _FakeStreamHandler(BaseHTTPRequestHandler):
         try:
             for frame in frames:
                 self.wfile.write(
-                    b"--frame\\r\\n"
-                    b"Content-Type: image/jpeg\\r\\n"
-                    + f"Content-Length: {len(frame)}\\r\\n\\r\\n".encode("ascii")
-                    + frame + b"\\r\\n"
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n"
+                    + f"Content-Length: {len(frame)}\r\n\r\n".encode("ascii")
+                    + frame + b"\r\n"
                 )
                 self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError):
