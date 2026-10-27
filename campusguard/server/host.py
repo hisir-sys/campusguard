@@ -140,7 +140,7 @@ class ServerHost:
         for camera_id in disable:
             self.manager.set_camera_snapshot(camera_id, False)
 
-    def snapshot_bytes(self, camera_id: str) -> bytes | None:
+    def snapshot_entry(self, camera_id: str) -> tuple[float, bytes] | None:
         with self._snapshot_lock:
             entry = self._snapshots.get(camera_id)
             if entry is None:
@@ -149,7 +149,11 @@ class ServerHost:
             if time.monotonic() - captured_at > 5.0:
                 self._snapshots.pop(camera_id, None)
                 return None
-            return jpeg
+            return captured_at, jpeg
+
+    def snapshot_bytes(self, camera_id: str) -> bytes | None:
+        entry = self.snapshot_entry(camera_id)
+        return entry[1] if entry is not None else None
 
     # -- Qt-thread slots ------------------------------------------------
     def _on_status(self, camera_id: str, status: str, message: str) -> None:
@@ -345,6 +349,10 @@ class HostBackend:
         with self.host._snapshot_lock:
             if camera_id in self.host._stream_watchers:
                 self.host._stream_last_seen[camera_id] = time.monotonic()
+
+    def camera_snapshot_entry(self, camera_id: str) -> tuple[float, bytes] | None:
+        self._require(camera_id)
+        return self.host.snapshot_entry(camera_id)
 
     def camera_snapshot(self, camera_id: str) -> bytes | None:
         self._require(camera_id)
