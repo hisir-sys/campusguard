@@ -234,7 +234,7 @@ class ServerViewerPage(QWidget):
         root.setSpacing(16)
         root.addWidget(make_page_title(
             "School server",
-            "Remote camera health, live snapshots, incidents and saved clips. Local camera mode remains separate.",
+            "All school cameras, clickable live views, incidents and saved clips. Local camera mode remains separate.",
         ))
         status_row = QHBoxLayout()
         self.connection_status = QLabel("Not connected. Check the server address and token in Settings.")
