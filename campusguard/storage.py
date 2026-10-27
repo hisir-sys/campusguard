@@ -307,6 +307,16 @@ class Repository:
                 (str(footage_path), public_id),
             )
 
+    def update_incident_assessment(
+        self, public_id: str, confidence: float, severity: str
+    ) -> None:
+        """Update an existing incident as the same detection's peak confidence rises."""
+        with self._lock, self._connection() as connection:
+            connection.execute(
+                "UPDATE incidents SET confidence = ?, severity = ? WHERE public_id = ?",
+                (float(confidence), severity, public_id),
+            )
+
     def update_incident_status(self, public_id: str, status: str) -> None:
         allowed = {"NEW", "ACKNOWLEDGED", "RESOLVED", "CONFIRMED", "DISMISSED", "FALSE_ALARM"}
         if status not in allowed:
