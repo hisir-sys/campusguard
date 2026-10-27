@@ -359,6 +359,7 @@ class _SnapshotRateLimiter:
 class _StreamLimiter:
     """Bound concurrent live streams per desktop to protect server capacity."""
     MAX_PER_ADDRESS = 4
+    MAX_GLOBAL = 24
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
@@ -367,7 +368,8 @@ class _StreamLimiter:
     def acquire(self, address: str) -> bool:
         with self._lock:
             active = self._active.get(address, 0)
-            if active >= self.MAX_PER_ADDRESS:
+            total = sum(self._active.values())
+            if active >= self.MAX_PER_ADDRESS or total >= self.MAX_GLOBAL:
                 return False
             self._active[address] = active + 1
             return True
