@@ -184,12 +184,16 @@ var
 begin
   Result := True;
   if CurPageID = ServerPage.ID then begin
-    if (not TryStrToInt(Trim(PortEdit.Text), PortValue)) or (PortValue < 1) or (PortValue > 65535) then begin
+    { Inno Setup Pascal Script does not provide TryStrToInt on all supported
+      compiler versions. StrToIntDef safely rejects non-numeric input via 0. }
+    PortValue := StrToIntDef(Trim(PortEdit.Text), 0);
+    if (PortValue < 1) or (PortValue > 65535) then begin
       MsgBox('Enter a port between 1 and 65535.', mbError, MB_OK);
       Result := False;
       exit;
     end;
-    if (not TryStrToInt(Trim(MaxFootageEdit.Text), SizeValue)) or (SizeValue < 1) or (SizeValue > 100000) then begin
+    SizeValue := StrToIntDef(Trim(MaxFootageEdit.Text), 0);
+    if (SizeValue < 1) or (SizeValue > 100000) then begin
       MsgBox('Enter a footage size limit between 1 and 100000 GB.', mbError, MB_OK);
       Result := False;
       exit;

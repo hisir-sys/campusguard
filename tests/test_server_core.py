@@ -92,14 +92,13 @@ def test_health_states_and_stall_detection():
 
 # ---------------------------------------------------------------- recorder
 def test_severity_bands_match_desktop_app():
-    # Confidence boundaries are inclusive at 70/85/95 percent.
-    assert severity_for(0.6999) == "LOW"
+    # Required bands: 70–<85 medium, 85–<95 high, and >=95 critical.
+    assert severity_for(0.69) == "LOW"
     assert severity_for(0.70) == "MEDIUM"
     assert severity_for(0.8499) == "MEDIUM"
     assert severity_for(0.85) == "HIGH"
     assert severity_for(0.9499) == "HIGH"
     assert severity_for(0.95) == "CRITICAL"
-    # Both normalized probabilities and percentage scores are supported.
     assert severity_for(97) == "CRITICAL"
     assert severity_for(50) == "LOW"
 

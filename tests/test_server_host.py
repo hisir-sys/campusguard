@@ -46,6 +46,7 @@ class FakeManager(QObject):
     def stop_camera(self, camera_id): self.stopped.append(camera_id)
     def set_camera_ai(self, camera_id, enabled): self.ai[camera_id] = enabled
     def set_camera_snapshot(self, camera_id, enabled): self.snapshot_enabled[camera_id] = enabled
+    def set_camera_snapshot_rate(self, camera_id, fps): self.snapshot_rates = getattr(self, "snapshot_rates", {}); self.snapshot_rates[camera_id] = fps
     def reconnect(self, camera_id, camera=None): self.reconnected.append(camera_id)
     def stop_all(self): self.stopped.append("ALL")
 
@@ -134,15 +135,17 @@ def test_add_list_remove_camera_with_credentials(env):
 
 
 def test_bulk_import_staggers_camera_start(env):
-    # Use a wider interval than the assertion window so a slow CI runner cannot
-    # advance into the second batch before the first-batch assertion.
-    env.host._start_timer.setInterval(1200)
+    # Keep the first-batch assertion deterministic even if importing ten cameras
+    # takes longer than one production timer interval on a busy CI runner.
+    env.host._start_timer.setInterval(5000)
     rows = "name,address\n" + "".join(f"Cam {i},rtsp://10.1.0.{i}/s2\n" for i in range(1, 11)) + "Bad,http://x\n"
     status, body = env.call("POST", "/cameras/import", raw=rows.encode())
     assert status == 200 and body["added"] == 10 and len(body["errors"]) == 1
     assert len(env.repo.list_cameras()) == 10
-    pump(env.app, 0.7)  # the production start queue ticks every 600 ms
+    pump(env.app, 0.2)
     assert 0 < len(env.manager.started) <= 4                    # first batch only
+    # Restore the production cadence and drain the remaining batches.
+    env.host._start_timer.setInterval(600)
     pump(env.app, 2.2)
     assert sorted(env.manager.started) == sorted(c.camera_id for c in env.repo.list_cameras())
 
@@ -167,7 +170,7 @@ def test_event_becomes_incident_with_footage_and_api_access(env):
     pump(env.app)
     status, body = env.call("GET", "/incidents")
     incident = body["incidents"][0]
-    assert incident["public_id"] == "INC-00001" and incident["severity"] == "MEDIUM" and incident["has_footage"] is False
+    assert incident["public_id"] == "INC-00001" and incident["severity"] == "HIGH" and incident["has_footage"] is False
     assert "footage_path" not in incident
     env.manager.event_detected.emit("CAM-001", "FIGHT DETECTED", 0.99, "HIGH")      # cooldown: no second incident
     pump(env.app)

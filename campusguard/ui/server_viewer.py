@@ -17,13 +17,108 @@ except Exception:  # pragma: no cover - depends on the Qt install
     QAudioOutput = QMediaPlayer = QVideoWidget = None  # type: ignore[assignment,misc]
     MULTIMEDIA_AVAILABLE = False
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
+    QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
     QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QScrollArea,
     QTabWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget, QFrame,
 )
 
 from campusguard.server.client import RemoteServerClient
 from campusguard.ui.common import make_page_title
+
+
+class _LiveStreamWorker(QThread):
+    frame_ready = Signal(bytes)
+    status_changed = Signal(str)
+
+    def __init__(self, client_provider: Callable[[], RemoteServerClient], camera_id: str,
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._client_provider = client_provider
+        self._camera_id = camera_id
+
+    def run(self) -> None:
+        while not self.isInterruptionRequested():
+            try:
+                self.status_changed.emit("Connecting to live camera…")
+                client = self._client_provider()
+                client.stream_frames(
+                    self._camera_id, self.frame_ready.emit,
+                    self.isInterruptionRequested,
+                )
+            except Exception as error:
+                if self.isInterruptionRequested():
+                    break
+                self.status_changed.emit(f"Reconnecting: {error}")
+                self.msleep(800)
+
+
+class _LiveFeedDialog(QDialog):
+    def __init__(self, client_provider: Callable[[], RemoteServerClient],
+                 camera: dict, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.camera = camera
+        self._last_image: QImage | None = None
+        self.setWindowTitle(f"CampusGuard Live · {camera.get('name', camera.get('camera_id', 'Camera'))}")
+        self.resize(1200, 760)
+        self.setWindowState(self.windowState() | Qt.WindowState.WindowMaximized)
+        layout = QVBoxLayout(self)
+        header = QHBoxLayout()
+        title = QLabel(f"{camera.get('name', 'Camera')}  ·  {camera.get('camera_id', '')}")
+        title.setStyleSheet("font-size: 16px; font-weight: 750;")
+        self.status = QLabel("Starting live feed…")
+        self.status.setProperty("muted", True)
+        header.addWidget(title, 1)
+        header.addWidget(self.status)
+        layout.addLayout(header)
+        self.frame = QLabel("Connecting to camera…")
+        self.frame.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.frame.setMinimumSize(640, 360)
+        self.frame.setStyleSheet("background: #05070b; border-radius: 10px;")
+        layout.addWidget(self.frame, 1)
+        footer = QHBoxLayout()
+        footer.addStretch(1)
+        close_button = QPushButton("Close live view")
+        close_button.clicked.connect(self.close)
+        footer.addWidget(close_button)
+        layout.addLayout(footer)
+        self._worker = _LiveStreamWorker(client_provider, str(camera.get("camera_id", "")), self)
+        self._worker.frame_ready.connect(self._show_frame)
+        self._worker.status_changed.connect(self.status.setText)
+        self._worker.start()
+
+    def _show_frame(self, jpeg: bytes) -> None:
+        image = QImage.fromData(jpeg, "JPEG")
+        if image.isNull():
+            self.status.setText("Received an invalid video frame.")
+            return
+        self._last_image = image
+        self.frame.setPixmap(QPixmap.fromImage(image).scaled(
+            self.frame.size(), Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation
+        ))
+        self.status.setText("LIVE · selected camera")
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if self._last_image is not None:
+            self.frame.setPixmap(QPixmap.fromImage(self._last_image).scaled(
+                self.frame.size(), Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            ))
+
+    def closeEvent(self, event) -> None:
+        self._worker.requestInterruption()
+        self._worker.wait(12000)
+        super().closeEvent(event)
+
+
+class _ClickablePreview(QLabel):
+    clicked = Signal()
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+        super().mousePressEvent(event)
 
 
 class _ServerTask(QThread):
@@ -44,6 +139,7 @@ class _ServerTask(QThread):
 class _CameraCard(QFrame):
     remove_requested = Signal(str)
     reconnect_requested = Signal(str)
+    live_requested = Signal(str)
 
     def __init__(self, camera: dict, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -53,10 +149,13 @@ class _CameraCard(QFrame):
         row = QHBoxLayout(self)
         row.setContentsMargins(12, 10, 12, 10)
         row.setSpacing(14)
-        self.preview = QLabel("Preview paused")
+        self.preview = _ClickablePreview("Preview paused")
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview.setFixedSize(200, 112)
         self.preview.setProperty("muted", True)
+        self.preview.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.preview.setToolTip("Click to open the selected camera's live view")
+        self.preview.clicked.connect(lambda: self.live_requested.emit(self.camera_id))
         self.preview.setStyleSheet("border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;")
         row.addWidget(self.preview)
         details = QVBoxLayout()
@@ -128,13 +227,15 @@ class ServerViewerPage(QWidget):
         self._cards: dict[str, _CameraCard] = {}
         self._clip_paths: set[Path] = set()
         self._clip_cancel = threading.Event()
+        self._live_dialog: _LiveFeedDialog | None = None
+        self._known_incident_ids: set[str] | None = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(24, 24, 24, 112)
         root.setSpacing(16)
         root.addWidget(make_page_title(
             "School server",
-            "Remote camera health, live snapshots, incidents and saved clips. Local camera mode remains separate.",
+            "All school cameras, clickable live views, incidents and saved clips. Local camera mode remains separate.",
         ))
         status_row = QHBoxLayout()
         self.connection_status = QLabel("Not connected. Check the server address and token in Settings.")
@@ -145,6 +246,14 @@ class ServerViewerPage(QWidget):
         self.refresh_button.clicked.connect(self.refresh)
         status_row.addWidget(self.refresh_button)
         root.addLayout(status_row)
+        self.remote_alert_banner = QLabel("")
+        self.remote_alert_banner.setWordWrap(True)
+        self.remote_alert_banner.setVisible(False)
+        self.remote_alert_banner.setStyleSheet("padding: 10px 14px; border: 1px solid #F07838; border-radius: 10px; font-weight: 700;")
+        root.addWidget(self.remote_alert_banner)
+        self._remote_alert_timer = QTimer(self)
+        self._remote_alert_timer.setSingleShot(True)
+        self._remote_alert_timer.timeout.connect(self.remote_alert_banner.hide)
 
         self.tabs = QTabWidget()
         root.addWidget(self.tabs, 1)
@@ -295,6 +404,42 @@ class ServerViewerPage(QWidget):
         self.connection_status.setProperty("muted", True)
         self.connection_status.style().unpolish(self.connection_status)
         self.connection_status.style().polish(self.connection_status)
+        self._last_cameras = list(data["cameras"])
+        incoming_ids = {str(row.get("public_id", "")) for row in data["incidents"] if row.get("public_id")}
+        if self._known_incident_ids is None:
+            # Seed from the first successful poll so opening the viewer does not
+            # replay alarms for historical incidents.
+            self._known_incident_ids = incoming_ids
+        else:
+            new_rows = [row for row in data["incidents"]
+                        if row.get("public_id") and str(row.get("public_id")) not in self._known_incident_ids]
+            self._known_incident_ids.update(incoming_ids)
+            actionable = []
+            for row in new_rows:
+                try:
+                    score = float(row.get("confidence", 0) or 0)
+                    score = score * 100.0 if score <= 1.0 else score
+                except (TypeError, ValueError):
+                    score = 0.0
+                if score >= 70.0:
+                    actionable.append((score, row))
+            if actionable:
+                score, latest = max(actionable, key=lambda item: item[0])
+                severity = str(latest.get("severity", "ALERT")).upper()
+                camera_name = str(latest.get("camera_name", "Camera"))
+                event = str(latest.get("event", "Fight detected"))
+                public_id = str(latest.get("public_id", ""))
+                self.remote_alert_banner.setText(
+                    f"{severity} · {event} · {camera_name} · {score:.1f}% confidence · {public_id}"
+                )
+                accent = "#FF343F" if score >= 95 else "#F07838" if score >= 85 else "#D9A441"
+                self.remote_alert_banner.setStyleSheet(
+                    f"padding: 10px 14px; border: 1px solid {accent}; border-left: 4px solid {accent}; "
+                    "border-radius: 10px; font-weight: 700;"
+                )
+                self.remote_alert_banner.show()
+                self._remote_alert_timer.start(15000 if score >= 95 else 7000 if score >= 85 else 5000)
+                QApplication.beep()
         self._sync_camera_cards(data["cameras"])
         for camera_id, jpeg in data["snapshots"].items():
             card = self._cards.get(camera_id)
@@ -319,6 +464,7 @@ class ServerViewerPage(QWidget):
                 card = _CameraCard(camera, self.camera_content)
                 card.remove_requested.connect(self._remove_camera)
                 card.reconnect_requested.connect(self._reconnect_camera)
+                card.live_requested.connect(self._open_live_feed)
                 self._cards[camera_id] = card
                 self.camera_layout.insertWidget(max(0, self.camera_layout.count() - 1), card)
             else:
@@ -437,6 +583,30 @@ class ServerViewerPage(QWidget):
         spec = (name.text().strip(), str(source_type.currentData()), address.text().strip(),
                 username.text(), password.text(), ai_enabled.isChecked())
         self._run(lambda: self._client_provider().add_camera(*spec), lambda _result: self.refresh())
+
+    def _open_live_feed(self, camera_id: str) -> None:
+        camera = next(
+            (item for item in getattr(self, "_last_cameras", [])
+             if str(item.get("camera_id", "")) == camera_id),
+            None,
+        )
+        if camera is None:
+            card = self._cards.get(camera_id)
+            camera = card.camera if card is not None else {"camera_id": camera_id, "name": camera_id}
+        if self._live_dialog is not None:
+            return
+        # Pause list polling while the dedicated stream worker owns this camera.
+        self._poll_timer.stop()
+        self._watched.clear()
+        dialog = _LiveFeedDialog(self._client_provider, camera, self)
+        self._live_dialog = dialog
+        try:
+            dialog.exec()
+        finally:
+            self._live_dialog = None
+            if not self._closing:
+                self._poll_timer.start()
+                QTimer.singleShot(0, self.refresh)
 
     def _remove_camera(self, camera_id: str) -> None:
         answer = QMessageBox.question(self, "Remove camera", f"Remove camera {camera_id} from the school server?")
