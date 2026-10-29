@@ -17,7 +17,7 @@ except Exception:  # pragma: no cover - depends on the Qt install
     QAudioOutput = QMediaPlayer = QVideoWidget = None  # type: ignore[assignment,misc]
     MULTIMEDIA_AVAILABLE = False
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
+    QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
     QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QScrollArea,
     QTabWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget, QFrame,
 )
@@ -228,6 +228,7 @@ class ServerViewerPage(QWidget):
         self._clip_paths: set[Path] = set()
         self._clip_cancel = threading.Event()
         self._live_dialog: _LiveFeedDialog | None = None
+        self._known_incident_ids: set[str] | None = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(24, 24, 24, 112)
@@ -245,6 +246,14 @@ class ServerViewerPage(QWidget):
         self.refresh_button.clicked.connect(self.refresh)
         status_row.addWidget(self.refresh_button)
         root.addLayout(status_row)
+        self.remote_alert_banner = QLabel("")
+        self.remote_alert_banner.setWordWrap(True)
+        self.remote_alert_banner.setVisible(False)
+        self.remote_alert_banner.setStyleSheet("padding: 10px 14px; border: 1px solid #F07838; border-radius: 10px; font-weight: 700;")
+        root.addWidget(self.remote_alert_banner)
+        self._remote_alert_timer = QTimer(self)
+        self._remote_alert_timer.setSingleShot(True)
+        self._remote_alert_timer.timeout.connect(self.remote_alert_banner.hide)
 
         self.tabs = QTabWidget()
         root.addWidget(self.tabs, 1)
@@ -396,6 +405,41 @@ class ServerViewerPage(QWidget):
         self.connection_status.style().unpolish(self.connection_status)
         self.connection_status.style().polish(self.connection_status)
         self._last_cameras = list(data["cameras"])
+        incoming_ids = {str(row.get("public_id", "")) for row in data["incidents"] if row.get("public_id")}
+        if self._known_incident_ids is None:
+            # Seed from the first successful poll so opening the viewer does not
+            # replay alarms for historical incidents.
+            self._known_incident_ids = incoming_ids
+        else:
+            new_rows = [row for row in data["incidents"]
+                        if row.get("public_id") and str(row.get("public_id")) not in self._known_incident_ids]
+            self._known_incident_ids.update(incoming_ids)
+            actionable = []
+            for row in new_rows:
+                try:
+                    score = float(row.get("confidence", 0) or 0)
+                    score = score * 100.0 if score <= 1.0 else score
+                except (TypeError, ValueError):
+                    score = 0.0
+                if score >= 70.0:
+                    actionable.append((score, row))
+            if actionable:
+                score, latest = max(actionable, key=lambda item: item[0])
+                severity = str(latest.get("severity", "ALERT")).upper()
+                camera_name = str(latest.get("camera_name", "Camera"))
+                event = str(latest.get("event", "Fight detected"))
+                public_id = str(latest.get("public_id", ""))
+                self.remote_alert_banner.setText(
+                    f"{severity} · {event} · {camera_name} · {score:.1f}% confidence · {public_id}"
+                )
+                accent = "#FF343F" if score >= 95 else "#F07838" if score >= 85 else "#D9A441"
+                self.remote_alert_banner.setStyleSheet(
+                    f"padding: 10px 14px; border: 1px solid {accent}; border-left: 4px solid {accent}; "
+                    "border-radius: 10px; font-weight: 700;"
+                )
+                self.remote_alert_banner.show()
+                self._remote_alert_timer.start(15000 if score >= 95 else 7000 if score >= 85 else 5000)
+                QApplication.beep()
         self._sync_camera_cards(data["cameras"])
         for camera_id, jpeg in data["snapshots"].items():
             card = self._cards.get(camera_id)
