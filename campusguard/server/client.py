@@ -156,6 +156,52 @@ class RemoteServerClient:
             raise ServerConnectionError("The server did not return a camera JPEG snapshot.")
         return body
 
+    def stream_frames(
+        self,
+        camera_id: str,
+        on_frame: Callable[[bytes], None],
+        should_stop: Callable[[], bool],
+    ) -> None:
+        """Read an authenticated multipart MJPEG stream until stopped or disconnected."""
+        url = self.base_url + f"/api/v1/cameras/{camera_id}/stream"
+        request = urllib.request.Request(
+            url,
+            headers={
+                "Authorization": f"Bearer {self.token}",
+                "Accept": "multipart/x-mixed-replace",
+                "Cache-Control": "no-cache",
+            },
+        )
+        with urllib.request.urlopen(request, timeout=max(self.timeout, 10.0)) as response:
+            content_type = response.headers.get("Content-Type", "")
+            if not content_type.lower().startswith("multipart/x-mixed-replace"):
+                raise ServerConnectionError("The server did not return a live camera stream.")
+            while not should_stop():
+                boundary = response.readline()
+                if not boundary:
+                    raise ServerConnectionError("The live camera stream disconnected.")
+                if not boundary.strip().startswith(b"--frame"):
+                    continue
+                headers: dict[str, str] = {}
+                while True:
+                    line = response.readline()
+                    if not line or line in (b"\r\n", b"\n"):
+                        break
+                    key, separator, value = line.decode("ascii", errors="ignore").partition(":")
+                    if separator:
+                        headers[key.strip().lower()] = value.strip()
+                try:
+                    length = int(headers.get("content-length", "0"))
+                except ValueError:
+                    raise ServerConnectionError("The live stream returned an invalid frame length.") from None
+                if length < 1 or length > 512 * 1024:
+                    raise ServerConnectionError("The live stream frame size is outside the allowed limit.")
+                jpeg = response.read(length)
+                if len(jpeg) != length:
+                    raise ServerConnectionError("The live stream ended during a frame.")
+                response.read(2)  # trailing CRLF before the next multipart boundary
+                on_frame(jpeg)
+
     def stop_snapshot(self, camera_id: str) -> None:
         self._request(f"/api/v1/cameras/{camera_id}/snapshot?watch=0")
 
