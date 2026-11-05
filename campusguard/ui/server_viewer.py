@@ -17,7 +17,7 @@ except Exception:  # pragma: no cover - depends on the Qt install
     QAudioOutput = QMediaPlayer = QVideoWidget = None  # type: ignore[assignment,misc]
     MULTIMEDIA_AVAILABLE = False
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
+    QCheckBox, QComboBox, QDialog, QInputDialog, QDialogButtonBox, QFileDialog, QFormLayout,
     QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QScrollArea,
     QTabWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget, QFrame,
 )
@@ -117,9 +117,16 @@ class _CameraCard(QFrame):
 class ServerViewerPage(QWidget):
     """Remote camera, incident and alert views. All network work stays off the UI thread."""
 
-    def __init__(self, client_provider: Callable[[], RemoteServerClient], parent: QWidget | None = None) -> None:
+    def __init__(self, client_provider: Callable[[], RemoteServerClient], parent: QWidget | None = None,
+                 peer_tokens=None) -> None:
         super().__init__(parent)
-        self._client_provider = client_provider
+        self._base_client_provider = client_provider
+        self._client_provider = self._active_client
+        # Optional object with load_peer_token(address)/save_peer_token(address, token) (Credential Manager).
+        self._peer_tokens = peer_tokens
+        self._override: dict | None = None          # {"name", "address", "token", "save"} while viewing another server
+        self._focus_incident: str | None = None
+        self._overview: dict | None = None
         self._worker: _ServerTask | None = None
         self._pending_success: Callable[[object], None] | None = None
         self._closing = False
@@ -136,6 +143,18 @@ class ServerViewerPage(QWidget):
             "School server",
             "Remote camera health, live snapshots, incidents and saved clips. Local camera mode remains separate.",
         ))
+        self.viewing_banner = QFrame()
+        self.viewing_banner.setProperty("card", True)
+        banner_row = QHBoxLayout(self.viewing_banner)
+        banner_row.setContentsMargins(12, 8, 12, 8)
+        self.viewing_label = QLabel("")
+        self.viewing_label.setWordWrap(True)
+        self.back_button = QPushButton("Back to my server")
+        self.back_button.clicked.connect(self.leave_other_server)
+        banner_row.addWidget(self.viewing_label, 1)
+        banner_row.addWidget(self.back_button)
+        self.viewing_banner.hide()
+        root.addWidget(self.viewing_banner)
         status_row = QHBoxLayout()
         self.connection_status = QLabel("Not connected. Check the server address and token in Settings.")
         self.connection_status.setWordWrap(True)
@@ -180,6 +199,37 @@ class ServerViewerPage(QWidget):
         self.tabs.addTab(self.incidents_table, "Incidents")
         self.alerts_table = self._make_table()
         self.tabs.addTab(self.alerts_table, "Alerts")
+
+        # School-wide alert overview shared by the school's servers (alerts only, never video).
+        self.school_tab = QWidget()
+        school_root = QVBoxLayout(self.school_tab)
+        school_root.setContentsMargins(4, 8, 4, 4)
+        school_root.setSpacing(8)
+        self.school_summary = QLabel("School-wide totals appear here once this server is connected.")
+        self.school_summary.setWordWrap(True)
+        self.school_summary.setStyleSheet("font-size: 14px; font-weight: 700;")
+        self.school_detail = QLabel("")
+        self.school_detail.setWordWrap(True)
+        self.school_detail.setProperty("muted", True)
+        school_root.addWidget(self.school_summary)
+        school_root.addWidget(self.school_detail)
+        self.servers_table = QTableWidget(0, 4)
+        self.servers_table.setHorizontalHeaderLabels(["Server", "Address", "Status", "Alerts"])
+        self.servers_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.servers_table.verticalHeader().setVisible(False)
+        self.servers_table.horizontalHeader().setStretchLastSection(True)
+        self.servers_table.setMaximumHeight(170)
+        school_root.addWidget(self.servers_table)
+        self.remote_table = QTableWidget(0, 7)
+        self.remote_table.setHorizontalHeaderLabels(
+            ["ID", "Source server · camera", "Event", "Confidence", "Severity", "Status", "Actions"])
+        self.remote_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.remote_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.remote_table.setAlternatingRowColors(True)
+        self.remote_table.verticalHeader().setVisible(False)
+        self.remote_table.horizontalHeader().setSectionResizeMode(1, self.remote_table.horizontalHeader().ResizeMode.Stretch)
+        school_root.addWidget(self.remote_table, 1)
+        self.tabs.addTab(self.school_tab, "School")
 
         # Multimedia backends can be unavailable on headless PCs and CI.
         # Create the player only when a user actually opens a saved clip.
@@ -235,6 +285,10 @@ class ServerViewerPage(QWidget):
             cameras = client.list_cameras()
             incidents = client.list_incidents()
             alerts = client.list_alerts()
+            try:        # older servers have no sync endpoints; the School tab simply stays empty
+                overview, remote_alerts = client.sync_overview(), client.sync_alerts(200)
+            except Exception:
+                overview, remote_alerts = None, []
             for camera_id in previously_watched - visible:
                 try:
                     client.stop_snapshot(camera_id)
@@ -248,7 +302,8 @@ class ServerViewerPage(QWidget):
                     if "not ready yet" not in str(error).lower():
                         snapshots[camera_id] = None
             return {"status": status, "cameras": cameras, "incidents": incidents,
-                    "alerts": alerts, "snapshots": snapshots, "watched": visible}
+                    "alerts": alerts, "snapshots": snapshots, "watched": visible,
+                    "overview": overview, "remote_alerts": remote_alerts}
 
         self._run(operation, self._apply_refresh)
 
@@ -303,6 +358,140 @@ class ServerViewerPage(QWidget):
         self._watched = set(data["watched"])
         self._populate_table(self.incidents_table, data["incidents"], allow_status_actions=True)
         self._populate_table(self.alerts_table, data["alerts"], allow_status_actions=True)
+        self._populate_school(data.get("overview"), data.get("remote_alerts", []))
+        if self._override and self._override.get("save") and self._peer_tokens is not None:
+            try:        # the token worked: remember it for next time
+                self._peer_tokens.save_peer_token(self._override["address"], self._override["token"])
+            except Exception:
+                pass
+            self._override["save"] = False
+        self._apply_focus()
+
+    # -- Phase 6: school-wide alerts and the remote-footage experience -----------------
+    def _active_client(self) -> RemoteServerClient:
+        if self._override is not None:
+            return RemoteServerClient(self._override["address"], self._override["token"], timeout=1.0, retries=0)
+        return self._base_client_provider()
+
+    def _populate_school(self, overview: dict | None, remote_alerts: list[dict]) -> None:
+        self._overview = overview
+        if not overview:
+            self.school_summary.setText("School-wide alerts are not available from this server.")
+            self.school_detail.setText("")
+            self.servers_table.setRowCount(0)
+            self.remote_table.setRowCount(0)
+            return
+        school, local = overview.get("school_wide", {}), overview.get("local", {})
+        peers = overview.get("peers", [])
+        name = overview.get("server_name") or "This server"
+        remote_total = sum(int(p.get("total", 0)) for p in peers)
+        self.school_summary.setText(f"School-wide fight alerts: {school.get('total', 0)}")
+        severities = ", ".join(f"{key}: {value}" for key, value in sorted(school.get("by_severity", {}).items())) or "none"
+        self.school_detail.setText(
+            f"{local.get('total', 0)} detected by {name} (this server) · {remote_total} reported by other servers · "
+            f"by severity: {severities}"
+        )
+        self.servers_table.setRowCount(len(peers))
+        for row, peer in enumerate(peers):
+            state = str(peer.get("state", "")).replace("_", " ")
+            if peer.get("last_error") and peer.get("state") != "online":
+                state += f" · {peer['last_error']}"
+            for col, value in enumerate((peer.get("name", ""), peer.get("address", ""), state, str(peer.get("total", 0)))):
+                self.servers_table.setItem(row, col, QTableWidgetItem(str(value)))
+        self.remote_table.setUpdatesEnabled(False)
+        self.remote_table.setRowCount(len(remote_alerts))
+        for row, alert in enumerate(remote_alerts):
+            try:
+                confidence = f"{float(alert.get('confidence', 0) or 0):.0%}"
+            except (TypeError, ValueError):
+                confidence = ""
+            values = [str(alert.get("incident_id", "")),
+                      f"{alert.get('source_name', '?')} · {alert.get('camera_name', '')}",
+                      str(alert.get("event", "")), confidence, str(alert.get("severity", "")),
+                      str(alert.get("status", ""))]
+            for col, value in enumerate(values):
+                self.remote_table.setItem(row, col, QTableWidgetItem(value))
+            if alert.get("has_footage"):
+                button = QPushButton("View footage", self.remote_table)
+                button.clicked.connect(lambda _checked=False, item=dict(alert): self.show_remote_footage_notice(item))
+                self.remote_table.setCellWidget(row, 6, button)
+            else:
+                self.remote_table.setItem(row, 6, QTableWidgetItem("No footage"))
+                self.remote_table.removeCellWidget(row, 6)
+        self.remote_table.setUpdatesEnabled(True)
+
+    def show_remote_footage_notice(self, alert: dict) -> None:
+        """Footage of a remote alert lives on its source server: never pretend a local copy exists."""
+        source = str(alert.get("source_name") or "the source server")
+        address = str(alert.get("source_address") or "")
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Information)
+        box.setWindowTitle("Footage is stored on another server")
+        if address:
+            box.setText(
+                f"This incident's footage is not stored on the current machine.\n\n"
+                f"Open {source} to review the incident and its recording."
+            )
+            box.setInformativeText(f"Source: {source} · {alert.get('camera_name', '')}\nAddress: {address}")
+            go = box.addButton(f"Go to {source}", QMessageBox.ButtonRole.AcceptRole)
+        else:
+            box.setText(
+                f"This incident's footage is not stored on the current machine.\n\n"
+                f"It is stored on {source}. Open that server's CampusGuard to review the recording."
+            )
+            box.setInformativeText("This server does not know the other server's network address. Check the peer settings.")
+            go = None
+        box.addButton("Close", QMessageBox.ButtonRole.RejectRole)
+        self._remote_footage_box = box
+        box.exec()
+        if go is not None and box.clickedButton() is go:
+            self.go_to_server(source, address, str(alert.get("incident_id", "")))
+
+    def go_to_server(self, name: str, address: str, incident_id: str = "") -> bool:
+        token = ""
+        if self._peer_tokens is not None:
+            try:
+                token = self._peer_tokens.load_peer_token(address)
+            except Exception:
+                token = ""
+        save = False
+        if not token:
+            token, accepted = QInputDialog.getText(
+                self, f"Connect to {name}", f"Access token for {name} ({address}):", QLineEdit.EchoMode.Password)
+            if not accepted or not token.strip():
+                return False
+            token, save = token.strip(), True
+        try:
+            RemoteServerClient(address, token)      # validates the address/token shape before switching
+        except Exception as error:
+            QMessageBox.warning(self, "Cannot open server", str(error))
+            return False
+        self._override = {"name": name, "address": address, "token": token, "save": save}
+        self._focus_incident = incident_id or None
+        self._watched.clear()
+        self.viewing_label.setText(f"Viewing {name} ({address}). Cameras, incidents and clips below come from that server.")
+        self.viewing_banner.show()
+        self.refresh()
+        return True
+
+    def leave_other_server(self) -> None:
+        self._override = None
+        self._focus_incident = None
+        self._watched.clear()
+        self.viewing_banner.hide()
+        self.tabs.setCurrentWidget(self.school_tab)
+        self.refresh()
+
+    def _apply_focus(self) -> None:
+        if not self._focus_incident:
+            return
+        for row in range(self.incidents_table.rowCount()):
+            item = self.incidents_table.item(row, 0)
+            if item is not None and item.text() == self._focus_incident:
+                self.tabs.setCurrentWidget(self.incidents_table)
+                self.incidents_table.selectRow(row)
+                self._focus_incident = None
+                return
 
     def _sync_camera_cards(self, cameras: list[dict]) -> None:
         present = {str(camera.get("camera_id", "")) for camera in cameras}

@@ -4,7 +4,8 @@ from __future__ import annotations
 import json
 import os
 import secrets
-from dataclasses import asdict, dataclass
+import uuid
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 
@@ -20,6 +21,11 @@ class ServerConfig:
     tls_cert_file: str = ""
     tls_key_file: str = ""
     footage_dir: str = ""
+    # Phase 6: identity inside one school ("one CampusGuard ID, several servers").
+    server_id: str = ""               # generated once per installation
+    server_name: str = ""             # shown to operators, e.g. "Server One"
+    school_id: str = ""               # shared by every server of the school; empty = derive from the account
+    peers: list = field(default_factory=list)   # [{"name", "address", "ca_file"}]; tokens live in Credential Manager
 
 
 def _clamp_int(value, low, high, default):
@@ -36,6 +42,28 @@ def _clamp_float(value, low, high, default):
         return default
 
 
+def normalise_peers(raw) -> list[dict]:
+    """Keep well-formed peers only, one per address (address is the stable key)."""
+    peers: list[dict] = []
+    seen: set[str] = set()
+    if not isinstance(raw, list):
+        return peers
+    for item in raw[:32]:
+        if not isinstance(item, dict):
+            continue
+        address = str(item.get("address", "")).strip().rstrip("/")
+        lowered = address.lower()
+        if not lowered.startswith(("http://", "https://")) or lowered in seen:
+            continue
+        seen.add(lowered)
+        peers.append({
+            "name": str(item.get("name", "")).strip()[:60] or address,
+            "address": address,
+            "ca_file": str(item.get("ca_file", "")).strip(),
+        })
+    return peers
+
+
 def normalise(values: dict) -> ServerConfig:
     base = ServerConfig()
     return ServerConfig(
@@ -49,6 +77,10 @@ def normalise(values: dict) -> ServerConfig:
         tls_cert_file=str(values.get("tls_cert_file", "")).strip(),
         tls_key_file=str(values.get("tls_key_file", "")).strip(),
         footage_dir=str(values.get("footage_dir", "")).strip(),
+        server_id=str(values.get("server_id", "")).strip()[:64],
+        server_name=str(values.get("server_name", "")).strip()[:60],
+        school_id=str(values.get("school_id", "")).strip()[:80],
+        peers=normalise_peers(values.get("peers")),
     )
 
 
@@ -63,6 +95,11 @@ def load_config(data_dir: Path, vault=None) -> ServerConfig:
     except (OSError, ValueError):
         values = {}
     config = normalise(values)
+    if not config.server_id:
+        config.server_id = uuid.uuid4().hex
+    if not config.server_name:
+        import socket
+        config.server_name = (socket.gethostname() or "CampusGuard server")[:60]
     if vault is None:
         from campusguard.credentials import CredentialVault
         vault = CredentialVault()

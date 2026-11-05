@@ -243,12 +243,50 @@ def configure_server(argv: list[str]) -> int:
             if not math.isfinite(parsed_limit) or not 1.0 <= parsed_limit <= 100000.0:
                 raise ValueError("Footage size limit must be between 1 and 100000 GB.")
             config.max_footage_gb = parsed_limit
+        server_name = _option(argv, "--server-name")
+        if server_name is not None:
+            config.server_name = server_name.strip()[:60] or config.server_name
+        school_id = _option(argv, "--school-id")
+        if school_id is not None:
+            config.school_id = school_id.strip()[:80]
+        remove_peer = _option(argv, "--remove-peer")
+        if remove_peer:
+            target = remove_peer.strip().rstrip("/").lower()
+            config.peers = [p for p in config.peers if p["address"].rstrip("/").lower() != target]
+            _peer_vault().delete_peer_token(remove_peer)
+        peer_address = _option(argv, "--add-peer-address")
+        if peer_address:
+            from campusguard.server.config import normalise_peers
+
+            peer_token = _option(argv, "--add-peer-token") or ""
+            if not peer_token and sys.stdin is not None and sys.stdout is not None:
+                peer_token = getpass.getpass("Access token of the other server: ")
+            if len(peer_token.strip()) < 16:
+                raise ValueError("The other server's access token is required (at least 16 characters).")
+            entry = {"name": _option(argv, "--add-peer-name") or peer_address,
+                     "address": peer_address, "ca_file": _option(argv, "--add-peer-ca") or ""}
+            kept = [p for p in config.peers if p["address"].rstrip("/").lower() != peer_address.strip().rstrip("/").lower()]
+            updated = normalise_peers(kept + [entry])
+            if len(updated) != len(kept) + 1:
+                raise ValueError("The peer address must start with http:// or https://.")
+            _peer_vault().save_peer_token(peer_address, peer_token.strip())
+            config.peers = updated
         save_config(data_dir, config)
+        if "--list-peers" in argv and sys.stdout is not None:
+            print(f"This server: {config.server_name} ({config.server_id}), school id: {config.school_id or '(from account)'}")
+            for peer in config.peers:
+                print(f"  peer: {peer['name']}  {peer['address']}")
         return 0
     except Exception as error:
         if sys.stdout is not None:
             print(f"Could not save server settings: {error}")
         return 1
+
+
+def _peer_vault():
+    from campusguard.credentials import CredentialVault
+
+    return CredentialVault()
 
 
 def server_status() -> int:

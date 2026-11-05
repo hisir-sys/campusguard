@@ -61,6 +61,10 @@ _ROUTES: list[tuple[str, re.Pattern, str]] = [
     ("GET", re.compile(r"^/alerts$"), "list_alerts"),
     ("POST", re.compile(r"^/incidents/(?P<public_id>INC-\d+)/status$"), "set_incident_status"),
     ("GET", re.compile(r"^/incidents/(?P<public_id>INC-\d+)/clip$"), "clip"),
+    ("GET", re.compile(r"^/sync/identity$"), "sync_identity"),
+    ("GET", re.compile(r"^/sync/events$"), "sync_events"),
+    ("GET", re.compile(r"^/sync/overview$"), "sync_overview"),
+    ("GET", re.compile(r"^/sync/alerts$"), "sync_alerts"),
 ]
 
 
@@ -242,6 +246,21 @@ class _Handler(BaseHTTPRequestHandler):
             raise ApiError(HTTPStatus.BAD_REQUEST, "'status' must be NEW, ACKNOWLEDGED, RESOLVED, CONFIRMED, DISMISSED or FALSE_ALARM.")
         self.backend.set_incident_status(public_id, status)
         self._send_json(HTTPStatus.OK, {"public_id": public_id, "status": status})
+
+    def _route_sync_identity(self, query) -> None:
+        self._send_json(HTTPStatus.OK, self.backend.sync_identity())
+
+    def _route_sync_events(self, query) -> None:
+        since = _int_param(query, "since", 0, 0, 2**62)
+        limit = _int_param(query, "limit", 200, 1, 500)
+        self._send_json(HTTPStatus.OK, self.backend.sync_events(since, limit))
+
+    def _route_sync_overview(self, query) -> None:
+        self._send_json(HTTPStatus.OK, self.backend.sync_overview())
+
+    def _route_sync_alerts(self, query) -> None:
+        limit = _int_param(query, "limit", 200, 1, 1000)
+        self._send_json(HTTPStatus.OK, {"alerts": self.backend.sync_alerts(limit)})
 
     def _route_clip(self, query, public_id: str) -> None:
         path: Path | None = self.backend.footage_path(public_id)

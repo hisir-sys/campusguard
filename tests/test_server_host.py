@@ -57,6 +57,7 @@ class FakeVault:
     def delete(self, camera_id): self.saved.pop(camera_id, None)
     def load_api_token(self): return self.api_token
     def save_api_token(self, token): self.api_token = token
+    def load_peer_token(self, address): return ""
 
 
 @pytest.fixture()

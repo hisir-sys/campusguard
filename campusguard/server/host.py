@@ -24,6 +24,7 @@ from campusguard.server.csv_import import NewCamera, parse_cameras_csv
 from campusguard.server.health import HealthTracker
 from campusguard.server.qt_bridge import MainThreadInvoker
 from campusguard.server.recorder import IncidentRecorder
+from campusguard.server.sync import PeerSync, SyncFacade, school_id_from_email
 from campusguard.server.retention import enforce_disk_budget, purge_old_footage
 from campusguard.settings import CameraConfig, CameraCredentials
 from campusguard.sources import build_capture_source
@@ -62,7 +63,7 @@ class ServerHost:
     """Owns the camera manager, repository and API. Camera operations run on the Qt thread."""
 
     def __init__(self, repository: Repository, vault, manager, config: ServerConfig,
-                 invoker: MainThreadInvoker) -> None:
+                 invoker: MainThreadInvoker, school_id: str = "") -> None:
         self.repository = repository
         self.vault = vault
         self.manager = manager
@@ -77,6 +78,11 @@ class ServerHost:
         self._start_timer.timeout.connect(self._start_next_batch)
         self.started_at = time.time()
         self.last_retention: dict = {}
+        self.sync = SyncFacade(
+            repository, config.server_id or "unnamed-server", config.server_name or "CampusGuard server",
+            config.school_id or school_id or "school-unknown", VERSION, lambda: self.config.peers,
+        )
+        self.peer_sync: PeerSync | None = None
         manager.default_preview = False
         manager.set_settings(repository.get_settings())
         manager.camera_status_changed.connect(self._on_status)
@@ -214,6 +220,8 @@ class ServerHost:
         return self.last_retention
 
     def stop_all(self) -> None:
+        if self.peer_sync is not None:
+            self.peer_sync.stop()
         self._start_timer.stop()
         self._snapshot_watchdog.stop()
         self.manager.stop_all()
@@ -247,6 +255,9 @@ class HostBackend:
             "open_incidents": host.repository.open_incident_count(),
             "footage_disk_free_gb": free_gb,
             "last_retention": host.last_retention,
+            "server_id": host.sync.server_id,
+            "server_name": host.sync.server_name,
+            "peers": [{"name": p["name"], "state": p["state"]} for p in host.sync.overview()["peers"]],
         }
 
     def list_cameras(self) -> list[dict]:
@@ -290,6 +301,19 @@ class HostBackend:
 
     def list_alerts(self, limit: int) -> list[dict]:
         return [self._incident(r) for r in self.host.repository.list_alerts(limit)]
+
+    # Phase 6 sync (read-only, thread-safe)
+    def sync_identity(self) -> dict:
+        return self.host.sync.identity()
+
+    def sync_events(self, since: int, limit: int) -> dict:
+        return self.host.sync.events(since, limit)
+
+    def sync_overview(self) -> dict:
+        return self.host.sync.overview()
+
+    def sync_alerts(self, limit: int) -> list[dict]:
+        return self.host.sync.remote_alerts(limit)
 
     def footage_path(self, public_id: str) -> Path | None:
         incident = self.host.repository.get_incident(public_id)
@@ -416,7 +440,7 @@ def run_server(host_override: str | None = None, port_override: int | None = Non
     repository = Repository(footage_dir=configured_footage)
     invoker = MainThreadInvoker()
     manager = CameraManager(vault, footage_dir=repository.footage_dir)
-    host = ServerHost(repository, vault, manager, config, invoker)
+    host = ServerHost(repository, vault, manager, config, invoker, school_id=school_id_from_email(session.email))
     try:
         api = ApiServer(config.host, config.port, config.token, HostBackend(host), log=log.info,
                         tls_cert_file=config.tls_cert_file, tls_key_file=config.tls_key_file)
@@ -426,6 +450,21 @@ def run_server(host_override: str | None = None, port_override: int | None = Non
     api.start()
     scheme = "https" if config.tls_cert_file and config.tls_key_file else "http"
     log.info("API listening on %s://%s:%d/api/v1 (access token stored in Windows Credential Manager)", scheme, config.host, api.port)
+
+    def on_new_remote_alert(peer: dict, event: dict) -> None:
+        log.info("alert from %s: %s on %s (%s)", peer["name"], event["event"], event["camera_name"], event["severity"])
+        repository.add_notification(
+            "remote_alert",
+            f"{event['severity']} alert from {peer['name']} · {event['camera_name']} ({float(event['confidence']):.0%})",
+        )
+
+    # Alert synchronisation with the school's other servers; runs on its own thread and
+    # can never block detection, recording or the API.
+    host.peer_sync = PeerSync(repository, host.sync, lambda: config.peers, vault.load_peer_token,
+                              on_new_alert=on_new_remote_alert)
+    host.peer_sync.start()
+    log.info("server id %s (%s), school %s, %d peer(s)", host.sync.server_id, host.sync.server_name,
+             host.sync.school_id, len(config.peers))
 
     exit_code = {"value": 0}
 

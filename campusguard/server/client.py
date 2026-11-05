@@ -150,6 +150,12 @@ class RemoteServerClient:
     def list_alerts(self) -> list[dict]:
         return self._json(self._request("/api/v1/alerts?limit=200")[1]).get("alerts", [])
 
+    def sync_overview(self) -> dict:
+        return self._json(self._request("/api/v1/sync/overview")[1])
+
+    def sync_alerts(self, limit: int = 200) -> list[dict]:
+        return self._json(self._request(f"/api/v1/sync/alerts?limit={int(limit)}")[1]).get("alerts", [])
+
     def snapshot(self, camera_id: str) -> bytes:
         status, body, content_type = self._request(f"/api/v1/cameras/{camera_id}/snapshot")
         if status != 200 or content_type.split(";", 1)[0].lower() != "image/jpeg":

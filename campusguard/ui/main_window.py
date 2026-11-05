@@ -646,7 +646,7 @@ class MainWindow(QMainWindow):
         self.incidents_page = IncidentsPage(self.repository)
         self.alerts_page = AlertsPage(self.repository)
         self.settings_page = SettingsPage(self.settings)
-        self.server_viewer_page = ServerViewerPage(self._remote_client)
+        self.server_viewer_page = ServerViewerPage(self._remote_client, peer_tokens=self.vault)
         self.info_pages = self._build_information_pages()
 
         self._pages = {

@@ -70,3 +70,24 @@ class CredentialVault:
             keyring.delete_password(self.SERVICE_NAME, camera_id)
         except keyring.errors.PasswordDeleteError:
             pass
+    # -- Phase 6: tokens used to read alerts from other servers of the same school ----
+    PEER_TOKEN_SERVICE = "CampusGuard peer servers"
+
+    @staticmethod
+    def _peer_key(address: str) -> str:
+        return address.strip().rstrip("/").lower()
+
+    def save_peer_token(self, address: str, token: str) -> None:
+        if token:
+            keyring.set_password(self.PEER_TOKEN_SERVICE, self._peer_key(address), token)
+        else:
+            self.delete_peer_token(address)
+
+    def load_peer_token(self, address: str) -> str:
+        return keyring.get_password(self.PEER_TOKEN_SERVICE, self._peer_key(address)) or ""
+
+    def delete_peer_token(self, address: str) -> None:
+        try:
+            keyring.delete_password(self.PEER_TOKEN_SERVICE, self._peer_key(address))
+        except keyring.errors.PasswordDeleteError:
+            pass

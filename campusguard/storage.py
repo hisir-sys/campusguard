@@ -96,6 +96,33 @@ class Repository:
             name TEXT PRIMARY KEY,
             value INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS remote_alerts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_server_id TEXT NOT NULL,
+            source_name TEXT NOT NULL,
+            source_incident_id TEXT NOT NULL,
+            camera_id TEXT NOT NULL,
+            camera_name TEXT NOT NULL,
+            happened_at TEXT NOT NULL,
+            event TEXT NOT NULL,
+            confidence REAL NOT NULL,
+            severity TEXT NOT NULL,
+            status TEXT NOT NULL,
+            has_footage INTEGER NOT NULL DEFAULT 0,
+            source_seq INTEGER NOT NULL DEFAULT 0,
+            received_at TEXT NOT NULL,
+            UNIQUE(source_server_id, source_incident_id)
+        );
+        CREATE INDEX IF NOT EXISTS remote_alerts_time ON remote_alerts(happened_at DESC);
+        CREATE TABLE IF NOT EXISTS peer_state (
+            server_id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            address TEXT NOT NULL,
+            last_seq INTEGER NOT NULL DEFAULT 0,
+            state TEXT NOT NULL DEFAULT 'disconnected',
+            last_seen TEXT,
+            last_error TEXT NOT NULL DEFAULT ''
+        );
         """
         with self._lock, self._connection() as connection:
             connection.execute("PRAGMA journal_mode = WAL")
@@ -109,6 +136,19 @@ class Repository:
             if "footage_path" not in columns:
                 connection.execute(
                     "ALTER TABLE incidents ADD COLUMN footage_path TEXT"
+                )
+            if "sync_seq" not in columns:
+                # Phase 6: every create/status/footage change gets a new sequence number so
+                # other servers can ask "what changed since N?" after a reconnect.
+                connection.execute(
+                    "ALTER TABLE incidents ADD COLUMN sync_seq INTEGER NOT NULL DEFAULT 0"
+                )
+                connection.execute("UPDATE incidents SET sync_seq = id WHERE sync_seq = 0")
+                top = connection.execute("SELECT COALESCE(MAX(sync_seq), 0) AS top FROM incidents").fetchone()["top"]
+                connection.execute(
+                    "INSERT INTO sequences(name, value) VALUES ('sync', ?) "
+                    "ON CONFLICT(name) DO UPDATE SET value = MAX(value, excluded.value)",
+                    (int(top),),
                 )
 
     def list_cameras(self) -> list[CameraConfig]:
@@ -199,6 +239,17 @@ class Repository:
                 [(key, json.dumps(value)) for key, value in settings.to_dict().items()],
             )
 
+    @staticmethod
+    def _next_sync_seq(connection: sqlite3.Connection) -> int:
+        row = connection.execute("SELECT value FROM sequences WHERE name = 'sync'").fetchone()
+        value = (int(row["value"]) if row else 0) + 1
+        connection.execute(
+            "INSERT INTO sequences(name, value) VALUES ('sync', ?) "
+            "ON CONFLICT(name) DO UPDATE SET value = excluded.value",
+            (value,),
+        )
+        return value
+
     def create_incident(
         self,
         camera: CameraConfig,
@@ -236,8 +287,8 @@ class Repository:
             row_id = int(cursor.lastrowid)
             public_id = f"INC-{row_id:05d}"
             connection.execute(
-                "UPDATE incidents SET public_id = ? WHERE id = ?",
-                (public_id, row_id),
+                "UPDATE incidents SET public_id = ?, sync_seq = ? WHERE id = ?",
+                (public_id, self._next_sync_seq(connection), row_id),
             )
             connection.execute(
                 "INSERT INTO alerts(incident_id, acknowledged) VALUES (?, 0)",
@@ -288,6 +339,7 @@ class Repository:
                 "DELETE FROM incidents WHERE happened_at < ?", (cutoff,)
             ).rowcount
             connection.execute("DELETE FROM notifications WHERE created_at < ?", (cutoff,))
+            connection.execute("DELETE FROM remote_alerts WHERE happened_at < ?", (cutoff,))
         return int(removed)
 
     def forget_footage_paths(self, paths: list[str]) -> None:
@@ -295,16 +347,17 @@ class Repository:
         if not paths:
             return
         with self._lock, self._connection() as connection:
-            connection.executemany(
-                "UPDATE incidents SET footage_path = NULL WHERE footage_path = ?",
-                [(str(path),) for path in paths],
-            )
+            for path in paths:
+                connection.execute(
+                    "UPDATE incidents SET footage_path = NULL, sync_seq = ? WHERE footage_path = ?",
+                    (self._next_sync_seq(connection), str(path)),
+                )
 
     def attach_incident_footage(self, public_id: str, footage_path: str) -> None:
         with self._lock, self._connection() as connection:
             connection.execute(
-                "UPDATE incidents SET footage_path = ? WHERE public_id = ?",
-                (str(footage_path), public_id),
+                "UPDATE incidents SET footage_path = ?, sync_seq = ? WHERE public_id = ?",
+                (str(footage_path), self._next_sync_seq(connection), public_id),
             )
 
     def update_incident_status(self, public_id: str, status: str) -> None:
@@ -318,14 +371,126 @@ class Repository:
             if row is None:
                 return
             connection.execute(
-                "UPDATE incidents SET status = ? WHERE public_id = ?",
-                (status, public_id),
+                "UPDATE incidents SET status = ?, sync_seq = ? WHERE public_id = ?",
+                (status, self._next_sync_seq(connection), public_id),
             )
             # Any explicit operator decision acknowledges the associated alert.
             if status != "NEW":
                 connection.execute(
                     "UPDATE alerts SET acknowledged = 1 WHERE incident_id = ?", (row["id"],)
                 )
+
+    # ------------------------------------------------------------------
+    # Phase 6: alert synchronisation between servers of one school
+    # ------------------------------------------------------------------
+    def list_sync_events(self, since_seq: int, limit: int = 200) -> tuple[list[dict[str, Any]], int]:
+        """Locally detected incidents changed after ``since_seq`` (oldest change first)."""
+        with self._lock, self._connection() as connection:
+            rows = connection.execute(
+                "SELECT public_id, camera_id, camera_name, happened_at, event, confidence, severity, "
+                "status, footage_path, sync_seq FROM incidents WHERE sync_seq > ? ORDER BY sync_seq ASC LIMIT ?",
+                (max(0, int(since_seq)), max(1, int(limit))),
+            ).fetchall()
+            latest = connection.execute("SELECT value FROM sequences WHERE name = 'sync'").fetchone()
+        events = [
+            {
+                "incident_id": row["public_id"], "camera_id": row["camera_id"], "camera_name": row["camera_name"],
+                "happened_at": row["happened_at"], "event": row["event"], "confidence": row["confidence"],
+                "severity": row["severity"], "status": row["status"],
+                "has_footage": bool(row["footage_path"]), "seq": int(row["sync_seq"]),
+            }
+            for row in rows
+        ]
+        return events, int(latest["value"]) if latest else 0
+
+    def upsert_remote_alert(self, source_server_id: str, source_name: str, event: dict[str, Any]) -> str:
+        """Store/refresh one alert received from another server. Returns new|updated|same."""
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        incident_id = str(event["incident_id"])
+        seq = int(event["seq"])
+        values = (
+            str(event["camera_id"]), str(event["camera_name"]), str(event["happened_at"]), str(event["event"]),
+            float(event["confidence"]), str(event["severity"]), str(event["status"]),
+            1 if event.get("has_footage") else 0,
+        )
+        with self._lock, self._connection() as connection:
+            existing = connection.execute(
+                "SELECT id, source_seq FROM remote_alerts WHERE source_server_id = ? AND source_incident_id = ?",
+                (source_server_id, incident_id),
+            ).fetchone()
+            if existing is None:
+                connection.execute(
+                    """INSERT INTO remote_alerts(source_server_id, source_name, source_incident_id, camera_id,
+                       camera_name, happened_at, event, confidence, severity, status, has_footage,
+                       source_seq, received_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (source_server_id, source_name, incident_id, *values, seq, now),
+                )
+                return "new"
+            if seq <= int(existing["source_seq"]):
+                return "same"        # duplicate or out-of-order delivery: never counted twice
+            connection.execute(
+                """UPDATE remote_alerts SET source_name = ?, camera_id = ?, camera_name = ?, happened_at = ?,
+                   event = ?, confidence = ?, severity = ?, status = ?, has_footage = ?, source_seq = ?
+                   WHERE id = ?""",
+                (source_name, *values, seq, existing["id"]),
+            )
+            return "updated"
+
+    def list_remote_alerts(self, limit: int = 200) -> list[dict[str, Any]]:
+        with self._lock, self._connection() as connection:
+            rows = connection.execute(
+                "SELECT * FROM remote_alerts ORDER BY happened_at DESC, id DESC LIMIT ?", (max(1, int(limit)),)
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def alert_counts(self) -> dict[str, Any]:
+        """Local and remote totals, split by severity (used for the school-wide overview)."""
+        with self._lock, self._connection() as connection:
+            local = connection.execute("SELECT severity, COUNT(*) AS n FROM incidents GROUP BY severity").fetchall()
+            remote = connection.execute(
+                "SELECT source_server_id, severity, COUNT(*) AS n FROM remote_alerts "
+                "GROUP BY source_server_id, severity"
+            ).fetchall()
+        local_by = {row["severity"]: int(row["n"]) for row in local}
+        remote_by: dict[str, dict[str, int]] = {}
+        for row in remote:
+            remote_by.setdefault(row["source_server_id"], {})[row["severity"]] = int(row["n"])
+        return {"local": local_by, "remote": remote_by}
+
+    def get_peer_state(self, server_id: str) -> dict[str, Any] | None:
+        with self._lock, self._connection() as connection:
+            row = connection.execute("SELECT * FROM peer_state WHERE server_id = ?", (server_id,)).fetchone()
+        return dict(row) if row else None
+
+    def list_peer_states(self) -> list[dict[str, Any]]:
+        with self._lock, self._connection() as connection:
+            rows = connection.execute("SELECT * FROM peer_state ORDER BY name").fetchall()
+        return [dict(row) for row in rows]
+
+    def save_peer_state(self, server_id: str, name: str, address: str, last_seq: int, state: str,
+                        last_seen: str | None, last_error: str = "") -> None:
+        with self._lock, self._connection() as connection:
+            connection.execute(
+                """INSERT INTO peer_state(server_id, name, address, last_seq, state, last_seen, last_error)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(server_id) DO UPDATE SET name = excluded.name, address = excluded.address,
+                   last_seq = excluded.last_seq, state = excluded.state,
+                   last_seen = COALESCE(excluded.last_seen, peer_state.last_seen), last_error = excluded.last_error""",
+                (server_id, name, address, int(last_seq), state, last_seen, last_error[:300]),
+            )
+
+    def delete_peer_state(self, server_id: str) -> None:
+        with self._lock, self._connection() as connection:
+            connection.execute("DELETE FROM peer_state WHERE server_id = ?", (server_id,))
+
+    def prune_peer_states(self, keep_addresses: set[str]) -> None:
+        """Forget peers that were removed from the configuration (and their alerts)."""
+        with self._lock, self._connection() as connection:
+            rows = connection.execute("SELECT server_id, address FROM peer_state").fetchall()
+            for row in rows:
+                if row["address"].rstrip("/").lower() not in keep_addresses:
+                    connection.execute("DELETE FROM peer_state WHERE server_id = ?", (row["server_id"],))
+                    connection.execute("DELETE FROM remote_alerts WHERE source_server_id = ?", (row["server_id"],))
 
     def list_alerts(self, limit: int = 500) -> list[dict[str, Any]]:
         with self._lock, self._connection() as connection:
