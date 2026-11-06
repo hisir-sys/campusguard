@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 # below) so the window and splash animation are not blocked at start-up.
 from campusguard.settings import CameraConfig, CameraCredentials, CameraStats
 from campusguard.ui.icons import IconLabel, set_icon_theme
-from campusguard.ui.theme import build_qss, get_palette, set_current
+from campusguard.ui.theme import build_qss, get_palette, rgba, set_current
 
 
 def apply_theme(application, theme: str) -> None:
@@ -128,8 +128,8 @@ def set_status_label(label: QLabel, status: str) -> None:
     label.setText(f"●  {status}")
     label.setStyleSheet(
         f"color: {color}; "
-        f"background: {color}18; "
-        f"border: 1px solid {color}38; "
+        f"background: {rgba(color, 40)}; "
+        f"border: 1px solid {rgba(color, 100)}; "
         "padding: 4px 9px; border-radius: 9px; "
         "font-size: 8pt; font-weight: 700; letter-spacing: 0.35px;"
     )

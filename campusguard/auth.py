@@ -255,3 +255,23 @@ def resume(now: Callable[[], float] = time.time) -> Session | None:
         return None
     save_session(session, now=now())
     return session
+
+
+_token_lock = __import__("threading").Lock()
+
+
+def fresh_access_token() -> str:
+    """A valid access token for background calls to the website ("" when not signed in).
+
+    Refresh tokens rotate, so the new one is saved straight away.
+    """
+    with _token_lock:
+        saved = load_saved()
+        if not saved:
+            return ""
+        try:
+            session = refresh_session(saved["refresh_token"])
+        except AuthError:
+            return ""
+        save_session(session, now=float(saved.get("verified_at") or time.time()))
+        return session.access_token

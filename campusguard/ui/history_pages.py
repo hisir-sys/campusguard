@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from campusguard.ui.severity import SEVERITY_TITLES, URGENT, severity_color, severity_title
 from campusguard.storage import Repository
 from campusguard.ui.common import make_page_title
 from campusguard.ui.theme import get_palette, rgba
@@ -472,23 +473,17 @@ def _severity_widget(
     severity: str,
 ) -> QLabel:
     value = str(severity).upper()
-    display_value = {
-        "LOW": "ALERT",
-        "MEDIUM": "CRITICAL ALERT",
-        "HIGH": "DANGER",
-    }.get(value, value)
-
     label = _pill(
-        display_value,
+        severity_title(value),
         "severityPill",
     )
 
-    if value == "HIGH":
-        label.setProperty("severity", "high")
-    elif value == "MEDIUM":
-        label.setProperty("severity", "medium")
-    else:
-        label.setProperty("severity", "low")
+    label.setProperty("severity", value.lower() if value in SEVERITY_TITLES else "low")
+    color = severity_color(value)
+    label.setStyleSheet(
+        f"color: {color}; border: 1px solid {color}; border-radius: 6px; "
+        "padding: 2px 8px; font-weight: 700; background: transparent;"
+    )
 
     label.style().unpolish(label)
     label.style().polish(label)
@@ -1592,17 +1587,13 @@ class IncidentsPage(QWidget):
             camera = str(row.get("camera_name", "Unknown camera")).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
             event = str(row.get("event", "Security event")).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
             severity = str(row.get("severity", "LOW")).upper()
-            severity_label = {
-                "LOW": "ALERT",
-                "MEDIUM": "CRITICAL ALERT",
-                "HIGH": "DANGER",
-            }.get(severity, severity)
-            severity_color = "#F87171" if severity == "HIGH" else ("#FBBF24" if severity == "MEDIUM" else "#34D399")
+            severity_label = severity_title(severity)
+            tint = severity_color(severity)
             entries.append(
                 f'<table width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 6px 0;">'
                 f'<tr><td style="padding:8px 10px;background:{rgba(palette.surface, 150)};border:1px solid {rgba(palette.line, 110)};border-radius:8px;">'
                 f'<span style="color:{palette.text};font-weight:600;">{event}</span>'
-                f'<span style="color:{severity_color};font-weight:700;"> &nbsp; {severity_label}</span><br/>'
+                f'<span style="color:{tint};font-weight:700;"> &nbsp; {severity_label}</span><br/>'
                 f'<span style="color:{palette.text_dim};font-size:9pt;">{camera} &nbsp; · &nbsp; {confidence:.0f}% confidence</span>'
                 f'</td></tr></table>'
             )
@@ -2175,7 +2166,7 @@ class AlertsPage(QWidget):
         high_count = sum(
             1
             for row in active
-            if row["severity"] == "HIGH"
+            if str(row["severity"]).upper() in URGENT
         )
 
         medium_low_count = len(active) - high_count
@@ -2243,12 +2234,12 @@ class AlertsPage(QWidget):
             camera = str(row.get("camera_name", "Unknown camera")).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
             event = str(row.get("event", "Security event")).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
             severity = str(row.get("severity", "LOW")).upper()
-            severity_color = "#F87171" if severity == "HIGH" else ("#FBBF24" if severity == "MEDIUM" else "#34D399")
+            tint = severity_color(severity)
             entries.append(
                 f'<table width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 6px 0;">'
                 f'<tr><td style="padding:8px 10px;background:{rgba(palette.surface, 150)};border:1px solid {rgba(palette.line, 110)};border-radius:8px;">'
                 f'<span style="color:{palette.text};font-weight:600;">{event}</span>'
-                f'<span style="color:{severity_color};font-weight:700;"> &nbsp; {severity}</span><br/>'
+                f'<span style="color:{tint};font-weight:700;"> &nbsp; {severity_title(severity)}</span><br/>'
                 f'<span style="color:{palette.text_dim};font-size:9pt;">{camera} &nbsp; · &nbsp; {confidence:.0f}% confidence</span>'
                 f'</td></tr></table>'
             )

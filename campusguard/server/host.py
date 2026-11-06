@@ -83,6 +83,7 @@ class ServerHost:
             config.school_id or school_id or "school-unknown", VERSION, lambda: self.config.peers,
         )
         self.peer_sync: PeerSync | None = None
+        self.cloud_sync = None
         manager.default_preview = False
         manager.set_settings(repository.get_settings())
         manager.camera_status_changed.connect(self._on_status)
@@ -261,6 +262,8 @@ class ServerHost:
     def stop_all(self) -> None:
         if self.peer_sync is not None:
             self.peer_sync.stop()
+        if self.cloud_sync is not None:
+            self.cloud_sync.stop()
         self._start_timer.stop()
         self._snapshot_watchdog.stop()
         self.manager.stop_all()
@@ -550,6 +553,18 @@ def run_server(host_override: str | None = None, port_override: int | None = Non
     host.peer_sync = PeerSync(repository, host.sync, lambda: config.peers, vault.load_peer_token,
                               on_new_alert=on_new_remote_alert)
     host.peer_sync.start()
+    # Summary + incident metadata (never video) to the school's website account.
+    from campusguard import auth as _auth
+    from campusguard.cloud_sync import CloudSync
+    from campusguard.storage import application_data_dir as _data_dir
+
+    def live_counts() -> dict:
+        snapshot = host.health.snapshot()
+        return {"online": sum(1 for item in snapshot.values() if item.get("status") == "LIVE")}
+
+    host.cloud_sync = CloudSync(repository, host.sync.server_id, host.sync.server_name, VERSION,
+                                _auth.fresh_access_token, _data_dir() / "cloud_sync.json", live_counts=live_counts)
+    host.cloud_sync.start()
     log.info("server id %s (%s), school %s, %d peer(s)", host.sync.server_id, host.sync.server_name,
              host.sync.school_id, len(config.peers))
 

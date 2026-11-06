@@ -532,6 +532,7 @@ class MainWindow(QMainWindow):
         # to initialize.
         if self.settings.connection_mode == "local":
             self._begin_camera_engine_import()
+            QTimer.singleShot(5000, self._start_cloud_sync)
 
         self._add_shortcut("Ctrl+1", lambda: self.navigate("dashboard"))
         self._add_shortcut("Ctrl+2", lambda: self.navigate("cameras"))
@@ -1302,6 +1303,9 @@ class MainWindow(QMainWindow):
             self._rebuild_information_pages()
         self.settings_page.set_saved()
         if previous_mode != self.settings.connection_mode:
+            self._stop_cloud_sync()
+            if self.settings.connection_mode == "local":
+                QTimer.singleShot(5000, self._start_cloud_sync)
             if self.settings.connection_mode == "server":
                 timer = getattr(self, "_camera_engine_poll", None)
                 if timer is not None:
@@ -1747,10 +1751,47 @@ class MainWindow(QMainWindow):
         self.dashboard.refresh_summary()
         self._update_alert_badge()
 
+    def _start_cloud_sync(self) -> None:
+        """Send this PC's summary + incident metadata to the website account (local mode only)."""
+        if getattr(self, "_cloud_sync", None) is not None or self.settings.connection_mode != "local":
+            return
+        try:
+            import uuid
+
+            from campusguard import auth as _auth
+            from campusguard.build_info import BUILD_VERSION
+            from campusguard.cloud_sync import CloudSync
+            from campusguard.storage import application_data_dir
+
+            folder = application_data_dir()
+            folder.mkdir(parents=True, exist_ok=True)
+            id_file = folder / "desktop_id.txt"
+            try:
+                desktop_id = id_file.read_text(encoding="utf-8").strip()
+            except OSError:
+                desktop_id = ""
+            if len(desktop_id) < 16:
+                desktop_id = "desktop-" + uuid.uuid4().hex
+                id_file.write_text(desktop_id, encoding="utf-8")
+            import socket
+
+            self._cloud_sync = CloudSync(self.repository, desktop_id, (socket.gethostname() or "This PC")[:60],
+                                         BUILD_VERSION, _auth.fresh_access_token, folder / "cloud_sync_desktop.json")
+            self._cloud_sync.start()
+        except Exception:
+            self._cloud_sync = None
+
+    def _stop_cloud_sync(self) -> None:
+        sync = getattr(self, "_cloud_sync", None)
+        self._cloud_sync = None
+        if sync is not None:
+            sync.stop()
+
     def closeEvent(self, event) -> None:
         # Stop everything that could create camera workers after the window is gone
         # (matters when the user logs out while the AI engine is still importing).
         self._closing = True
+        self._stop_cloud_sync()
         if hasattr(self, "server_viewer_page"):
             self.server_viewer_page.shutdown()
         for timer_name in ("_camera_engine_poll", "_refresh_timer"):
