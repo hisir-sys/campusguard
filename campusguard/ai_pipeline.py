@@ -210,12 +210,14 @@ class FightDecision:
         self.confidences: deque[float] = deque(maxlen=self.TRIGGER_PREDICTIONS)
         self.event_latched = False
         self.normal_release_count = 0
+        self.peak_confidence: float | None = None
 
     def reset(self) -> None:
         self.states.clear()
         self.confidences.clear()
         self.event_latched = False
         self.normal_release_count = 0
+        self.peak_confidence = None
 
     def update(self, state: str, confidence: float | None) -> Event | None:
         if state == "NORMAL":
@@ -225,6 +227,7 @@ class FightDecision:
             if self.normal_release_count >= self.NORMAL_RELEASE_PREDICTIONS:
                 self.event_latched = False
                 self.normal_release_count = 0
+                self.peak_confidence = None
             return None
 
         self.normal_release_count = 0
@@ -238,6 +241,13 @@ class FightDecision:
         self.confidences.append(float(confidence))
 
         if self.event_latched:
+            # Keep one incident latched for the full confrontation, but surface
+            # confidence improvements so storage and the toast can track its peak.
+            current = self.peak_confidence
+            observed = float(confidence)
+            if current is None or observed > current + 1e-6:
+                self.peak_confidence = observed
+                return "UPDATE", observed, "HIGH"
             return None
         if len(self.states) < self.TRIGGER_PREDICTIONS:
             return None
@@ -253,6 +263,7 @@ class FightDecision:
             return None
 
         self.event_latched = True
+        self.peak_confidence = rolling_confidence
         return "FIGHT DETECTED", rolling_confidence, "HIGH"
 
 

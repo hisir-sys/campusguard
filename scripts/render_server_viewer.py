@@ -50,11 +50,21 @@ def render(app: QApplication, output: Path, theme: str, count: int) -> float:
     page.connection_status.setText(f"UI TEST DATA — NOT LIVE · Layout size: {count} camera cards")
     started = time.perf_counter()
     page._sync_camera_cards([camera_fixture(i + 1) for i in range(count)])
-    app.processEvents()
     page.resize(1280, 820)
+    page.ensurePolished()
     page.show()
-    app.processEvents()
-    page.grab().save(str(output))
+    # Process layout/paint events after showing and sizing; otherwise some Qt
+    # platforms can grab a not-yet-laid-out top-level widget (a tiny PNG).
+    for _ in range(3):
+        app.processEvents()
+    image = page.grab()
+    if image.isNull() or image.width() < 1000 or image.height() < 600:
+        raise RuntimeError(
+            "Viewer grab is empty or undersized: "
+            f"{image.width()}x{image.height()}"
+        )
+    if not image.save(str(output), "PNG"):
+        raise RuntimeError(f"Qt could not save viewer screenshot: {output}")
     elapsed = time.perf_counter() - started
     page.shutdown()
     page.close()
@@ -73,8 +83,13 @@ def main() -> int:
         for count in (0, 5, 120):
             path = output / f"server-viewer-{theme}-{count:03d}-test-fixtures.png"
             elapsed = render(app, path, theme, count)
-            if not path.exists() or path.stat().st_size < 10_000:
-                raise RuntimeError(f"Screenshot was not written correctly: {path}")
+            # PNG compression varies by OS/Qt version and theme. Validate that
+            # the saved file is a real, nontrivial PNG instead of assuming 10 KB.
+            if not path.is_file() or path.stat().st_size < 1_000:
+                size = path.stat().st_size if path.exists() else 0
+                raise RuntimeError(
+                    f"Screenshot was not written correctly: {path} ({size} bytes)"
+                )
             print(f"RENDER OK: {path} ({path.stat().st_size} bytes, {elapsed:.2f}s)")
     return 0
 

@@ -9,7 +9,12 @@ from campusguard.settings import CameraConfig
 
 def severity_for(confidence: float) -> str:
     score = confidence * 100.0 if confidence <= 1.0 else confidence
-    return "LOW" if score < 85.0 else "MEDIUM" if score < 95.0 else "HIGH"
+    return (
+        "LOW" if score < 70.0
+        else "MEDIUM" if score < 85.0
+        else "HIGH" if score < 95.0
+        else "CRITICAL"
+    )
 
 
 class IncidentRecorder:
@@ -31,6 +36,25 @@ class IncidentRecorder:
         with self._lock:
             self._pending_footage[camera.camera_id] = str(incident["public_id"])
         return incident
+
+    def update_assessment(self, camera_id: str, confidence: float) -> str | None:
+        """Update the existing incident's peak confidence without creating a new row."""
+        with self._lock:
+            public_id = self._pending_footage.get(camera_id)
+        if public_id is None:
+            return None
+        incident = self.repository.get_incident(public_id)
+        if incident is None:
+            return None
+        previous = float(incident.get("confidence", 0.0))
+        previous_score = previous * 100.0 if previous <= 1.0 else previous
+        score = confidence * 100.0 if confidence <= 1.0 else confidence
+        if score <= previous_score:
+            return public_id
+        self.repository.update_incident_assessment(
+            public_id, confidence, severity_for(confidence)
+        )
+        return public_id
 
     def attach_footage(self, camera_id: str, footage_path: str) -> str | None:
         with self._lock:

@@ -6,9 +6,18 @@ from campusguard.ai_pipeline import FightDecision, InteractionEngine, TrackedPer
 from campusguard.model_adapters import MODEL_INPUT_ADAPTERS
 from campusguard.model_registry import MODEL_PROFILES
 from campusguard.settings import AppSettings
+from campusguard.server.recorder import severity_for
 
 
 class SettingsTests(unittest.TestCase):
+    def test_incident_severity_matches_alert_thresholds(self):
+        self.assertEqual(severity_for(0.69), "LOW")
+        self.assertEqual(severity_for(0.70), "MEDIUM")
+        self.assertEqual(severity_for(0.849), "MEDIUM")
+        self.assertEqual(severity_for(0.85), "HIGH")
+        self.assertEqual(severity_for(0.949), "HIGH")
+        self.assertEqual(severity_for(0.95), "CRITICAL")
+
     def test_all_violence_models_round_trip(self):
         for key in ("mc3", "fdsc_mc3", "r3d", "x3d"):
             settings = AppSettings.from_dict({"violence_model": key})
@@ -120,6 +129,19 @@ class DecisionTests(unittest.TestCase):
         for _ in range(3):
             self.assertIsNone(decision.update("FIGHT DETECTED", 0.90))
         self.assertTrue(decision.event_latched)
+
+    def test_higher_confidence_updates_same_latched_event(self):
+        decision = FightDecision(0.65)
+        self.assertEqual(
+            decision.update("FIGHT DETECTED", 0.80),
+            ("FIGHT DETECTED", 0.80, "HIGH"),
+        )
+        self.assertEqual(
+            decision.update("FIGHT DETECTED", 0.94),
+            ("UPDATE", 0.94, "HIGH"),
+        )
+        self.assertIsNone(decision.update("FIGHT DETECTED", 0.91))
+        self.assertEqual(decision.peak_confidence, 0.94)
 
     def test_normal_resets_event_latch(self):
         decision = FightDecision(0.65)

@@ -179,6 +179,31 @@ class SeverityAlertToast(QFrame):
         self._sound_beats = 1
         self._sound_timer.start()
 
+    def update_alert(
+        self,
+        incident_id: str,
+        event: str,
+        camera_name: str,
+        confidence: float,
+    ) -> None:
+        """Refresh the same incident's peak confidence without replaying its alarm."""
+        score = confidence * 100.0 if confidence <= 1.0 else confidence
+        if score < 70:
+            return
+        self._level = "medium" if score < 85 else "high" if score < 95 else "critical"
+        config = self._LEVELS[self._level]
+        self._incident_id = incident_id
+        self._title.setText(config["title"])
+        self._message.setText(f"{event} · {camera_name}")
+        self._confidence.setText(f"Peak model confidence  {score:.1f}%")
+        self._apply_theme()
+        self._dismiss_timer.start(config["popup_ms"])
+        self.adjustSize()
+        self.setFixedHeight(max(166, self.sizeHint().height()))
+        self._position()
+        self.show()
+        self.raise_()
+
     def _position(self) -> None:
         parent = self.parentWidget()
         if parent is None:

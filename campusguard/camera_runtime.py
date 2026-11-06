@@ -188,6 +188,7 @@ class RuntimeOptions:
         self._source_fps = 30.0
         self._preview_enabled = True
         self._snapshot_enabled = False
+        self._snapshot_interval = 0.5
 
     def snapshot(self) -> tuple[AppSettings, bool]:
         with self._lock:
@@ -223,6 +224,15 @@ class RuntimeOptions:
     def snapshot_enabled(self) -> bool:
         with self._lock:
             return self._snapshot_enabled
+
+    def set_snapshot_fps(self, fps: float) -> None:
+        with self._lock:
+            self._snapshot_interval = 1.0 / max(1.0, min(float(fps), 12.0))
+
+    @property
+    def snapshot_interval(self) -> float:
+        with self._lock:
+            return self._snapshot_interval
 
     @property
     def source_fps(self) -> float:
@@ -486,7 +496,10 @@ class FrameAnalysisThread(QThread):
                 want_preview = self.options.preview_enabled and (
                     preview_interval <= 0.0 or now - last_preview >= preview_interval
                 )
-                want_snapshot = self.options.snapshot_enabled and now - last_snapshot >= 0.5
+                want_snapshot = (
+                    self.options.snapshot_enabled
+                    and now - last_snapshot >= self.options.snapshot_interval
+                )
                 processed = None
 
                 if pipeline is None:
@@ -859,10 +872,16 @@ class CameraManager(QObject):
             session.options.set_preview_enabled(enabled)
 
     def set_camera_snapshot(self, camera_id: str, enabled: bool) -> None:
-        """Enable low-rate JPEG snapshots only while a remote viewer watches."""
+        """Enable JPEG previews only while a remote viewer watches."""
         session = self._sessions.get(camera_id)
         if session is not None:
             session.options.set_snapshot_enabled(enabled)
+
+    def set_camera_snapshot_rate(self, camera_id: str, fps: float) -> None:
+        """Adjust JPEG preview rate for a selected full live view."""
+        session = self._sessions.get(camera_id)
+        if session is not None:
+            session.options.set_snapshot_fps(fps)
 
     def set_camera_ai(self, camera_id: str, enabled: bool) -> None:
         session = self._sessions.get(camera_id)
