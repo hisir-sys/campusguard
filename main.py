@@ -296,21 +296,22 @@ class AppController:
         self._run(updater.check_for_update, self._offer_update)
 
     def _offer_update(self, info) -> None:
-        if not info or self.window is None:
+        if not info or self.window is None or getattr(self, "_update_dialog", None) is not None:
             return
-        answer = QMessageBox.question(
-            self.window,
-            "CampusGuard update available",
-            f"CampusGuard update {info['version']} is available.\n\n"
-            "Download and install it now? CampusGuard will close and reopen automatically.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.Yes,
-        )
-        if answer != QMessageBox.StandardButton.Yes:
-            return
+        from campusguard.ui.update_dialog import UpdateDialog
+
+        dialog = UpdateDialog(str(info["version"]), self.window)
+        self._update_dialog = dialog
+        dialog.update_requested.connect(lambda: self._start_update(info))
+        dialog.finished.connect(lambda _r: setattr(self, "_update_dialog", None))
+        dialog.open()
+
+    def _start_update(self, info) -> None:
         from campusguard import updater
 
-        self.window.statusBar().showMessage("Downloading the CampusGuard update…")
+        dialog = getattr(self, "_update_dialog", None)
+        if dialog is not None:
+            dialog.show_downloading()
         self._run(
             lambda: updater.download_installer(info["url"], info["checksum_url"]),
             self._install_update,
@@ -321,13 +322,14 @@ class AppController:
             return
         from campusguard import updater
 
-        if not installer:
-            QMessageBox.warning(self.window, "Update", "The update could not be downloaded or verified. Please try again later.")
-            return
-        if not updater.launch_installer(installer):
-            QMessageBox.warning(self.window, "Update", "The installer could not be started. Please try again later.")
+        dialog = getattr(self, "_update_dialog", None)
+        if not installer or not updater.launch_installer(installer):
+            if dialog is not None:
+                dialog.show_failed()
             return
         window, self.window = self.window, None
+        if dialog is not None:
+            dialog.close()
         self._close_window_for_flow(window)
         self.app.quit()
 
