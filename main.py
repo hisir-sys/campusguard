@@ -4,12 +4,13 @@ import sys
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QTimer, Qt
+from PySide6.QtCore import QTimer, QVariantAnimation, Qt
 from PySide6.QtGui import QFontDatabase, QGuiApplication, QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
     QFrame,
+    QGraphicsOpacityEffect,
     QLabel,
     QMessageBox,
     QVBoxLayout,
@@ -35,27 +36,37 @@ def _load_brand_fonts() -> None:
 
 
 class StartupWindow(QWidget):
-    """Instant lightweight start-up surface: the CampusGuard orb and a status line."""
+    """Launch screen: the CampusGuard logo draws itself in, then hands over to the glass
+    thinking orb while the app loads. Colours follow the saved dark/light theme."""
+
+    LOGO_SECONDS = 2.6
 
     def __init__(self) -> None:
         super().__init__()
+        from campusguard.ui.brand_logo import LogoReveal, saved_theme
+        from campusguard.ui.theme import get_palette, set_current
+
         self.setWindowTitle("CampusGuard")
         self.setWindowIcon(QApplication.windowIcon())
         self.setFixedSize(380, 420)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
 
+        set_current(saved_theme())
+        palette = get_palette()
+        light = palette.name == "light"
+        accent_text = "#5E8F0B" if light else "#C8FF52"
         panel = QFrame(self)
         panel.setObjectName("startupPanel")
         panel.setGeometry(0, 0, 380, 420)
         panel.setStyleSheet(
-            """
-            QFrame#startupPanel {
-                background: #090C0A;
-                border: 1px solid rgba(200,255,82,0.18);
+            f"""
+            QFrame#startupPanel {{
+                background: {palette.bg0};
+                border: 1px solid {"rgba(23,27,22,0.14)" if light else "rgba(200,255,82,0.18)"};
                 border-radius: 28px;
-            }
-            QLabel { background: transparent; border: none; }
+            }}
+            QLabel {{ background: transparent; border: none; }}
             """
         )
 
@@ -64,15 +75,28 @@ class StartupWindow(QWidget):
         layout.setSpacing(0)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self.orb = ThinkingOrb(size=210)
+        # The logo and the orb share one slot; the orb takes over when the logo has formed.
+        self._stage = QWidget()
+        self._stage.setFixedSize(210, 210)
+        self.logo = LogoReveal(self._stage, size=210)
+        self.logo.setAccessibleName("CampusGuard logo")
+        self.orb = ThinkingOrb(self._stage, size=210)
         self.orb.setAccessibleName("CampusGuard start-up animation")
-        layout.addWidget(self.orb, 0, Qt.AlignmentFlag.AlignCenter)
+        self.orb.hide()
+        self.orb.stop()
+        self._orb_fade = QGraphicsOpacityEffect(self.orb)
+        self._orb_fade.setOpacity(0.0)
+        self.orb.setGraphicsEffect(self._orb_fade)
+        self._logo_fade = QGraphicsOpacityEffect(self.logo)
+        self._logo_fade.setOpacity(1.0)
+        self.logo.setGraphicsEffect(self._logo_fade)
+        layout.addWidget(self._stage, 0, Qt.AlignmentFlag.AlignCenter)
         layout.addSpacing(18)
 
-        brand = QLabel('CAMPUS<span style="color:#C8FF52;">GUARD</span>')
+        brand = QLabel(f'CAMPUS<span style="color:{accent_text};">GUARD</span>')
         brand.setAlignment(Qt.AlignmentFlag.AlignCenter)
         brand.setStyleSheet(
-            "color: #F7F8F4; font-family: 'Manrope', 'DM Sans', 'Segoe UI'; "
+            f"color: {palette.text}; font-family: 'Manrope', 'DM Sans', 'Segoe UI'; "
             "font-size: 17pt; font-weight: 800; letter-spacing: 4px;"
         )
         layout.addWidget(brand)
@@ -80,8 +104,15 @@ class StartupWindow(QWidget):
 
         self.status = QLabel("Starting…")
         self.status.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.status.setStyleSheet("color: #8D958B; font-size: 10pt; letter-spacing: 1px;")
+        self.status.setStyleSheet(f"color: {palette.muted}; font-size: 10pt; letter-spacing: 1px;")
         layout.addWidget(self.status)
+
+        self._handover = QTimer(self)
+        self._handover.setSingleShot(True)
+        self._handover.timeout.connect(self._show_orb)
+        self._handover_anim = QVariantAnimation(self)
+        self._handover_anim.setDuration(450)
+        self._handover_anim.valueChanged.connect(self._on_handover)
 
         screen = QGuiApplication.primaryScreen()
         if screen is not None:
@@ -91,16 +122,36 @@ class StartupWindow(QWidget):
     def set_status(self, text: str) -> None:
         self.status.setText(text)
 
-    def showEvent(self, event) -> None:
+    def _show_orb(self) -> None:
+        self.orb.show()
         self.orb.start()
+        self._handover_anim.setStartValue(0.0)
+        self._handover_anim.setEndValue(1.0)
+        self._handover_anim.start()
+
+    def _on_handover(self, value) -> None:
+        value = float(value)
+        self._orb_fade.setOpacity(value)
+        self._logo_fade.setOpacity(1.0 - value)
+        if value >= 1.0:
+            self.logo.stop()
+            self.logo.hide()
+
+    def showEvent(self, event) -> None:
+        self.logo.start()
+        # Let the finished logo hold for a beat, then crossfade to the thinking orb.
+        self._handover.start(int((self.LOGO_SECONDS + 0.6) * 1000))
         super().showEvent(event)
 
     def hideEvent(self, event) -> None:
         self.orb.stop()
+        self.logo.stop()
         super().hideEvent(event)
 
     def closeEvent(self, event) -> None:
+        self._handover.stop()
         self.orb.stop()
+        self.logo.stop()
         super().closeEvent(event)
 
 
