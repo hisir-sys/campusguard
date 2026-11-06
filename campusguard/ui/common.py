@@ -152,9 +152,7 @@ class CameraPreview(QFrame):
         self.video_label = QLabel("Waiting for camera frames")
         self.video_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.video_label.setProperty("videoSurface", True)
-        self.video_label.setStyleSheet(
-            "border-radius: 14px; font-size: 9pt; padding: 1px;"
-        )
+        self.video_label.setStyleSheet("font-size: 9pt;")
         self.video_label.setScaledContents(False)
 
         self.name_overlay = QLabel(camera.name, self)
@@ -182,7 +180,7 @@ class CameraPreview(QFrame):
         self.analysis_overlay.raise_()
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(8, 8, 8, 8)
+        outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
         outer.addWidget(self.video_label, 1)
 

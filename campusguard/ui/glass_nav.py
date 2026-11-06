@@ -211,8 +211,8 @@ class GlassBar(QWidget):
 
         if self._hover > 0.01:
             spot = QRadialGradient(QPointF(self._spot_x, h * 0.5), max(120.0, w * 0.18))
-            spot.setColorAt(0.0, qcolor(pal.accent, int(34 * self._hover)))
-            spot.setColorAt(1.0, qcolor(pal.accent, 0))
+            spot.setColorAt(0.0, qcolor(pal.ink, int(34 * self._hover)))
+            spot.setColorAt(1.0, qcolor(pal.ink, 0))
             painter.fillRect(QRectF(0, 0, w, h), QBrush(spot))
 
             streak = QLinearGradient(self._spot_x - 100, 0, self._spot_x + 100, 0)
@@ -325,14 +325,14 @@ class NavButton(QAbstractButton):
         # soft pill behind the active item
         if self._active > 0.01:
             pill = QRectF(2.0, 2.0, w - 4.0, h - 4.0)
-            painter.setPen(QPen(qcolor(pal.accent, int(60 * self._active)), 1.0))
-            painter.setBrush(qcolor(pal.accent, int(22 * self._active)))
+            painter.setPen(QPen(qcolor(pal.ink, int(60 * self._active)), 1.0))
+            painter.setBrush(qcolor(pal.ink, int(22 * self._active)))
             painter.drawRoundedRect(pill, 12.0, 12.0)
 
         content_w = self._content_width()
         x = (w - content_w) / 2.0
         if self._icon:
-            icon_color = mix_colors(text_color, QColor(pal.accent), self._active)
+            icon_color = mix_colors(text_color, QColor(pal.ink), self._active)
             pixmap = icon_pixmap(self._icon, self.ICON_SIZE, icon_color.name())
             painter.drawPixmap(QPointF(x, cy - self.ICON_SIZE / 2.0), pixmap)
             x += self.ICON_SIZE + 8
@@ -348,9 +348,9 @@ class NavButton(QAbstractButton):
             underline_y = h - 4.0
             left = (w - underline_w) / 2.0
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(qcolor(pal.accent, int(60 * reveal)))
+            painter.setBrush(qcolor(pal.ink, int(60 * reveal)))
             painter.drawRoundedRect(QRectF(left - 2, underline_y - 1.5, underline_w + 4, 4.0), 2.0, 2.0)
-            painter.setBrush(qcolor(pal.accent, 255))
+            painter.setBrush(qcolor(pal.ink, 255))
             painter.drawRoundedRect(QRectF(left, underline_y, underline_w, 2.0), 1.0, 1.0)
 
         if self._badge > 0:
@@ -421,7 +421,7 @@ class RoundIconButton(QAbstractButton):
             painter.drawEllipse(QRectF(1.0, 1.0, size - 2.0, size - 2.0))
 
         if self._tone == "accent":
-            color = QColor(pal.accent)
+            color = QColor(pal.ink)
         else:
             color = mix_colors(QColor(pal.text_dim), QColor(pal.text), self._hover)
         glyph = max(12, int(size * 0.5))
@@ -493,6 +493,83 @@ class GlassButton(QAbstractButton):
         text_w = metrics.horizontalAdvance(self.text())
         baseline = h / 2.0 + (metrics.ascent() - metrics.descent()) / 2.0
         painter.drawText(QPointF((w - text_w) / 2.0, baseline), self.text())
+
+
+class AccountButton(GlassButton):
+    """Account chip: avatar initial, "Signed in" + elided email, and a log-out glyph.
+
+    The email can never overflow: it is elided to the available width and the
+    full address is in the tooltip. Collapsed, only the avatar circle remains.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__("Log in", parent)
+        self._email: str | None = None
+        self._compact = False
+        self.setFixedHeight(48)
+
+    def set_email(self, email: str | None) -> None:
+        self._email = (email or "").strip() or None
+        self.setText("Log out" if self._email else "Log in")
+        self.update()
+
+    def set_compact(self, compact: bool) -> None:
+        self._compact = compact
+        self.setFixedHeight(40 if compact else 48)
+        self.update()
+
+    def sizeHint(self) -> QSize:
+        return QSize(196, 48)
+
+    def paintEvent(self, event) -> None:
+        pal = get_palette()
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        w = float(self.width())
+        h = float(self.height())
+        if not self._compact:
+            painter.setPen(QPen(qcolor(pal.line, int(pal.line_alpha * 1.8 + 50 * self._hover)), 1.0))
+            painter.setBrush(qcolor(pal.veil, int(pal.veil_alpha * 1.5 + pal.veil_alpha * 1.5 * self._hover)))
+            painter.drawRoundedRect(QRectF(0.5, 0.5, w - 1.0, h - 1.0), 12.0, 12.0)
+        diameter = 32.0
+        cx = w / 2.0 if self._compact else 8.0 + diameter / 2.0
+        circle = QRectF(cx - diameter / 2.0, (h - diameter) / 2.0, diameter, diameter)
+        painter.setPen(QPen(qcolor(pal.ink, 150), 1.0))
+        painter.setBrush(qcolor(pal.ink, 34 + int(30 * self._hover)))
+        painter.drawEllipse(circle)
+        initial = (self._email or "?")[:1].upper()
+        font = QFont(self.font())
+        font.setPointSizeF(10.5)
+        font.setWeight(QFont.Weight.Bold)
+        painter.setFont(font)
+        painter.setPen(QColor(pal.ink))
+        painter.drawText(circle, int(Qt.AlignmentFlag.AlignCenter), initial)
+        if self._compact:
+            return
+        if not self._email:
+            painter.setFont(self._label_font())
+            painter.setPen(QColor(pal.text))
+            painter.drawText(QRectF(circle.right() + 10, 0, w - circle.right() - 18, h), int(Qt.AlignmentFlag.AlignVCenter), "Log in")
+            return
+        icon_size = 16
+        icon_x = w - icon_size - 12.0
+        painter.drawPixmap(QPointF(icon_x, (h - icon_size) / 2.0), icon_pixmap("log-out", icon_size, get_palette().text_dim))
+        text_left = circle.right() + 10.0
+        text_w = icon_x - text_left - 8.0
+        small = QFont(self.font())
+        small.setPointSizeF(7.5)
+        small.setWeight(QFont.Weight.Medium)
+        painter.setFont(small)
+        painter.setPen(QColor(pal.muted))
+        painter.drawText(QRectF(text_left, 6, text_w, 16), int(Qt.AlignmentFlag.AlignVCenter), "SIGNED IN")
+        main = QFont(self.font())
+        main.setPointSizeF(9.0)
+        main.setWeight(QFont.Weight.DemiBold)
+        painter.setFont(main)
+        painter.setPen(QColor(pal.text))
+        elided = QFontMetrics(main).elidedText(self._email, Qt.TextElideMode.ElideMiddle, int(text_w))
+        painter.drawText(QRectF(text_left, 21, text_w, 20), int(Qt.AlignmentFlag.AlignVCenter), elided)
 
 
 # ----------------------------------------------------------------------------
@@ -588,7 +665,7 @@ class SearchControl(QWidget):
         pal = get_palette()
         self.edit.setStyleSheet(
             "QLineEdit { background: transparent; border: none; padding: 0 2px; "
-            f"color: {pal.text}; selection-background-color: {pal.accent}; "
+            f"color: {pal.text}; selection-background-color: {pal.ink}; "
             "selection-color: #090C0A; }"
         )
         self.esc_badge.setStyleSheet(
@@ -641,10 +718,10 @@ class SearchControl(QWidget):
         glow = QPainterPath()
         glow.addRoundedRect(QRectF(0.5, 0.5, w - 1.0, h - 1.0), radius, radius)
         painter.fillPath(glow, qcolor(pal.field, int(pal.field_alpha * self._open)))
-        painter.setPen(QPen(qcolor(pal.accent, int(70 * self._open)), 3.0))
+        painter.setPen(QPen(qcolor(pal.ink, int(70 * self._open)), 3.0))
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawRoundedRect(QRectF(0.5, 0.5, w - 1.0, h - 1.0), radius, radius)
-        painter.setPen(QPen(qcolor(pal.accent, int(230 * self._open)), 1.2))
+        painter.setPen(QPen(qcolor(pal.ink, int(230 * self._open)), 1.2))
         painter.drawRoundedRect(QRectF(1.0, 1.0, w - 2.0, h - 2.0), radius, radius)
 
 
@@ -733,11 +810,11 @@ class _SideNavButton(QAbstractButton):
         reveal = max(self._hover, self._active)
 
         if self._active > 0.01:
-            painter.setPen(QPen(qcolor(pal.accent, int(80 * self._active)), 1))
-            painter.setBrush(qcolor(pal.accent, int(26 * self._active)))
+            painter.setPen(QPen(qcolor(pal.ink, int(80 * self._active)), 1))
+            painter.setBrush(qcolor(pal.ink, int(26 * self._active)))
             painter.drawRoundedRect(QRectF(2, 2, w - 4, h - 4), 12, 12)
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(qcolor(pal.accent, 255))
+            painter.setBrush(qcolor(pal.ink, 255))
             painter.drawRoundedRect(QRectF(3, 11, 3, h - 22), 1.5, 1.5)
         elif reveal > 0.01:
             painter.setPen(QPen(qcolor(pal.line, int(18 + 22 * self._hover)), 1))
@@ -825,7 +902,7 @@ class TopBar(GlassBar):
         self.theme_button.clicked.connect(lambda _checked=False: self.theme_toggle_requested.emit())
         root.addWidget(self.theme_button, 0, Qt.AlignmentFlag.AlignHCenter)
 
-        self.login_button = GlassButton("Log in")
+        self.login_button = AccountButton()
         self.login_button.clicked.connect(lambda _checked=False: self.login_requested.emit())
         root.addWidget(self.login_button, 0, Qt.AlignmentFlag.AlignHCenter)
 
@@ -841,9 +918,8 @@ class TopBar(GlassBar):
             button.set_expanded(self._expanded)
         self.logo.set_expanded(self._expanded)
         self.search.setFixedWidth(196 if self._expanded else 48)
-        self.login_button.setVisible(self._expanded)
-        if self._expanded:
-            self.login_button.setFixedWidth(196)
+        self.login_button.set_compact(not self._expanded)
+        self.login_button.setFixedWidth(196 if self._expanded else 44)
         self.update()
 
     def enterEvent(self, event) -> None:
@@ -870,11 +946,10 @@ class TopBar(GlassBar):
 
     def set_operator(self, name: str | None) -> None:
         if name:
-            short = name if len(name) <= 20 else name[:19] + "…"
-            self.login_button.setText(f"Log out · {short}")
+            self.login_button.set_email(name)
             self.login_button.setToolTip(f"Signed in as {name}. Click to log out.")
         else:
-            self.login_button.setText("Log in")
+            self.login_button.set_email(None)
             self.login_button.setToolTip("Sign in with your CampusGuard account.")
 
     def focus_search(self) -> None:
@@ -959,9 +1034,9 @@ class _DockButton(QAbstractButton):
         reveal = self._hover
 
         if reveal > 0.01:
-            painter.setPen(QPen(qcolor(pal.accent, int(65 * reveal)), 1))
-            painter.setBrush(qcolor(pal.accent, int(24 * reveal)))
-            painter.drawRoundedRect(QRectF(1, 1, w - 2, h - 2), 15, 15)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(qcolor(pal.ink, int(26 * reveal)))
+            painter.drawRoundedRect(QRectF(1, 1, w - 2, h - 2), 14, 14)
 
         icon_size = 20
         color = mix_colors(QColor(pal.text_dim), QColor(pal.text), max(reveal, self._active * 0.55))
@@ -980,13 +1055,9 @@ class _DockButton(QAbstractButton):
             painter.drawText(QPointF(48, h / 2 + 4), self._label)
 
         if self._active > 0.01:
-            glow = QRadialGradient(QPointF(w / 2.0, h - 6.0), 24.0)
-            glow.setColorAt(0.0, qcolor(pal.accent, int(70 * self._active)))
-            glow.setColorAt(1.0, qcolor(pal.accent, 0))
-            painter.fillRect(QRectF(0, h - 18, w, 18), QBrush(glow))
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(qcolor(pal.accent, int(235 * self._active)))
-            painter.drawRoundedRect(QRectF(w / 2.0 - 20, h - 4, 40, 2), 1, 1)
+            painter.setBrush(qcolor(pal.ink, int(255 * self._active)))
+            painter.drawRoundedRect(QRectF(w / 2.0 - 8, h - 6, 16, 3), 1.5, 1.5)
 
         if self._badge > 0:
             painter.setPen(Qt.PenStyle.NoPen)

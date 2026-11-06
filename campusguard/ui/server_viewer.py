@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from campusguard.server.client import RemoteServerClient
+from campusguard.ui.theme import get_palette, rgba
 from campusguard.ui.common import make_page_title
 
 
@@ -436,6 +437,11 @@ class ServerViewerPage(QWidget):
     def _worker_failed(self, message: str) -> None:
         self.connection_status.setText(f"Server unreachable or access unavailable. Retrying automatically. {message}")
         self.connection_status.setProperty("muted", False)
+        warn = get_palette().warn
+        self.connection_status.setStyleSheet(
+            f"color: {get_palette().text}; background: {rgba(warn, 30)}; "
+            f"border: 1px solid {rgba(warn, 110)}; border-radius: 10px; padding: 9px 12px;"
+        )
         self.connection_status.style().unpolish(self.connection_status)
         self.connection_status.style().polish(self.connection_status)
 
@@ -457,6 +463,7 @@ class ServerViewerPage(QWidget):
             f"{counts.get('connecting', 0)} connecting"
         )
         self.connection_status.setProperty("muted", True)
+        self.connection_status.setStyleSheet("")
         self.connection_status.style().unpolish(self.connection_status)
         self.connection_status.style().polish(self.connection_status)
         self._last_cameras = list(data["cameras"])

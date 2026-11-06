@@ -21,14 +21,14 @@ class UpdateDialog(QDialog):
         p = get_palette()
         self.setStyleSheet(
             f"""
-            QDialog#updateDialog {{ background: {p.popup}; border: 1px solid {rgba(p.accent, 90)}; border-radius: 14px; }}
+            QDialog#updateDialog {{ background: {p.popup}; border: 1px solid {rgba(p.ink, 90)}; border-radius: 14px; }}
             QLabel#updateTitle {{ color: {p.text}; font-size: 18pt; font-weight: 700; }}
             QLabel#updateBody {{ color: {p.text_dim}; }}
             QPushButton#updateNow {{ background: {p.accent}; color: #0A0D08; border: none; border-radius: 9px; padding: 10px 22px; font-weight: 700; }}
             QPushButton#updateNow:hover {{ background: {p.accent_hover}; }}
             QPushButton#updateNow:disabled {{ background: {rgba(p.accent, 90)}; }}
             QPushButton#updateLater {{ background: transparent; color: {p.text}; border: 1px solid {rgba(p.text, 60)}; border-radius: 9px; padding: 10px 22px; }}
-            QPushButton#updateLater:hover {{ border-color: {p.accent}; }}
+            QPushButton#updateLater:hover {{ border-color: {p.ink}; }}
             QProgressBar {{ background: {rgba(p.text, 25)}; border: none; border-radius: 3px; max-height: 6px; }}
             QProgressBar::chunk {{ background: {p.accent}; border-radius: 3px; }}
             """

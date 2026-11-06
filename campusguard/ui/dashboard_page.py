@@ -1745,7 +1745,7 @@ class DashboardPage(QWidget):
         )
 
         outer = QVBoxLayout(tile)
-        outer.setContentsMargins(8, 8, 8, 8)
+        outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
         outer.addWidget(surface, 1)
 

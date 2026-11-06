@@ -37,6 +37,7 @@ class Palette:
     edge: str
     sheen_alpha: int
     popup: str
+    ink: str  # accent for text/icons/lines drawn on surfaces (deep green in light mode)
 
 
 DARK = Palette(
@@ -54,6 +55,7 @@ DARK = Palette(
     "#C8FF52",
     8,
     "#111512",
+    "#C8FF52",
 )
 
 LIGHT = Palette(
@@ -71,6 +73,7 @@ LIGHT = Palette(
     "#91C82A",
     18,
     "#FFFFFF",
+    "#3C7410",
 )
 
 _current: Palette = DARK
@@ -170,18 +173,19 @@ QFrame#notificationRow {
   border: none;
   border-bottom: 1px solid @line_soft@;
 }
-QFrame#cameraPreview {
-  background: @glass@;
-  border: 1px solid @glass_line@;
-  border-radius: 18px;
+QFrame#cameraPreview, QFrame#offlineCameraTile {
+  background: transparent;
+  border: none;
+  border-radius: 14px;
 }
 QLabel[videoSurface="true"] {
-  background: @field@;
-  border: 1px solid @line_soft@;
-  color: @muted@;
+  background: #0B0F0D;
+  border: 1px solid @line_strong@;
+  border-radius: 14px;
+  color: #98A296;
 }
-QFrame#cameraPreview:hover {
-  border-color: @line_strong@;
+QFrame#cameraPreview:hover QLabel[videoSurface="true"] {
+  border-color: @accent_line@;
 }
 QFrame#dashboardStatTile:hover,
 QFrame#dashboardModelTile:hover {
@@ -230,10 +234,10 @@ QPushButton[primary="true"]:hover {
 }
 QPushButton[danger="true"] { color: @bad@; border-color: @bad_line@; }
 QPushButton[link="true"] {
-  background: transparent; border: none; color: @accent@;
+  background: transparent; border: none; color: @ink@;
   padding: 2px 4px; font-weight: 600;
 }
-QPushButton[link="true"]:hover { color: @accent_hover@; }
+QPushButton[link="true"]:hover { color: @text@; }
 
 QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
   background: @field@; color: @text@;
@@ -247,6 +251,18 @@ QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover {
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {
   border: 1px solid @line_strong@; padding: 8px 9px;
 }
+QComboBox::drop-down { border: none; width: 28px; background: transparent; }
+QComboBox::down-arrow { image: url(@chev_down@); width: 12px; height: 12px; }
+QSpinBox::up-button, QDoubleSpinBox::up-button {
+  subcontrol-origin: border; subcontrol-position: top right;
+  width: 22px; border: none; background: transparent; margin: 2px 2px 0 0;
+}
+QSpinBox::down-button, QDoubleSpinBox::down-button {
+  subcontrol-origin: border; subcontrol-position: bottom right;
+  width: 22px; border: none; background: transparent; margin: 0 2px 2px 0;
+}
+QSpinBox::up-arrow, QDoubleSpinBox::up-arrow { image: url(@chev_up@); width: 10px; height: 10px; }
+QSpinBox::down-arrow, QDoubleSpinBox::down-arrow { image: url(@chev_down@); width: 10px; height: 10px; }
 QComboBox QAbstractItemView {
   background: @popup@; color: @text@;
   border: 1px solid @line@;
@@ -259,7 +275,7 @@ QCheckBox::indicator {
   width: 16px; height: 16px; border-radius: 5px;
 }
 QCheckBox::indicator:checked {
-  background: @accent@; border: 1px solid @accent@;
+  background: @ink@; border: 1px solid @ink@; image: url(@check_icon@);
 }
 QCheckBox::indicator:unchecked {
   background: @field@; border: 1px solid @line_strong@;
@@ -284,6 +300,40 @@ QHeaderView::section {
   border-bottom: 1px solid @line@;
   padding: 10px 9px; font-size: 8pt; font-weight: 600;
 }
+
+QTabWidget::pane {
+  background: transparent; border: none; top: 6px;
+}
+QTabWidget > QWidget { background: transparent; }
+QTabBar { background: transparent; qproperty-drawBase: 0; }
+QTabBar::tab {
+  background: @veil@; color: @text_dim@;
+  border: 1px solid @line_soft@; border-radius: 9px;
+  padding: 8px 18px; margin: 0 6px 0 0; font-weight: 600;
+}
+QTabBar::tab:hover { color: @text@; border-color: @line_strong@; }
+QTabBar::tab:selected {
+  background: @veil_hover@; color: @text@; border-color: @accent_line@;
+}
+QGroupBox {
+  background: transparent; border: 1px solid @line@; border-radius: 12px;
+  margin-top: 14px; padding: 14px 10px 10px 10px;
+}
+QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 6px; color: @text_dim@; font-weight: 600; }
+QListWidget, QListView, QTreeView, QTextEdit, QPlainTextEdit {
+  background: @field@; color: @text@; border: 1px solid @line@; border-radius: 10px;
+  selection-background-color: @select@; selection-color: @text@;
+}
+QListWidget::item { padding: 6px 8px; }
+QListWidget::item:selected { background: @select@; color: @text@; }
+QMenu {
+  background: @popup@; color: @text@; border: 1px solid @line_strong@;
+  border-radius: 10px; padding: 6px;
+}
+QMenu::item { padding: 7px 18px; border-radius: 6px; }
+QMenu::item:selected { background: @veil_hover@; }
+QProgressBar { background: @veil@; border: none; border-radius: 4px; text-align: center; color: @text@; }
+QProgressBar::chunk { background: @ink@; border-radius: 4px; }
 
 QScrollBar:vertical { background: transparent; width: 7px; margin: 4px 0; }
 QScrollBar::handle:vertical {
@@ -317,30 +367,65 @@ def is_compact() -> bool:
     return _base_pt < 10
 
 
+def _ui_assets(p: "Palette") -> dict[str, str]:
+    """Write the small tick/chevron SVGs QSS needs (QSS can only reference files)."""
+    import tempfile
+    from pathlib import Path
+
+    folder = Path(tempfile.gettempdir()) / "campusguard-ui"
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return {"check_icon": "", "chev_down": "", "chev_up": ""}
+
+    def svg(name: str, body: str, color: str, width: float) -> str:
+        path = folder / f"{name}-{p.name}.svg"
+        text = (
+            '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" '
+            f'stroke="{color}" stroke-width="{width}" stroke-linecap="round" stroke-linejoin="round">{body}</svg>'
+        )
+        try:
+            if not path.exists() or path.read_text(encoding="utf-8") != text:
+                path.write_text(text, encoding="utf-8")
+        except OSError:
+            return ""
+        return path.as_posix()
+
+    tick = "#090C0A" if p.name == "dark" else "#FFFFFF"
+    return {
+        "check_icon": svg("check", '<path d="m5 12.5 4.5 4.5L19 7.5"/>', tick, 3.2),
+        "chev_down": svg("chev-down", '<path d="m6 9 6 6 6-6"/>', p.text_dim, 2.4),
+        "chev_up": svg("chev-up", '<path d="m6 15 6-6 6 6"/>', p.text_dim, 2.4),
+    }
+
+
 def build_qss(theme: str) -> str:
     p = LIGHT if theme == "light" else DARK
+    k = 20 if p.name == "light" else 10  # light surfaces need stronger hairlines
     values = {
         "text": p.text, "text_dim": p.text_dim, "muted": p.muted,
         "accent": p.accent, "accent_hover": p.accent_hover,
         "good": p.good, "warn": p.warn, "bad": p.bad,
         "bg1": p.bg1, "popup": rgba(p.glass, 188 if p.name == "dark" else 196),
         "glass": rgba(p.glass, p.glass_alpha),
-        "glass_line": rgba(p.line, 14),
-        "line": rgba(p.line, 18),
-        "line_soft": rgba(p.line, 11),
-        "line_strong": rgba(p.line, 32),
+        "glass_line": rgba(p.line, 14 * k // 10),
+        "line": rgba(p.line, 18 * k // 10),
+        "line_soft": rgba(p.line, 11 * k // 10),
+        "line_strong": rgba(p.line, 32 * k // 10),
         "veil": rgba(p.veil, p.veil_alpha),
-        "veil_hover": rgba(p.accent, 14),
-        "veil_press": rgba(p.accent, 22),
+        "veil_hover": rgba(p.ink, 14 if p.name == "dark" else 12),
+        "veil_press": rgba(p.ink, 22 if p.name == "dark" else 20),
         "field": rgba(p.field, p.field_alpha),
         "table": rgba(p.surface, max(210, p.surface_alpha - 24)),
         "table_alt": rgba(p.veil, 4),
-        "select": rgba(p.accent, 58),
+        "select": rgba(p.accent, 58 if p.name == "dark" else 120),
         "handle": rgba(p.text, 62),
         "handle_hover": rgba(p.text, 110),
         "bad_line": rgba(p.bad, 100),
-        "accent_line": rgba(p.accent, 190),
+        "accent_line": rgba(p.ink, 190)
+        , "ink": p.ink,
         "base_pt": str(_base_pt),
+        **_ui_assets(p),
     }
     qss = _QSS
     for key, value in values.items():

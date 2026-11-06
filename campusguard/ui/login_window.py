@@ -161,18 +161,18 @@ class LoginDialog(QDialog):
         self.setStyleSheet(
             self.styleSheet()
             + f"""
-            QDialog {{ background: {pal.bg1}; border: 1px solid {rgba(pal.accent, 40)}; border-radius: 18px; }}
+            QDialog {{ background: {pal.bg1}; border: 1px solid {rgba(pal.ink, 40)}; border-radius: 18px; }}
             QLabel {{ background: transparent; }}
-            QLabel#loginEyebrow {{ color: {pal.accent}; font-size: 8pt; font-weight: 700; letter-spacing: 2px; }}
+            QLabel#loginEyebrow {{ color: {pal.ink}; font-size: 8pt; font-weight: 700; letter-spacing: 2px; }}
             QLabel#loginTitle {{ font-family: 'Manrope', 'DM Sans', 'Segoe UI'; font-size: 24pt; font-weight: 800; }}
             QLabel#loginIntro {{ color: {pal.text_dim}; font-size: 10pt; }}
             QLabel#loginMessage {{ border: 1px solid {rgba(pal.line, 30)}; border-radius: 10px; padding: 10px 12px; }}
             QLabel#loginMessage[kind="error"] {{ color: {pal.bad}; border-color: {rgba(pal.bad, 110)}; background: {rgba(pal.bad, 26)}; }}
-            QLabel#loginMessage[kind="info"] {{ color: {pal.text}; border-color: {rgba(pal.accent, 90)}; background: {rgba(pal.accent, 22)}; }}
+            QLabel#loginMessage[kind="info"] {{ color: {pal.text}; border-color: {rgba(pal.ink, 90)}; background: {rgba(pal.ink, 22)}; }}
             QLabel#loginMessage[kind="success"] {{ color: {pal.good}; border-color: {rgba(pal.good, 110)}; background: {rgba(pal.good, 26)}; }}
             QFrame#loginDivider {{ background: {rgba(pal.line, 22)}; border: none; }}
             QPushButton#loginLink {{ background: transparent; border: none; color: {pal.text_dim}; padding: 4px 0; }}
-            QPushButton#loginLink:hover {{ color: {pal.accent}; }}
+            QPushButton#loginLink:hover {{ color: {pal.ink}; }}
             """
         )
 

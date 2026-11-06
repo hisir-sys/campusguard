@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import sys
 from dataclasses import replace
 from pathlib import Path
 import threading
@@ -37,6 +39,7 @@ from campusguard.ui.camera_page import CamerasPage, LocalVideoTestDialog
 from campusguard.ui.common import apply_theme, make_card, make_page_title
 from campusguard.ui.dashboard_page import DashboardPage
 from campusguard.ui.glass_nav import BackdropWidget, BottomBar, TopBar
+from campusguard.ui.title_bar import TitleBar
 from campusguard.ui.history_pages import AlertsPage, IncidentsPage
 from campusguard.ui.icons import set_icon_theme
 from campusguard.ui.screen_fit import compute_fit
@@ -475,11 +478,17 @@ class InAppOverlay(QFrame):
 class MainWindow(QMainWindow):
     logout_requested = Signal()
     closed = Signal()
+    _GUTTER = 5  # invisible resize border around the frameless window
 
     def __init__(self, account_email: str | None = None) -> None:
         super().__init__()
         self.setWindowTitle("CampusGuard — Security Operations")
         self.setWindowIcon(QApplication.windowIcon())
+        self._custom_frame = os.environ.get("CAMPUSGUARD_NATIVE_TITLEBAR", "") != "1"
+        if self._custom_frame:
+            self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
+            self.setMouseTracking(True)
+            self.setContentsMargins(self._GUTTER, self._GUTTER, self._GUTTER, self._GUTTER)
         self._fit_to_screen()
 
         self.repository = Repository()
@@ -676,6 +685,9 @@ class MainWindow(QMainWindow):
         outer.addLayout(workspace, 1)
 
         self.setCentralWidget(central)
+        if self._custom_frame:
+            self.title_bar = TitleBar(self)
+            self.setMenuWidget(self.title_bar)
         self._in_app_overlay = InAppOverlay(central)
         self._in_app_overlay.closed.connect(self._on_overlay_closed)
         self._in_app_overlay.hide()
@@ -1387,6 +1399,82 @@ class MainWindow(QMainWindow):
         if answer == QMessageBox.StandardButton.Yes:
             self.logout_requested.emit()
 
+    # ----- frameless window: resize edges, border, rounded corners -------
+
+    def _edges_at(self, pos) -> Qt.Edge:
+        if not self._custom_frame or self.isMaximized() or self.isFullScreen():
+            return Qt.Edge(0)
+        g = self._GUTTER + 1
+        edges = Qt.Edge(0)
+        if pos.x() <= g:
+            edges |= Qt.Edge.LeftEdge
+        elif pos.x() >= self.width() - g:
+            edges |= Qt.Edge.RightEdge
+        if pos.y() <= g:
+            edges |= Qt.Edge.TopEdge
+        elif pos.y() >= self.height() - g:
+            edges |= Qt.Edge.BottomEdge
+        return edges
+
+    def mouseMoveEvent(self, event) -> None:
+        edges = self._edges_at(event.position().toPoint())
+        left_right = bool(edges & (Qt.Edge.LeftEdge | Qt.Edge.RightEdge))
+        top_bottom = bool(edges & (Qt.Edge.TopEdge | Qt.Edge.BottomEdge))
+        if left_right and top_bottom:
+            diagonal = (edges & Qt.Edge.LeftEdge and edges & Qt.Edge.TopEdge) or (
+                edges & Qt.Edge.RightEdge and edges & Qt.Edge.BottomEdge
+            )
+            self.setCursor(Qt.CursorShape.SizeFDiagCursor if diagonal else Qt.CursorShape.SizeBDiagCursor)
+        elif left_right:
+            self.setCursor(Qt.CursorShape.SizeHorCursor)
+        elif top_bottom:
+            self.setCursor(Qt.CursorShape.SizeVerCursor)
+        else:
+            self.unsetCursor()
+        super().mouseMoveEvent(event)
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            edges = self._edges_at(event.position().toPoint())
+            handle = self.windowHandle()
+            if edges and handle is not None and handle.startSystemResize(edges):
+                event.accept()
+                return
+        super().mousePressEvent(event)
+
+    def changeEvent(self, event) -> None:
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.WindowStateChange and self._custom_frame:
+            gutter = 0 if self.isMaximized() or self.isFullScreen() else self._GUTTER
+            self.setContentsMargins(gutter, gutter, gutter, gutter)
+            self.title_bar.sync_state()
+
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
+        if self._custom_frame and not self.isMaximized():
+            from PySide6.QtGui import QPainter
+
+            from campusguard.ui.theme import get_palette, qcolor
+
+            pal = get_palette()
+            painter = QPainter(self)
+            painter.setPen(qcolor(pal.line, min(140, pal.line_alpha + 60)))
+            painter.drawRect(0, 0, self.width() - 1, self.height() - 1)
+
+    def _round_native_corners(self) -> None:
+        """Windows 11: ask DWM for rounded corners on the frameless window."""
+        if sys.platform != "win32" or not self._custom_frame:
+            return
+        try:
+            import ctypes
+
+            value = ctypes.c_int(2)  # DWMWCP_ROUND
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                int(self.winId()), 33, ctypes.byref(value), ctypes.sizeof(value)
+            )
+        except Exception:
+            pass
+
     def _available_geometry(self) -> QRect:
         screen = self.screen() or QGuiApplication.primaryScreen()
         return screen.availableGeometry() if screen is not None else QRect(0, 0, 1500, 940)
@@ -1409,6 +1497,9 @@ class MainWindow(QMainWindow):
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
+        if not getattr(self, "_corners_set", False):
+            self._corners_set = True
+            self._round_native_corners()
         handle = self.windowHandle()
         if handle is not None and not getattr(self, "_screen_hooked", False):
             self._screen_hooked = True

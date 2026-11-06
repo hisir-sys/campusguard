@@ -92,6 +92,16 @@ _ICONS: dict[str, str] = {
         '<circle cx="10" cy="12" r="2.5"/>'
         '<circle cx="18" cy="18" r="2.5"/>'
     ),
+    "minus": '<path d="M5 12h14"/>',
+    "square": '<rect x="5" y="5" width="14" height="14" rx="2.5"/>',
+    "restore": (
+        '<rect x="4" y="9" width="11" height="11" rx="2.5"/>'
+        '<path d="M9 9V6.5A2.5 2.5 0 0 1 11.5 4H17.5A2.5 2.5 0 0 1 20 6.5V12.5A2.5 2.5 0 0 1 17.5 15H15"/>'
+    ),
+    "log-out": (
+        '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>'
+        '<path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>'
+    ),
     "user": '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/>',
 }
 
@@ -111,7 +121,7 @@ def tone_color(tone: str) -> str:
         "text": p.text,
         "dim": p.text_dim,
         "muted": p.muted,
-        "accent": p.accent,
+        "accent": p.ink,
         "good": p.good,
         "warn": p.warn,
         "bad": p.bad,
