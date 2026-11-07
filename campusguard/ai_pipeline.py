@@ -87,6 +87,15 @@ def _detector_batcher(model, device) -> BatchRunner:
         return runner
 
 
+def shutdown_detector_batchers(timeout: float = 5.0) -> None:
+    """Stop every shared detector worker before application/test teardown."""
+    with MODEL_CACHE_LOCK:
+        runners = [runner for _, runner in _DETECTOR_BATCHERS.values()]
+        _DETECTOR_BATCHERS.clear()
+    for runner in runners:
+        runner.close(timeout=timeout)
+
+
 def resolve_model_path(value: str) -> Path:
     """Resolve bundled model paths independently of the process working directory."""
     raw = Path(value).expanduser()
