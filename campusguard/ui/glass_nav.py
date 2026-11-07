@@ -210,8 +210,9 @@ class GlassBar(QWidget):
         painter.fillRect(QRectF(0, 0, w, h * 0.55), QBrush(sheen))
 
         if self._hover > 0.01:
-            spot = QRadialGradient(QPointF(self._spot_x, h * 0.5), max(120.0, w * 0.18))
-            spot.setColorAt(0.0, qcolor(pal.ink, int(34 * self._hover)))
+            spot = QRadialGradient(QPointF(self._spot_x, h * 0.5), max(70.0, min(w * 0.12, 110.0)))
+            spot.setColorAt(0.0, qcolor(pal.ink, int(20 * self._hover)))
+            spot.setColorAt(0.6, qcolor(pal.ink, int(6 * self._hover)))
             spot.setColorAt(1.0, qcolor(pal.ink, 0))
             painter.fillRect(QRectF(0, 0, w, h), QBrush(spot))
 
@@ -1033,11 +1034,9 @@ class _DockButton(QAbstractButton):
         # accent glow beneath the glyph plus a thin indicator line.
         reveal = self._hover
 
-        if reveal > 0.01:
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(qcolor(pal.ink, int(26 * reveal)))
-            painter.drawRoundedRect(QRectF(1, 1, w - 2, h - 2), 14, 14)
-
+        # No filled/outlined pill behind the hovered item: the dock's soft cursor
+        # glow already shows where the pointer is, and a second box on top of it
+        # read as a box-inside-a-box.
         icon_size = 20
         color = mix_colors(QColor(pal.text_dim), QColor(pal.text), max(reveal, self._active * 0.55))
         # Keep the icon and label in separate horizontal zones while hovered.

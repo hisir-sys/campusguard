@@ -395,7 +395,16 @@ class VisionPipeline:
             self.status,
             fight_class_override=fight_class_override,
         )
-        self.status("fight", f"VIOLENCE MODEL — {self.model_display_name(selected_key)}")
+        # The classifier reports under its own profile key; the dashboard's engine
+        # status reads the "fight" component, so publish the real outcome there.
+        # (It used to publish an informational line that never counted as READY,
+        # which left the engine stuck on PARTIAL with every model loaded.)
+        classifier = self.classifiers[selected_key]
+        display_name = self.model_display_name(selected_key)
+        if getattr(classifier, "model", None) is not None:
+            self.status("fight", f"READY — {display_name}")
+        else:
+            self.status("fight", f"MODEL NOT LOADED — {display_name} could not be loaded")
 
         self.person_buffers.clear()
         self.person_frame_counts.clear()

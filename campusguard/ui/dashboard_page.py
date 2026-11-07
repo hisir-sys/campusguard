@@ -1827,10 +1827,11 @@ class DashboardPage(QWidget):
             "fight",
         }:
 
-            self._runtime_loaded[
-                component
-            ] = message.upper().startswith(
-                "READY"
+            # Judge each component across all cameras: one camera that is still
+            # loading must not mask another one that is ready.
+            self._runtime_loaded[component] = any(
+                str(statuses.get(component, "")).upper().startswith("READY")
+                for statuses in self._model_statuses.values()
             )
 
             self._runtime_messages[
