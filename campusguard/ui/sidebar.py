@@ -25,8 +25,10 @@ from campusguard.ui.glass_nav import AccountButton
 from campusguard.ui.icons import icon_pixmap
 from campusguard.ui.theme import get_palette, qcolor
 
-FULL_WIDTH = 248
-COMPACT_WIDTH = 68
+RAIL_WIDTH = 66
+PANEL_WIDTH = 232
+FULL_WIDTH = RAIL_WIDTH + 8 + PANEL_WIDTH
+COMPACT_WIDTH = RAIL_WIDTH
 
 SECTIONS = (
     (
@@ -79,7 +81,7 @@ class _NavItem(QAbstractButton):
         self.update()
 
     def sizeHint(self) -> QSize:
-        return QSize(FULL_WIDTH - 24, 40)
+        return QSize(PANEL_WIDTH - 24, 40)
 
     def enterEvent(self, event) -> None:
         self._hover = True
@@ -98,20 +100,22 @@ class _NavItem(QAbstractButton):
         painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
         w, h = float(self.width()), float(self.height())
         body = QRectF(0.5, 0.5, w - 1, h - 1)
-        radius = h / 2.0
+        radius = 14.0 if not self._compact else min(h, w) / 2.0 - 1
         if self._active:
-            glow = QRadialGradient(QPointF(w / 2.0, h / 2.0), w * 0.62)
-            glow.setColorAt(0.0, qcolor(pal.ink, 46))
-            glow.setColorAt(1.0, qcolor(pal.ink, 6))
-            painter.setPen(QPen(qcolor(pal.ink, 120), 1))
-            painter.setBrush(glow)
+            raised = QLinearGradient(0, 0, 0, h)
+            raised.setColorAt(0.0, qcolor(pal.text, 44))
+            raised.setColorAt(1.0, qcolor(pal.text, 14))
+            painter.setPen(QPen(qcolor(pal.text, 46), 1))
+            painter.setBrush(raised)
             painter.drawRoundedRect(body, radius, radius)
+            painter.setPen(QPen(qcolor(pal.text, 70), 1))
+            painter.drawLine(QPointF(radius * 0.7, 1.0), QPointF(w - radius * 0.7, 1.0))
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(qcolor(pal.ink))
-            painter.drawRoundedRect(QRectF(-1, h * 0.26, 3.5, h * 0.48), 1.75, 1.75)
+            painter.drawRoundedRect(QRectF(-1, h * 0.28, 3.5, h * 0.44), 1.75, 1.75)
         elif self._hover:
-            painter.setPen(QPen(qcolor(pal.text, 18), 1))
-            painter.setBrush(qcolor(pal.text, 12))
+            painter.setPen(QPen(qcolor(pal.text, 16), 1))
+            painter.setBrush(qcolor(pal.text, 10))
             painter.drawRoundedRect(body, radius, radius)
         tint = pal.ink if self._active else (pal.text if self._hover else pal.text_dim)
         size = 19
@@ -234,7 +238,80 @@ class _ThemeToggle(QAbstractButton):
             )
 
 
-class Sidebar(QFrame):
+def _paint_glass(widget: QWidget, radius: float, metal: bool) -> None:
+    """Shared glass / brushed-metal capsule used by the rail and the panel."""
+    pal = get_palette()
+    dark = pal.name == "dark"
+    painter = QPainter(widget)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    w, h = float(widget.width()), float(widget.height())
+    rect = QRectF(0.5, 0.5, w - 1, h - 1)
+    path = QPainterPath()
+    path.addRoundedRect(rect, radius, radius)
+    if metal:
+        # brushed steel capsule: dark edges, soft sheen down the middle
+        fill = QLinearGradient(0, 0, w, 0)
+        if dark:
+            fill.setColorAt(0.0, QColor(22, 26, 24))
+            fill.setColorAt(0.5, QColor(52, 60, 56))
+            fill.setColorAt(1.0, QColor(20, 24, 22))
+        else:
+            fill.setColorAt(0.0, QColor(224, 230, 222))
+            fill.setColorAt(0.5, QColor(250, 252, 248))
+            fill.setColorAt(1.0, QColor(220, 226, 218))
+    else:
+        fill = QLinearGradient(0, 0, w * 0.4, h)
+        if dark:
+            fill.setColorAt(0.0, QColor(255, 255, 255, 22))
+            fill.setColorAt(1.0, QColor(255, 255, 255, 8))
+        else:
+            fill.setColorAt(0.0, QColor(255, 255, 255, 235))
+            fill.setColorAt(1.0, QColor(255, 255, 255, 175))
+    painter.fillPath(path, fill)
+    glow = QRadialGradient(QPointF(w * 0.5, 0), max(w, 120) * 0.9)
+    glow.setColorAt(0.0, qcolor(pal.ink, 34 if dark else 16))
+    glow.setColorAt(1.0, qcolor(pal.ink, 0))
+    painter.fillPath(path, glow)
+    edge = QLinearGradient(0, 0, 0, h)
+    edge.setColorAt(0.0, QColor(255, 255, 255, 95 if dark else 255))
+    edge.setColorAt(0.45, QColor(255, 255, 255, 24 if dark else 110))
+    edge.setColorAt(1.0, QColor(255, 255, 255, 44 if dark else 200))
+    painter.setPen(QPen(edge, 1.2))
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    painter.drawPath(path)
+    if not dark:
+        painter.setPen(QPen(QColor(20, 40, 10, 36), 1))
+        painter.drawRoundedRect(rect.adjusted(-0.5, -0.5, 0.5, 0.5), radius, radius)
+
+
+class _Rail(QFrame):
+    """Slim metallic icon capsule (top) + a small capsule for settings (bottom)."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
+
+    def paintEvent(self, event) -> None:
+        _paint_glass(self, 31.0, metal=True)
+
+
+class _Panel(QFrame):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
+
+    def paintEvent(self, event) -> None:
+        _paint_glass(self, 26.0, metal=False)
+
+
+class Sidebar(QWidget):
+    """Master navigation: metallic icon rail + labelled glass panel.
+
+    Layout follows the "rail + panel" reference: the rail holds quick icons, a
+    separate capsule below holds settings/theme/account, and the panel carries
+    the account header, search and grouped labelled navigation with badges.
+    """
+
     page_requested = Signal(str)
     theme_toggle_requested = Signal()
     login_requested = Signal()
@@ -243,90 +320,139 @@ class Sidebar(QFrame):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("sidebar")
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
-        self.setFixedWidth(FULL_WIDTH)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         self._compact = False
         self._user_compact = False
+        self._buttons: dict[str, list[_NavItem]] = {}
 
-        root = QVBoxLayout(self)
-        root.setContentsMargins(12, 16, 12, 12)
-        root.setSpacing(2)
+        outer = QHBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(8)
 
-        self.brand_row = QWidget()
-        brand = QHBoxLayout(self.brand_row)
-        brand.setContentsMargins(6, 0, 6, 0)
-        brand.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        brand.setSpacing(10)
+        # ---------------- rail column -----------------------------------
+        rail_col = QVBoxLayout()
+        rail_col.setContentsMargins(0, 0, 0, 0)
+        rail_col.setSpacing(8)
+        self.rail = _Rail()
+        self.rail.setFixedWidth(RAIL_WIDTH)
+        rail = QVBoxLayout(self.rail)
+        rail.setContentsMargins(9, 12, 9, 12)
+        rail.setSpacing(3)
         self.logo = LogoMark(size=30)
         self.logo.setCursor(Qt.CursorShape.PointingHandCursor)
         self.logo.setToolTip("Collapse / expand menu")
         self.logo.mousePressEvent = lambda _e: self.toggle_compact()
-        brand.addWidget(self.logo)
-        self.brand_text = QWidget()
-        text_col = QVBoxLayout(self.brand_text)
-        text_col.setContentsMargins(0, 0, 0, 0)
-        text_col.setSpacing(0)
-        self.brand_name = QLabel("CampusGuard")
-        self.brand_name.setStyleSheet("font-size: 12pt; font-weight: 700; background: transparent;")
-        self.brand_tag = QLabel("Security operations")
-        self.brand_tag.setProperty("muted", True)
-        self.brand_tag.setStyleSheet("font-size: 8pt; background: transparent;")
-        text_col.addWidget(self.brand_name)
-        text_col.addWidget(self.brand_tag)
-        brand.addWidget(self.brand_text, 1)
-        root.addWidget(self.brand_row)
-        root.addSpacing(10)
+        rail.addWidget(self.logo, 0, Qt.AlignmentFlag.AlignHCenter)
+        rail.addSpacing(6)
+        first = True
+        for _title, items in SECTIONS:
+            for text, key, icon in items:
+                if key == "settings":
+                    continue
+                if text == "Services":
+                    div = _SectionLabel("")
+                    div.set_compact(True)
+                    rail.addWidget(div)
+                item = self._make_item(text, key, icon, compact=True)
+                rail.addWidget(item)
+            first = False
+        rail.addStretch(1)
+        rail_col.addWidget(self.rail, 1)
+
+        self.rail_bottom = _Rail()
+        self.rail_bottom.setFixedWidth(RAIL_WIDTH)
+        bottom = QVBoxLayout(self.rail_bottom)
+        bottom.setContentsMargins(9, 10, 9, 10)
+        bottom.setSpacing(3)
+        bottom.addWidget(self._make_item("Settings", "settings", "settings", compact=True))
+        self.theme_toggle = _ThemeToggle()
+        self.theme_toggle.set_compact(True)
+        self.theme_toggle.setToolTip("Switch light / dark theme")
+        self.theme_toggle.clicked.connect(lambda _c=False: self.theme_toggle_requested.emit())
+        bottom.addWidget(self.theme_toggle)
+        self.rail_account = AccountButton()
+        self.rail_account.set_compact(True)
+        self.rail_account.setFixedWidth(RAIL_WIDTH - 18)
+        self.rail_account.clicked.connect(lambda _c=False: self.login_requested.emit())
+        bottom.addWidget(self.rail_account)
+        rail_col.addWidget(self.rail_bottom, 0)
+        outer.addLayout(rail_col, 0)
+
+        # ---------------- panel -----------------------------------------
+        self.panel = _Panel()
+        self.panel.setFixedWidth(PANEL_WIDTH)
+        panel = QVBoxLayout(self.panel)
+        panel.setContentsMargins(12, 14, 12, 12)
+        panel.setSpacing(2)
+
+        self.login_button = AccountButton()
+        self.login_button.setFixedWidth(PANEL_WIDTH - 24)
+        self.login_button.clicked.connect(lambda _c=False: self.login_requested.emit())
+        panel.addWidget(self.login_button)
+        panel.addSpacing(8)
 
         self.search = QLineEdit()
         self.search.setPlaceholderText("Search   Ctrl K")
         self.search.setClearButtonEnabled(True)
         self.search.setFixedHeight(38)
         self.search.returnPressed.connect(lambda: self.search_submitted.emit(self.search.text().strip()))
-        root.addWidget(self.search)
+        panel.addWidget(self.search)
 
-        self._buttons: dict[str, _NavItem] = {}
         self._section_labels: list[_SectionLabel] = []
         for title, items in SECTIONS:
             label = _SectionLabel(title)
             self._section_labels.append(label)
-            root.addWidget(label)
+            panel.addWidget(label)
             for text, key, icon in items:
-                item = _NavItem(text, icon)
-                item.clicked.connect(lambda _c=False, target=key: self.page_requested.emit(target))
-                root.addWidget(item)
-                self._buttons[key] = item
+                panel.addWidget(self._make_item(text, key, icon, compact=False))
+        panel.addStretch(1)
 
-        root.addStretch(1)
-        self.theme_toggle = _ThemeToggle()
-        self.theme_toggle.clicked.connect(lambda _c=False: self.theme_toggle_requested.emit())
-        root.addWidget(self.theme_toggle)
-        root.addSpacing(4)
-        self.login_button = AccountButton()
-        self.login_button.clicked.connect(lambda _c=False: self.login_requested.emit())
-        root.addWidget(self.login_button)
+        brand = QHBoxLayout()
+        brand.setContentsMargins(6, 0, 6, 0)
+        self.brand_name = QLabel("CampusGuard")
+        self.brand_name.setStyleSheet("font-size: 9pt; font-weight: 700; background: transparent;")
+        self.brand_tag = QLabel("Security operations")
+        self.brand_tag.setProperty("muted", True)
+        self.brand_tag.setStyleSheet("font-size: 8pt; background: transparent;")
+        brand.addWidget(self.brand_name)
+        brand.addStretch(1)
+        brand.addWidget(self.brand_tag)
+        panel.addLayout(brand)
+        outer.addWidget(self.panel, 0)
+
         self.set_compact(False)
+
+    def _make_item(self, text: str, key: str, icon: str, compact: bool) -> _NavItem:
+        item = _NavItem(text, icon)
+        item.set_compact(compact)
+        if compact:
+            item.setFixedSize(RAIL_WIDTH - 18, 40)
+        item.clicked.connect(lambda _c=False, target=key: self.page_requested.emit(target))
+        self._buttons.setdefault(key, []).append(item)
+        return item
 
     # ----- API used by the main window ---------------------------------
     def set_active(self, page: str) -> None:
-        for key, item in self._buttons.items():
-            item.set_active(key == page)
+        for key, items in self._buttons.items():
+            for item in items:
+                item.set_active(key == page)
 
     def set_badge(self, key: str, count: int) -> None:
-        item = self._buttons.get(key)
-        if item is not None:
+        for item in self._buttons.get(key, []):
             item.set_badge(count)
 
     def set_theme(self, theme: str) -> None:
         self.theme_toggle.set_dark(theme == "dark")
         self.logo.update()
-        self.update()
+        self.rail.update()
+        self.rail_bottom.update()
+        self.panel.update()
 
     def set_operator(self, name: str | None) -> None:
-        self.login_button.set_email(name)
-        self.login_button.setToolTip(
-            f"Signed in as {name}. Click to log out." if name else "Sign in with your CampusGuard account."
-        )
+        tip = f"Signed in as {name}. Click to log out." if name else "Sign in with your CampusGuard account."
+        for button in (self.login_button, self.rail_account):
+            button.set_email(name)
+            button.setToolTip(tip)
 
     def focus_search(self) -> None:
         if self._compact:
@@ -334,58 +460,15 @@ class Sidebar(QFrame):
         self.search.setFocus()
         self.search.selectAll()
 
-    def paintEvent(self, event) -> None:
-        pal = get_palette()
-        dark = pal.name == "dark"
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        w, h = float(self.width()), float(self.height())
-        radius = min(w / 2.0, 30.0) if self._compact else 28.0
-        rect = QRectF(0.5, 0.5, w - 1, h - 1)
-        path = QPainterPath()
-        path.addRoundedRect(rect, radius, radius)
-        fill = QLinearGradient(0, 0, w * 0.4, h)
-        if dark:
-            fill.setColorAt(0.0, QColor(255, 255, 255, 26))
-            fill.setColorAt(0.5, QColor(255, 255, 255, 11))
-            fill.setColorAt(1.0, QColor(255, 255, 255, 18))
-        else:
-            fill.setColorAt(0.0, QColor(255, 255, 255, 235))
-            fill.setColorAt(1.0, QColor(255, 255, 255, 170))
-        painter.fillPath(path, fill)
-        # soft lime light spilling from the top edge
-        glow = QRadialGradient(QPointF(w * 0.3, 0), w * 0.9)
-        glow.setColorAt(0.0, qcolor(pal.ink, 30 if dark else 16))
-        glow.setColorAt(1.0, qcolor(pal.ink, 0))
-        painter.fillPath(path, glow)
-        edge = QLinearGradient(0, 0, 0, h)
-        edge.setColorAt(0.0, QColor(255, 255, 255, 80 if dark else 255))
-        edge.setColorAt(0.4, QColor(255, 255, 255, 22 if dark else 120))
-        edge.setColorAt(1.0, QColor(255, 255, 255, 40 if dark else 200))
-        painter.setPen(QPen(edge, 1.2))
-        painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.drawPath(path)
-        if not dark:
-            painter.setPen(QPen(QColor(20, 40, 10, 38), 1))
-            painter.drawRoundedRect(rect.adjusted(-0.5, -0.5, 0.5, 0.5), radius, radius)
-
     def toggle_compact(self) -> None:
         self._user_compact = not self._compact
         self.set_compact(self._user_compact)
 
     def set_compact(self, compact: bool) -> None:
         self._compact = compact
-        self.setFixedWidth(COMPACT_WIDTH if compact else FULL_WIDTH)
-        self.brand_text.setVisible(not compact)
-        self.search.setVisible(not compact)
-        for label in self._section_labels:
-            label.set_compact(compact)
+        self.panel.setVisible(not compact)
+        self.setFixedWidth(RAIL_WIDTH if compact else RAIL_WIDTH + 8 + PANEL_WIDTH)
         self.update()
-        for item in self._buttons.values():
-            item.set_compact(compact)
-        self.theme_toggle.set_compact(compact)
-        self.login_button.set_compact(compact)
-        self.login_button.setFixedWidth(44 if compact else FULL_WIDTH - 24)
 
     def is_compact(self) -> bool:
         return self._compact
