@@ -6,7 +6,8 @@ from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication, QWidget
 
 from campusguard.ui import theme
-from campusguard.ui.glass_nav import AccountButton, TopBar
+from campusguard.ui.glass_nav import AccountButton
+from campusguard.ui.sidebar import Sidebar
 from campusguard.ui.title_bar import TitleBar
 
 APP = QApplication.instance() or QApplication([])
@@ -52,7 +53,7 @@ def test_account_button_never_overflows():
 
 
 def test_topbar_operator_state():
-    bar = TopBar()
+    bar = Sidebar()
     bar.set_operator("me@school.org")
     assert bar.login_button.text() == "Log out"
     assert "me@school.org" in bar.login_button.toolTip()

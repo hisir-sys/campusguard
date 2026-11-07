@@ -545,7 +545,7 @@ class DashboardPage(QWidget):
             self._dashboard_content
         )
 
-        root.setContentsMargins(24, 16, 24, 112)
+        root.setContentsMargins(24, 18, 24, 28)
         root.setSpacing(14)
 
         # --------------------------------------------------------------
@@ -555,6 +555,18 @@ class DashboardPage(QWidget):
         # information visible at a glance. The camera wall sits underneath
         # as the main visual surface.
         # --------------------------------------------------------------
+        header = QVBoxLayout()
+        header.setContentsMargins(2, 0, 0, 4)
+        header.setSpacing(2)
+        self._welcome_title = QLabel("Welcome back")
+        self._welcome_title.setStyleSheet("font-size: 24px; font-weight: 700; background: transparent;")
+        self._welcome_subtitle = QLabel("Live overview of your campus cameras and incidents")
+        self._welcome_subtitle.setObjectName("mutedLabel")
+        self._welcome_subtitle.setStyleSheet("font-size: 13px; background: transparent;")
+        header.addWidget(self._welcome_title)
+        header.addWidget(self._welcome_subtitle)
+        root.addLayout(header, 0)
+
         main_row = QHBoxLayout()
         main_row.setContentsMargins(0, 0, 0, 0)
         main_row.setSpacing(18)

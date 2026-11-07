@@ -1056,7 +1056,7 @@ class IncidentsPage(QWidget):
             20,
             16,
             20,
-            112,
+            28,
         )
 
         root.setSpacing(14)
@@ -1915,7 +1915,7 @@ class AlertsPage(QWidget):
             20,
             16,
             20,
-            112,
+            28,
         )
 
         root.setSpacing(14)

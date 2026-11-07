@@ -117,20 +117,6 @@ class BackdropWidget(QWidget):
         self._glow(painter, w, h, QPointF(w * 0.92, h * 1.0), reach * 0.60, pal.glow2, pal.glow2_alpha)
         self._glow(painter, w, h, QPointF(w * 0.60, h * 0.30), reach * 0.30, pal.glow2, int(pal.glow2_alpha * 0.5))
 
-        # two soft diagonal bands, like the folded wallpaper behind the glass in the reference
-        for start_y, end_y, bulge in ((0.78, 0.50, 0.30), (0.95, 0.68, 0.12)):
-            band = QPainterPath()
-            band.moveTo(-w * 0.1, h * start_y)
-            band.cubicTo(w * 0.30, h * (start_y - bulge), w * 0.60, h * (start_y + 0.25), w * 1.1, h * end_y)
-            band.lineTo(w * 1.1, h * (end_y + 0.20))
-            band.cubicTo(w * 0.60, h * (start_y + 0.45), w * 0.30, h * (start_y + 0.05), -w * 0.1, h * (start_y + 0.25))
-            band.closeSubpath()
-            sheen = QLinearGradient(0, 0, w, 0)
-            sheen.setColorAt(0.0, qcolor(pal.veil, 0))
-            sheen.setColorAt(0.5, qcolor(pal.veil, int(pal.veil_alpha * 0.8)))
-            sheen.setColorAt(1.0, qcolor(pal.veil, 0))
-            painter.fillPath(band, QBrush(sheen))
-
         painter.end()
         return pixmap
 

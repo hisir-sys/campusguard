@@ -38,7 +38,8 @@ from campusguard.storage import Repository
 from campusguard.ui.camera_page import CamerasPage, LocalVideoTestDialog
 from campusguard.ui.common import apply_theme, make_card, make_page_title
 from campusguard.ui.dashboard_page import DashboardPage
-from campusguard.ui.glass_nav import BackdropWidget, BottomBar, TopBar
+from campusguard.ui.glass_nav import BackdropWidget
+from campusguard.ui.sidebar import Sidebar
 from campusguard.ui.title_bar import TitleBar
 from campusguard.ui.history_pages import AlertsPage, IncidentsPage
 from campusguard.ui.icons import set_icon_theme
@@ -149,7 +150,7 @@ class InAppOverlay(QFrame):
         self._clear_blur()
         if not enabled:
             return
-        for name in ("stack", "top_bar", "bottom_bar"):
+        for name in ("stack", "top_bar"):
             widget = getattr(window, name, None)
             if isinstance(widget, QWidget):
                 effect = QGraphicsBlurEffect(widget)
@@ -641,7 +642,7 @@ class MainWindow(QMainWindow):
 
         # Left operations rail. It stays visually quiet when collapsed and
         # expands on hover so the workspace remains the hero.
-        self.top_bar = TopBar()
+        self.top_bar = Sidebar()
         outer.addWidget(self.top_bar, 0)
 
         workspace = QVBoxLayout()
@@ -650,7 +651,6 @@ class MainWindow(QMainWindow):
 
         self.stack = QStackedWidget()
         self.stack.setObjectName("workspaceStack")
-        self.stack.setMaximumWidth(1240)
 
         self.dashboard = DashboardPage(self.repository)
         self.camera_page = CamerasPage()
@@ -674,14 +674,6 @@ class MainWindow(QMainWindow):
             self.stack.addWidget(page)
 
         workspace.addWidget(self.stack, 1)
-
-        # The dock is a true floating overlay on the canvas, not a row in
-        # the workspace layout. This leaves no full-width container/strip
-        # behind it and lets the canvas remain visible through the glass.
-        self.bottom_bar = BottomBar(central)
-        self.bottom_bar.setMinimumHeight(68)
-        self.bottom_bar.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        self.bottom_bar.setAutoFillBackground(False)
 
         outer.addLayout(workspace, 1)
 
@@ -711,19 +703,11 @@ class MainWindow(QMainWindow):
         self._position_bottom_bar()
 
     def _position_bottom_bar(self) -> None:
-        """Keep the navigation dock floating above the canvas without a row behind it."""
-        if not hasattr(self, "bottom_bar") or not hasattr(self, "top_bar"):
-            return
-        canvas = self.centralWidget()
-        if canvas is None:
-            return
-        self.bottom_bar.adjustSize()
-        left = max(12, self.top_bar.geometry().right() + 12)
-        available_width = max(0, canvas.width() - left - 12)
-        x = left + max(0, (available_width - self.bottom_bar.width()) // 2)
-        y = max(12, canvas.height() - self.bottom_bar.height() - 22)
-        self.bottom_bar.move(x, y)
-        self.bottom_bar.raise_()
+        """Compact the sidebar to icons on narrow windows."""
+        if hasattr(self, "top_bar"):
+            narrow = self.width() < 1180
+            if narrow != self.top_bar.is_compact():
+                self.top_bar.set_compact(narrow)
 
     # ------------------------------------------------------------------
     # Long-form technical information pages
@@ -1074,7 +1058,6 @@ class MainWindow(QMainWindow):
         self.top_bar.theme_toggle_requested.connect(self._toggle_theme)
         self.top_bar.login_requested.connect(self._toggle_operator)
         self.top_bar.search_submitted.connect(self._run_global_search)
-        self.bottom_bar.page_requested.connect(self.navigate)
 
         self.dashboard.camera_selected.connect(self.open_camera)
         self.dashboard.view_alerts_requested.connect(lambda: self.navigate("alerts"))
@@ -1148,7 +1131,6 @@ class MainWindow(QMainWindow):
             return
         self.stack.setCurrentWidget(self._pages[page])
         self.top_bar.set_active(page)
-        self.bottom_bar.set_active(page)
         if page == "incidents":
             self.incidents_page.refresh()
         elif page == "alerts":
@@ -1832,7 +1814,7 @@ class MainWindow(QMainWindow):
         )
 
     def _update_alert_badge(self) -> None:
-        self.bottom_bar.set_badge("alerts", self.repository.active_alert_count())
+        self.top_bar.set_badge("alerts", self.repository.active_alert_count())
 
     def _sync_cameras(self) -> None:
         cameras = list(self.cameras.values())

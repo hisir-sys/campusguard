@@ -152,7 +152,7 @@ class _CameraCard(QFrame):
         row.setSpacing(14)
         self.preview = _ClickablePreview("Preview paused")
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.preview.setFixedSize(200, 112)
+        self.preview.setFixedSize(200, 28)
         self.preview.setProperty("muted", True)
         self.preview.setCursor(Qt.CursorShape.PointingHandCursor)
         self.preview.setToolTip("Click to open the selected camera's live view")
@@ -239,7 +239,7 @@ class ServerViewerPage(QWidget):
         self._known_incident_ids: set[str] | None = None
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(24, 24, 24, 112)
+        root.setContentsMargins(24, 24, 24, 28)
         root.setSpacing(16)
         root.addWidget(make_page_title(
             "School server",

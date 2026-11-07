@@ -43,7 +43,7 @@ class Palette:
 DARK = Palette(
     "dark",
     "#090C0A", "#090C0A",
-    "#C8FF52", 14, "#879080", 8,
+    "#C8FF52", 9, "#879080", 6,
     "#F7F8F4", "#D2D8CE", "#8D958B",
     "#C8FF52", "#D8FF83",
     "#6DD6A0", "#E5B85C", "#F06B70",
@@ -149,9 +149,9 @@ QToolTip {
 }
 
 QFrame[card="true"] {
-  background: @glass@;
-  border: 1px solid @glass_line@;
-  border-radius: 16px;
+  background: @card@;
+  border: 1px solid @card_line@;
+  border-radius: 18px;
 }
 QFrame[tile="true"] {
   background: @veil@;
@@ -408,6 +408,8 @@ def build_qss(theme: str) -> str:
         "good": p.good, "warn": p.warn, "bad": p.bad,
         "bg1": p.bg1, "popup": rgba(p.glass, 188 if p.name == "dark" else 196),
         "glass": rgba(p.glass, p.glass_alpha),
+        "card": p.surface,
+        "card_line": rgba(p.line, 17 if p.name == "dark" else 44),
         "glass_line": rgba(p.line, 14 * k // 10),
         "line": rgba(p.line, 18 * k // 10),
         "line_soft": rgba(p.line, 11 * k // 10),
