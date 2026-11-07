@@ -38,3 +38,12 @@ def test_second_camera_still_loading_does_not_mask_ready_first(tmp_path):
         page.update_model_status("cam-1", component, "READY — x")
     page.update_model_status("cam-2", "fight", "Loading model…")
     assert page._current_model_status() == ("ACTIVE", "good")
+
+
+
+def test_dashboard_close_detaches_card_event_filters(tmp_path):
+    page = _page(tmp_path)
+    assert page._event_filter_targets
+    page.close()
+    assert page._closing
+    assert not page._event_filter_targets
