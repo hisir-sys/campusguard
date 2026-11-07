@@ -138,3 +138,22 @@ def test_enter_idle_clears_temporal_state(ai):
     assert pipe.next_display_id == 1 and pipe.last_involved_ids == set()
     pipe.classifiers = {}
     assert not pipe.fight_model_ready
+
+
+def test_fight_needs_two_people_when_detector_is_running(ai):
+    pipe = object.__new__(ai.VisionPipeline)
+    pipe.detector = object()
+    pipe.settings = SimpleNamespace(detection_enabled=True)
+    # nobody seen yet: trust the classifier
+    assert pipe._require_two_people("FIGHT DETECTED") == "FIGHT DETECTED"
+    pipe._note_people(1)
+    pipe._note_people(1)
+    assert pipe._require_two_people("FIGHT DETECTED") == "NORMAL"        # one person fixing hair
+    assert pipe._require_two_people("POSSIBLE ALTERCATION") == "NORMAL"
+    assert pipe._require_two_people("NORMAL") == "NORMAL"
+    pipe._note_people(2)
+    assert pipe._require_two_people("FIGHT DETECTED") == "FIGHT DETECTED"
+    pipe.detector = None                                                   # no people info: trust model
+    pipe.__dict__.pop("_people_history")
+    pipe._note_people(1)
+    assert pipe._require_two_people("FIGHT DETECTED") == "FIGHT DETECTED"

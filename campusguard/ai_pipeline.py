@@ -196,10 +196,10 @@ class FightDecision:
     """
 
     NORMAL_RELEASE_PREDICTIONS = 6
-    # The temporal classifier already produced the user-visible FIGHT DETECTED
-    # state. Persist the incident on that first qualifying prediction instead
-    # of waiting for several later temporal-window updates.
-    TRIGGER_PREDICTIONS = 1
+    # One noisy spike (someone fixing their hair, waving, stretching) must not raise
+    # an incident, so two consecutive qualifying predictions (~0.5 s apart) are
+    # needed. Later temporal-window updates are not waited for.
+    TRIGGER_PREDICTIONS = 2
     # Use the same configured confidence threshold as the visible state.
     # Do not silently require a second, higher persistence threshold.
     MIN_TRIGGER_CONFIDENCE = 0.0
@@ -515,6 +515,7 @@ class VisionPipeline:
         if people:
             self.cached_people = copy.deepcopy(people)
 
+        self._note_people(len(people))
         pair_ids = self.interactions.update(people)
         model_key = settings.violence_model if settings.violence_model != "enhanced" else "fdsc_mc3"
         model = self._selected_model(model_key)
@@ -549,6 +550,7 @@ class VisionPipeline:
                         # Do not gate its event creation on detector/pair availability;
                         # those auxiliary signals can temporarily miss people while
                         # the temporal classifier is still correctly detecting the event.
+                        state = self._require_two_people(state)
                         event = self.decision.update(state, confidence)
                         self.last_state, self.last_confidence = state, confidence
                 else:
@@ -574,6 +576,30 @@ class VisionPipeline:
         self.last_process_fps = 1.0 / max(perf_counter() - process_started, 1e-6)
         return annotated, state, confidence, event
 
+    PEOPLE_WINDOW_SECONDS = 4.0
+
+    def _note_people(self, count: int) -> None:
+        now = perf_counter()
+        history = self.__dict__.setdefault("_people_history", deque())
+        history.append((now, count))
+        while history and now - history[0][0] > self.PEOPLE_WINDOW_SECONDS:
+            history.popleft()
+
+    def _require_two_people(self, state: str) -> str:
+        """A fight needs at least two people. If the person detector is running and has
+        not seen two people in the last few seconds, a "fight" from the scene classifier
+        is a false alarm (one person fixing their hair, waving, stretching)."""
+        if state not in {"FIGHT DETECTED", "POSSIBLE ALTERCATION"}:
+            return state
+        if self.detector is None or not self.settings.detection_enabled:
+            return state  # no people information: trust the classifier
+        history = self.__dict__.get("_people_history")
+        if not history:
+            return state
+        if max(count for _, count in history) >= 2:
+            return state
+        return "NORMAL"
+
     @property
     def fight_model_ready(self) -> bool:
         key = self.settings.violence_model
@@ -585,6 +611,7 @@ class VisionPipeline:
         self._reset_tracking_state()
         self._clear_involvement([])
         self.cached_people.clear()
+        self.__dict__.pop("_people_history", None)
         self.last_state, self.last_confidence = "NORMAL", None
 
     def render_cached(

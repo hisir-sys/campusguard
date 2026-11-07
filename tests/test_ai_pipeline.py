@@ -124,6 +124,7 @@ class InteractionTests(unittest.TestCase):
 class DecisionTests(unittest.TestCase):
     def test_qualifying_prediction_triggers_once_until_normal_release(self):
         decision = FightDecision(0.65)
+        self.assertIsNone(decision.update("FIGHT DETECTED", 0.90))  # a single spike is not enough
         event = decision.update("FIGHT DETECTED", 0.90)
         self.assertEqual(event, ("FIGHT DETECTED", 0.90, "HIGH"))
         for _ in range(3):
@@ -132,6 +133,7 @@ class DecisionTests(unittest.TestCase):
 
     def test_higher_confidence_updates_same_latched_event(self):
         decision = FightDecision(0.65)
+        self.assertIsNone(decision.update("FIGHT DETECTED", 0.80))
         self.assertEqual(
             decision.update("FIGHT DETECTED", 0.80),
             ("FIGHT DETECTED", 0.80, "HIGH"),
@@ -142,6 +144,13 @@ class DecisionTests(unittest.TestCase):
         )
         self.assertIsNone(decision.update("FIGHT DETECTED", 0.91))
         self.assertEqual(decision.peak_confidence, 0.94)
+
+    def test_single_spike_between_normals_never_triggers(self):
+        decision = FightDecision(0.65)
+        for _ in range(5):
+            self.assertIsNone(decision.update("NORMAL", 0.1))
+            self.assertIsNone(decision.update("FIGHT DETECTED", 0.97))
+        self.assertFalse(decision.event_latched)
 
     def test_normal_resets_event_latch(self):
         decision = FightDecision(0.65)
