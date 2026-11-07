@@ -39,7 +39,7 @@ class StartupWindow(QWidget):
     """Launch screen: the CampusGuard logo draws itself in, then hands over to the glass
     thinking orb while the app loads. Colours follow the saved dark/light theme."""
 
-    LOGO_SECONDS = 2.6
+    LOGO_SECONDS = 3.2
 
     def __init__(self) -> None:
         super().__init__()
@@ -62,8 +62,8 @@ class StartupWindow(QWidget):
         panel.setStyleSheet(
             f"""
             QFrame#startupPanel {{
-                background: {palette.bg0};
-                border: 1px solid {"rgba(23,27,22,0.14)" if light else "rgba(200,255,82,0.18)"};
+                background: {"#FAFBF8" if light else "#050606"};
+                border: 1px solid {"rgba(23,27,22,0.10)" if light else "rgba(255,255,255,0.06)"};
                 border-radius: 28px;
             }}
             QLabel {{ background: transparent; border: none; }}
@@ -93,14 +93,7 @@ class StartupWindow(QWidget):
         layout.addWidget(self._stage, 0, Qt.AlignmentFlag.AlignCenter)
         layout.addSpacing(18)
 
-        brand = QLabel(f'CAMPUS<span style="color:{accent_text};">GUARD</span>')
-        brand.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        brand.setStyleSheet(
-            f"color: {palette.text}; font-family: 'Manrope', 'DM Sans', 'Segoe UI'; "
-            "font-size: 17pt; font-weight: 800; letter-spacing: 4px;"
-        )
-        layout.addWidget(brand)
-        layout.addSpacing(8)
+        layout.addSpacing(10)
 
         self.status = QLabel("Starting…")
         self.status.setAlignment(Qt.AlignmentFlag.AlignCenter)

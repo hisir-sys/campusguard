@@ -1,8 +1,8 @@
 """CampusGuard logo: a lime shield with a check mark, drawn in code so it is sharp at any size.
 
 LogoMark   - the static logo.
-LogoReveal - the launch animation: a glass tile of liquid colour dissolves while the
-             shield and check draw themselves in, then the logo settles with a soft glow.
+LogoReveal - the launch animation from the brand film: glass disc with a check, melting into
+             a glass tile while the shield draws in, then the plain lime shield stays.
 Colours follow the active theme (dark / light).
 """
 from __future__ import annotations
@@ -14,7 +14,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QElapsedTimer, QPointF, QRectF, Qt, QTimer
 from PySide6.QtGui import (
-    QBrush, QColor, QLinearGradient, QPainter, QPainterPath, QPen, QRadialGradient,
+    QBrush, QColor, QConicalGradient, QLinearGradient, QPainter, QPainterPath, QPen, QRadialGradient,
 )
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
@@ -137,10 +137,17 @@ class LogoMark(QWidget):
 
 
 class LogoReveal(QWidget):
-    """Launch animation. ``finished_reveal`` is reached after DURATION seconds, then the logo
-    stays on screen with a gentle breathing glow."""
+    """Launch animation, following the brand film:
 
-    DURATION = 2.6
+    1. a glass disc with a lime check mark,
+    2. the disc melts into a rounded glass tile whose edge glows with liquid colour
+       while the shield draws itself around the check,
+    3. the colour drains away, the tile fades and the plain lime shield + check stays.
+
+    After DURATION seconds the animation is finished and the logo is simply held
+    (no glow, no breathing)."""
+
+    DURATION = 3.2
 
     def __init__(self, parent: QWidget | None = None, size: int = 210) -> None:
         super().__init__(parent)
@@ -151,8 +158,13 @@ class LogoReveal(QWidget):
         self._clock.start()
         self._timer = QTimer(self)
         self._timer.setInterval(16)
-        self._timer.timeout.connect(self.update)
+        self._timer.timeout.connect(self._tick)
         self._timer.start()
+
+    def _tick(self) -> None:
+        self.update()
+        if self.is_done():
+            self._timer.stop()  # the logo is held still: no need to keep repainting
 
     def seconds(self) -> float:
         return self._clock.elapsed() / 1000.0
@@ -165,6 +177,7 @@ class LogoReveal(QWidget):
 
     def start(self) -> None:
         if not self._timer.isActive():
+            self._clock.restart()  # the film starts when the window appears
             self._timer.start()
 
     def stop(self) -> None:
@@ -174,97 +187,93 @@ class LogoReveal(QWidget):
         self.update()
 
     # -- drawing -----------------------------------------------------------
-    def _paint_tile(self, painter: QPainter, centre: QPointF, side: float, strength: float, t: float) -> None:
-        """Glass tile with drifting liquid colour, clipped to a rounded square."""
-        if strength <= 0.003:
-            return
-        palette = get_palette()
-        light = palette.name == "light"
-        scale = 0.86 + 0.14 * _smooth(0.0, 0.25, self.progress()) - 0.10 * (1.0 - strength)
-        half = side * scale / 2.0
-        rect = QRectF(centre.x() - half, centre.y() - half, half * 2, half * 2)
-        radius = half * 0.52
-        clip = QPainterPath()
-        clip.addRoundedRect(rect, radius, radius)
+    @staticmethod
+    def _tile_path(centre: QPointF, side: float, roundness: float) -> QPainterPath:
+        """Rounded square that is a perfect circle at roundness 1 and a soft tile at 0."""
+        radius = side / 2.0 * (0.52 + 0.48 * roundness)
+        rect = QRectF(centre.x() - side / 2.0, centre.y() - side / 2.0, side, side)
+        path = QPainterPath()
+        path.addRoundedRect(rect, radius, radius)
+        return path
 
+    def _paint_glass(self, painter: QPainter, path: QPainterPath, rect: QRectF, strength: float) -> None:
+        light = get_palette().name == "light"
         painter.save()
         painter.setOpacity(strength)
-        base = QLinearGradient(rect.topLeft(), rect.bottomRight())
-        base.setColorAt(0.0, QColor(255, 255, 255, 235 if light else 38))
-        base.setColorAt(1.0, QColor(235, 240, 228, 225) if light else QColor(10, 14, 11, 235))
-        painter.fillPath(clip, QBrush(base))
-
-        painter.setClipPath(clip)
-        blobs = (
-            (QColor(LOGO_LIME_DARK), 0.0, 0.34, 1.00),
-            (QColor("#FF8A3D"), 2.1, 0.30, 0.80),
-            (QColor("#35D6FF"), 4.0, 0.28, 0.85),
-            (QColor("#A6FF8F"), 5.4, 0.26, 0.90),
-        )
-        for index, (color, phase, reach, speed) in enumerate(blobs):
-            angle = t * speed * 1.6 + phase
-            bx = centre.x() + math.cos(angle) * half * reach * 1.7
-            by = centre.y() + math.sin(angle * 0.9 + index) * half * reach * 1.7
-            blob_radius = half * (0.95 + 0.12 * math.sin(t * 2 + index))
-            gradient = QRadialGradient(QPointF(bx, by), blob_radius)
-            gradient.setColorAt(0.0, _alpha(color, 0.78 if not light else 0.62))
-            gradient.setColorAt(0.55, _alpha(color, 0.22))
-            gradient.setColorAt(1.0, _alpha(color, 0.0))
-            painter.setCompositionMode(
-                QPainter.CompositionMode.CompositionMode_SourceOver if light else QPainter.CompositionMode.CompositionMode_Plus
-            )
-            painter.fillRect(rect, QBrush(gradient))
-        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
-
-        # Glass sheen: bright top edge fading down.
-        sheen = QLinearGradient(rect.topLeft(), QPointF(rect.left(), rect.top() + half * 1.1))
-        sheen.setColorAt(0.0, QColor(255, 255, 255, 120 if not light else 170))
-        sheen.setColorAt(1.0, QColor(255, 255, 255, 0))
-        painter.fillRect(QRectF(rect.left(), rect.top(), rect.width(), half * 1.1), QBrush(sheen))
-        painter.setClipping(False)
-
+        body = QRadialGradient(QPointF(rect.center().x(), rect.top() + rect.height() * 0.22), rect.width() * 0.85)
+        if light:
+            body.setColorAt(0.0, QColor(255, 255, 255))
+            body.setColorAt(1.0, QColor(226, 232, 220))
+        else:
+            body.setColorAt(0.0, QColor(66, 70, 76))
+            body.setColorAt(1.0, QColor(9, 11, 12))
+        painter.fillPath(path, QBrush(body))
         rim = QLinearGradient(rect.topLeft(), rect.bottomRight())
-        rim.setColorAt(0.0, QColor(255, 255, 255, 210 if not light else 255))
-        rim.setColorAt(0.5, QColor(255, 255, 255, 40))
-        rim.setColorAt(1.0, QColor(255, 255, 255, 120 if not light else 160))
-        painter.setPen(QPen(QBrush(rim), max(1.0, side * 0.012)))
+        rim.setColorAt(0.0, QColor(255, 255, 255, 235 if not light else 200))
+        rim.setColorAt(0.5, QColor(190, 205, 230, 70))
+        rim.setColorAt(1.0, QColor(200, 255, 82, 210 if not light else 150))
+        painter.setPen(QPen(QBrush(rim), max(1.2, rect.width() * 0.016)))
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.drawRoundedRect(rect, radius, radius)
+        painter.drawPath(path)
+        painter.restore()
+
+    def _paint_liquid_edge(self, painter: QPainter, path: QPainterPath, centre: QPointF, rect: QRectF, strength: float, t: float) -> None:
+        """Lime / amber / red / cyan colour gathering along the tile's edge."""
+        if strength <= 0.004:
+            return
+        light = get_palette().name == "light"
+        painter.save()
+        painter.setClipPath(path)
+        stops = (
+            (0.00, "#B5F23D"), (0.08, "#B5F23D"), (0.17, "#F4803A"), (0.25, "#35C6E8"),
+            (0.33, "#B5F23D"), (0.42, "#E2452F"), (0.50, "#B5F23D"), (0.58, "#B5F23D"),
+            (0.67, "#F4803A"), (0.75, "#35C6E8"), (0.83, "#B5F23D"), (0.92, "#E2452F"),
+        )
+        for width_factor, alpha in ((0.24, 0.14), (0.15, 0.30), (0.08, 0.58)):
+            gradient = QConicalGradient(centre, -(t * 55.0) % 360.0)
+            for position, hex_color in stops:
+                gradient.setColorAt(position, _alpha(QColor(hex_color), alpha * strength * (0.7 if light else 1.0)))
+            gradient.setColorAt(1.0, _alpha(QColor(stops[0][1]), alpha * strength * (0.7 if light else 1.0)))
+            painter.setPen(QPen(QBrush(gradient), rect.width() * width_factor, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawPath(path)
         painter.restore()
 
     def paintEvent(self, event) -> None:
         del event
         t = self.seconds()
-        p = self.progress()
         size = float(min(self.width(), self.height()))
         centre = QPointF(self.width() / 2.0, self.height() / 2.0)
 
-        tile_strength = _smooth(0.0, 0.18, p) * (1.0 - _smooth(0.58, 0.86, p))
-        shield_progress = _smooth(0.30, 0.78, p)
-        check_progress = _smooth(0.66, 0.92, p)
-        settle = _smooth(0.80, 1.0, p)
-        breathe = 0.5 + 0.5 * math.sin(t * 2.2)
+        disc_in = _smooth(0.0, 0.40, t)
+        morph = _smooth(0.65, 1.55, t)                       # disc -> rounded tile
+        edge = _smooth(0.70, 1.15, t) * (1.0 - _smooth(1.85, 2.65, t))
+        shield_p = _smooth(0.95, 1.85, t)
+        tile_fade = 1.0 - _smooth(2.15, 2.85, t)
+        shrink = _smooth(2.15, 2.85, t)                       # tile gone: shield settles smaller
 
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
 
         color = logo_color()
-        # Ambient glow behind the mark that grows as the logo forms.
-        glow_strength = (0.10 + 0.10 * breathe) * (0.3 + 0.7 * settle) * (0.4 + 0.6 * shield_progress)
-        glow = QRadialGradient(centre, size * 0.5)
-        glow.setColorAt(0.0, _alpha(color, glow_strength * (1.0 if get_palette().name == "dark" else 0.8)))
-        glow.setColorAt(1.0, _alpha(color, 0.0))
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QBrush(glow))
-        painter.drawEllipse(centre, size * 0.5, size * 0.5)
+        pop = 0.82 + 0.18 * disc_in
+        side = size * (0.52 + 0.26 * morph) * pop
+        path = self._tile_path(centre, side, 1.0 - morph)
+        rect = QRectF(centre.x() - side / 2.0, centre.y() - side / 2.0, side, side)
+        glass_strength = disc_in * tile_fade
+        if glass_strength > 0.003:
+            self._paint_glass(painter, path, rect, glass_strength)
+            self._paint_liquid_edge(painter, path, centre, rect, edge * tile_fade, t)
 
-        self._paint_tile(painter, centre, size * 0.74, tile_strength, t)
-
-        box = QRectF(centre.x() - size * 0.36, centre.y() - size * 0.36, size * 0.72, size * 0.72)
-        width = size * 0.052
-        glow_level = 0.5 + 0.5 * settle * (0.6 + 0.4 * breathe)
+        scale = 1.0 - 0.20 * shrink
+        box_side = size * 0.62 * scale * pop
+        box = QRectF(centre.x() - box_side / 2.0, centre.y() - box_side / 2.0, box_side, box_side)
+        check_side = size * (0.74 - 0.14 * morph) * scale * pop
+        check_box = QRectF(centre.x() - check_side / 2.0, centre.y() - check_side / 2.0, check_side, check_side)
+        width = size * (0.070 - 0.020 * _smooth(1.2, 2.3, t)) * scale
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        _draw_progress(painter, shield_path(box), shield_progress, color, width, glow_level)
-        _draw_progress(painter, check_path(box), check_progress, color, width, glow_level)
+        painter.setOpacity(disc_in)
+        _draw_progress(painter, shield_path(box), shield_p, color, width, 0.0)
+        _draw_progress(painter, check_path(check_box), 1.0, color, width, 0.0)
         painter.end()
