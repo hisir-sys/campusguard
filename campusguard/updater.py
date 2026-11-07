@@ -78,19 +78,61 @@ def select_update(release: dict, current_version: str) -> dict | None:
     return {"version": remote_version, "url": installer_url, "checksum_url": checksum_url}
 
 
-def check_for_update() -> dict | None:
+def check_for_update_detailed() -> tuple[dict | None, str]:
+    """Return (update-or-None, plain-language result) for the UI and the log."""
     if BUILD_VERSION == "dev" or not getattr(sys, "frozen", False):
+        message = "Update checks only run in the installed CampusGuard app."
         _log(f"update check skipped (version={BUILD_VERSION!r}, frozen={getattr(sys, 'frozen', False)})")
-        return None
+        return None, message
     try:
         with _request(_API_URL) as response:
             release = json.loads(response.read().decode("utf-8"))
     except Exception as error:
         _log(f"update check failed: {type(error).__name__}: {error}")
-        return None
+        return None, "Could not reach the update server. Check the internet connection."
     update = select_update(release, BUILD_VERSION)
-    _log(f"installed={BUILD_VERSION} latest={str(release.get('body', '')).strip()!r} update={'yes' if update else 'no'}")
-    return update
+    latest = str(release.get("body", "")).strip()
+    _log(f"installed={BUILD_VERSION} latest={latest!r} update={'yes' if update else 'no'}")
+    if update:
+        return update, f"Build {update['version']} is available (you have build {BUILD_VERSION})."
+    return None, f"You are up to date (build {BUILD_VERSION})."
+
+
+def check_for_update() -> dict | None:
+    return check_for_update_detailed()[0]
+
+
+def _marker_path() -> Path:
+    from campusguard.storage import application_data_dir
+
+    return application_data_dir() / "pending_update.json"
+
+
+def mark_update_started(new_version: str) -> None:
+    """Remember that an update was launched, so the next start can confirm it."""
+    try:
+        path = _marker_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"from": BUILD_VERSION, "to": str(new_version)}), encoding="utf-8")
+    except Exception as error:
+        _log(f"could not write update marker: {error}")
+
+
+def consume_update_marker() -> dict | None:
+    """Return {"from","to"} once, after the app restarted on the new build."""
+    try:
+        path = _marker_path()
+        if not path.is_file():
+            return None
+        data = json.loads(path.read_text(encoding="utf-8"))
+        path.unlink(missing_ok=True)
+        if _version_number(BUILD_VERSION) >= _version_number(str(data.get("to"))) >= 0:
+            _log(f"update confirmed: {data.get('from')} -> {BUILD_VERSION}")
+            return data
+        _log(f"update marker ignored (installed={BUILD_VERSION}, expected={data.get('to')})")
+    except Exception as error:
+        _log(f"could not read update marker: {error}")
+    return None
 
 
 def download_installer(url: str, checksum_url: str) -> Path | None:

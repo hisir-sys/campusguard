@@ -11,7 +11,7 @@ class UpdateDialog(QDialog):
 
     update_requested = Signal()
 
-    def __init__(self, version: str, parent: QWidget | None = None) -> None:
+    def __init__(self, version: str, parent: QWidget | None = None, done: bool = False) -> None:
         super().__init__(parent)
         self.setObjectName("updateDialog")
         self.setWindowTitle("CampusGuard update")
@@ -36,12 +36,14 @@ class UpdateDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(26, 24, 26, 22)
         layout.setSpacing(12)
-        title = QLabel("A new CampusGuard update is available")
+        title = QLabel("CampusGuard was updated" if done else "A new CampusGuard update is available")
         title.setObjectName("updateTitle")
         title.setWordWrap(True)
         self.body = QLabel(
-            f"Version {version} is ready to install.\n\n"
-            "Choose “Update now” and CampusGuard will download it, install it and reopen by itself."
+            f"You are now running build {version}. Everything is ready."
+            if done
+            else f"Build {version} is ready to install.\n\n"
+            "Choose “Update now”. CampusGuard will close for a moment while it installs, then reopen by itself."
         )
         self.body.setObjectName("updateBody")
         self.body.setWordWrap(True)
@@ -63,7 +65,12 @@ class UpdateDialog(QDialog):
         layout.addWidget(self.progress)
         layout.addLayout(buttons)
         self.later_button.clicked.connect(self.reject)
-        self.now_button.clicked.connect(self.update_requested)
+        if done:
+            self.later_button.hide()
+            self.now_button.setText("Continue")
+            self.now_button.clicked.connect(self.accept)
+        else:
+            self.now_button.clicked.connect(self.update_requested)
 
     def show_downloading(self) -> None:
         self.body.setText("Downloading and verifying the update… CampusGuard will close and reopen when it is installed.")

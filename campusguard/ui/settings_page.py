@@ -52,6 +52,7 @@ class SettingsPage(QWidget):
     settings_changed = Signal(object)
     server_connection_test_requested = Signal(str, str)
     server_token_changed = Signal(str)
+    update_check_requested = Signal()
 
     def __init__(self, settings: AppSettings, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -281,6 +282,24 @@ class SettingsPage(QWidget):
         status_section.body.addLayout(status_grid)
         content_layout.addWidget(status_section)
 
+        from campusguard.build_info import BUILD_VERSION
+
+        update_section = SettingsSection(
+            "UPDATES",
+            "CampusGuard checks for a new version every time it starts and asks before installing.",
+        )
+        update_row = QHBoxLayout()
+        self.update_status_label = QLabel(
+            "Development build" if BUILD_VERSION == "dev" else f"Installed build: {BUILD_VERSION}"
+        )
+        self.update_status_label.setWordWrap(True)
+        update_row.addWidget(self.update_status_label, 1)
+        self.check_updates_button = QPushButton("Check for updates")
+        self.check_updates_button.clicked.connect(self._request_update_check)
+        update_row.addWidget(self.check_updates_button)
+        update_section.body.addLayout(update_row)
+        content_layout.addWidget(update_section)
+
         content_layout.addStretch(1)
         scroll.setWidget(content)
         root.addWidget(scroll, 1)
@@ -322,6 +341,15 @@ class SettingsPage(QWidget):
 
         frame.body = body  # type: ignore[attr-defined]
         return frame
+
+    def _request_update_check(self) -> None:
+        self.check_updates_button.setEnabled(False)
+        self.update_status_label.setText("Checking for updates…")
+        self.update_check_requested.emit()
+
+    def set_update_status(self, text: str) -> None:
+        self.update_status_label.setText(text)
+        self.check_updates_button.setEnabled(True)
 
     def _status_card(self, title: str, value: str) -> QFrame:
         frame = QFrame()

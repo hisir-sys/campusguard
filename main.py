@@ -242,6 +242,7 @@ class AppController:
 
             window = MainWindow(account_email=session.email)
             window.logout_requested.connect(lambda: self.logout(session.email))
+            window.update_check_requested.connect(self._manual_update_check)
             window.closed.connect(self._on_window_closed)
             return window
         except Exception as error:
@@ -260,6 +261,7 @@ class AppController:
         window.raise_()
         window.activateWindow()
         self.window = window
+        self._confirm_finished_update()
         self._begin_update_check()
 
     def _on_window_closed(self) -> None:
@@ -295,6 +297,33 @@ class AppController:
         # after the user agrees, so the popup appears within seconds.
         self._run(updater.check_for_update, self._offer_update)
 
+    def _confirm_finished_update(self) -> None:
+        """After the installer relaunched us on the new build, say so once."""
+        from campusguard import updater
+        from campusguard.ui.update_dialog import UpdateDialog
+
+        marker = updater.consume_update_marker()
+        if marker and self.window is not None:
+            dialog = UpdateDialog(str(marker["to"]), self.window, done=True)
+            self._done_dialog = dialog
+            dialog.open()
+
+    def _manual_update_check(self) -> None:
+        from campusguard import updater
+
+        def finished(result) -> None:
+            info, message = result
+            if self.window is not None:
+                self.window.settings_page.set_update_status(message)
+            if info:
+                self._offer_update(info)
+
+        def failed(_error) -> None:
+            if self.window is not None:
+                self.window.settings_page.set_update_status("The update check failed. Try again in a moment.")
+
+        self._run(updater.check_for_update_detailed, finished, failed)
+
     def _offer_update(self, info) -> None:
         if not info or self.window is None or getattr(self, "_update_dialog", None) is not None:
             return
@@ -310,6 +339,7 @@ class AppController:
         from campusguard import updater
 
         dialog = getattr(self, "_update_dialog", None)
+        self._pending_version = str(info["version"])
         if dialog is not None:
             dialog.show_downloading()
         self._run(
@@ -323,7 +353,14 @@ class AppController:
         from campusguard import updater
 
         dialog = getattr(self, "_update_dialog", None)
-        if not installer or not updater.launch_installer(installer):
+        if not installer:
+            if dialog is not None:
+                dialog.show_failed()
+            return
+        version = str(getattr(self, "_pending_version", ""))
+        updater.mark_update_started(version)
+        if not updater.launch_installer(installer):
+            updater.consume_update_marker()
             if dialog is not None:
                 dialog.show_failed()
             return

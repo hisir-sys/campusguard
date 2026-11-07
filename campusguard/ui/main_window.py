@@ -477,6 +477,7 @@ class InAppOverlay(QFrame):
 
 class MainWindow(QMainWindow):
     logout_requested = Signal()
+    update_check_requested = Signal()
     closed = Signal()
     _GUTTER = 5  # invisible resize border around the frameless window
 
@@ -1091,6 +1092,7 @@ class MainWindow(QMainWindow):
         self.settings_page.settings_changed.connect(self._save_settings)
         self.settings_page.server_connection_test_requested.connect(self._test_server_connection)
         self.settings_page.server_token_changed.connect(self._save_server_token)
+        self.settings_page.update_check_requested.connect(self.update_check_requested)
 
     def _remote_client(self) -> RemoteServerClient:
         return RemoteServerClient(self.settings.server_address, self.vault.load_server_token(), timeout=1.0, retries=0)
