@@ -17,7 +17,9 @@ def test_logo_orb_and_mark_paint_in_both_themes():
     _app()
     for theme in ("dark", "light"):
         set_current(theme)
-        for widget in (brand_logo.LogoReveal(size=120), ThinkingOrb(size=120), brand_logo.LogoMark(size=64)):
+        reveal = brand_logo.LogoReveal(size=120)
+        reveal.seconds = lambda: 3.3  # the film starts empty; check the held end state
+        for widget in (reveal, ThinkingOrb(size=120), brand_logo.LogoMark(size=64)):
             image = widget.grab().toImage()
             assert not image.isNull()
             assert any(image.pixelColor(x, y).alpha() > 0 for x in range(0, image.width(), 4) for y in range(0, image.height(), 4))
