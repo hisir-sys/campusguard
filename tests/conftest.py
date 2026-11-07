@@ -18,6 +18,15 @@ def pytest_sessionfinish(session, exitstatus):
 
         app = QApplication.instance()
         if app is not None:
+            # Dashboard pages are often children of a top-level MainWindow,
+            # so closing only top-level widgets would not invoke their
+            # closeEvent. Detach their child filters explicitly first.
+            from campusguard.ui.dashboard_page import DashboardPage
+
+            for widget in app.allWidgets():
+                if isinstance(widget, DashboardPage):
+                    widget._detach_card_event_filters()
+
             for widget in app.topLevelWidgets():
                 try:
                     widget.close()
