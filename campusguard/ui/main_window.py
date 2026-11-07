@@ -1058,6 +1058,7 @@ class MainWindow(QMainWindow):
         self.top_bar.theme_toggle_requested.connect(self._toggle_theme)
         self.top_bar.login_requested.connect(self._toggle_operator)
         self.top_bar.search_submitted.connect(self._run_global_search)
+        self.top_bar.camera_selected.connect(self.open_camera)
 
         self.dashboard.camera_selected.connect(self.open_camera)
         self.dashboard.view_alerts_requested.connect(lambda: self.navigate("alerts"))
@@ -1820,6 +1821,7 @@ class MainWindow(QMainWindow):
         cameras = list(self.cameras.values())
         self.dashboard.sync_cameras(cameras)
         self.camera_page.sync_cameras(cameras, self.camera_stats)
+        self.top_bar.set_cameras(cameras)
         self.dashboard.refresh_summary()
 
     def _refresh_pages(self) -> None:
