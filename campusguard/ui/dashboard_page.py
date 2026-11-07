@@ -484,6 +484,8 @@ class DashboardPage(QWidget):
         super().__init__(parent)
 
         self.repository = repository
+        self._closing = False
+        self._event_filter_targets: dict[QWidget, str] = {}
 
         self._cameras: dict[str, CameraConfig] = {}
         self._stats: dict[str, CameraStats] = {}
@@ -745,9 +747,7 @@ class DashboardPage(QWidget):
         frame.setMinimumHeight(170)
         frame.setMaximumHeight(170)
         frame.setCursor(Qt.CursorShape.PointingHandCursor)
-        frame.installEventFilter(self)
-        for child in frame.findChildren(QWidget):
-            child.installEventFilter(self)
+        self._install_card_event_filters(frame, "ai")
 
         self.engine_values = {}
 
@@ -791,9 +791,7 @@ class DashboardPage(QWidget):
         frame.setMinimumHeight(222)
         frame.setMaximumHeight(222)
         frame.setCursor(Qt.CursorShape.PointingHandCursor)
-        frame.installEventFilter(self)
-        for child in frame.findChildren(QWidget):
-            child.installEventFilter(self)
+        self._install_card_event_filters(frame, "stats")
 
         self.online_value = QLabel("0")
         self.online_value.setProperty("kvvalue", True)
@@ -1013,37 +1011,44 @@ class DashboardPage(QWidget):
     # POPUP EVENT HANDLING
     # ==================================================================
 
+    def _install_card_event_filters(self, frame: QFrame, kind: str) -> None:
+        """Track every clickable card widget so filters can be detached safely."""
+        targets = [frame, *frame.findChildren(QWidget)]
+        for target in targets:
+            self._event_filter_targets[target] = kind
+            target.installEventFilter(self)
+
+    def _detach_card_event_filters(self) -> None:
+        self._closing = True
+        for target in tuple(self._event_filter_targets):
+            try:
+                target.removeEventFilter(self)
+            except RuntimeError:
+                # Qt may already have destroyed a child during parent teardown.
+                pass
+        self._event_filter_targets.clear()
+
+    def closeEvent(self, event) -> None:
+        self._detach_card_event_filters()
+        self._clear_navigation_blur()
+        if hasattr(self, "_popup"):
+            self._popup.close()
+        super().closeEvent(event)
+
     def eventFilter(
         self,
         watched,
         event,
     ) -> bool:
-        if event.type() == QEvent.Type.MouseButtonPress:
-
-            if (
-                watched is self._engine_card
-                or watched
-                in self._engine_card.findChildren(
-                    QWidget
-                )
-            ):
-                self._open_popup("ai")
-                return True
-
-            if (
-                watched is self._stats_card
-                or watched
-                in self._stats_card.findChildren(
-                    QWidget
-                )
-            ):
-                self._open_popup("stats")
-                return True
-
-        return super().eventFilter(
-            watched,
-            event,
-        )
+        # During shutdown, do not touch child wrappers: Qt may already be
+        # delivering a final event while their C++ objects are being deleted.
+        if self._closing:
+            return False
+        kind = self._event_filter_targets.get(watched)
+        if kind and event.type() == QEvent.Type.MouseButtonPress:
+            self._open_popup(kind)
+            return True
+        return super().eventFilter(watched, event)
 
     def _blur_navigation(self, enabled: bool) -> None:
         self._clear_navigation_blur()
