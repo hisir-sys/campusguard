@@ -705,7 +705,7 @@ class MainWindow(QMainWindow):
     def _position_bottom_bar(self) -> None:
         """Compact the sidebar to icons on narrow windows."""
         if hasattr(self, "top_bar"):
-            narrow = self.width() < 1180
+            narrow = self.width() < 1180 or self.top_bar._user_compact
             if narrow != self.top_bar.is_compact():
                 self.top_bar.set_compact(narrow)
 

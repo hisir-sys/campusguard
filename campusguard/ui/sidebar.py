@@ -8,7 +8,7 @@ the old TopBar/BottomBar so every page keeps working unchanged.
 from __future__ import annotations
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QLinearGradient, QPainter, QPainterPath, QPen, QRadialGradient
 from PySide6.QtWidgets import (
     QAbstractButton,
     QFrame,
@@ -26,7 +26,7 @@ from campusguard.ui.icons import icon_pixmap
 from campusguard.ui.theme import get_palette, qcolor
 
 FULL_WIDTH = 248
-COMPACT_WIDTH = 76
+COMPACT_WIDTH = 68
 
 SECTIONS = (
     (
@@ -98,20 +98,24 @@ class _NavItem(QAbstractButton):
         painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
         w, h = float(self.width()), float(self.height())
         body = QRectF(0.5, 0.5, w - 1, h - 1)
+        radius = h / 2.0
         if self._active:
-            painter.setPen(QPen(qcolor(pal.ink, 70), 1))
-            painter.setBrush(qcolor(pal.ink, 26))
-            painter.drawRoundedRect(body, 11, 11)
+            glow = QRadialGradient(QPointF(w / 2.0, h / 2.0), w * 0.62)
+            glow.setColorAt(0.0, qcolor(pal.ink, 46))
+            glow.setColorAt(1.0, qcolor(pal.ink, 6))
+            painter.setPen(QPen(qcolor(pal.ink, 120), 1))
+            painter.setBrush(glow)
+            painter.drawRoundedRect(body, radius, radius)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(qcolor(pal.ink))
-            painter.drawRoundedRect(QRectF(0, h * 0.28, 3, h * 0.44), 1.5, 1.5)
+            painter.drawRoundedRect(QRectF(-1, h * 0.26, 3.5, h * 0.48), 1.75, 1.75)
         elif self._hover:
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(qcolor(pal.text, 14))
-            painter.drawRoundedRect(body, 11, 11)
+            painter.setPen(QPen(qcolor(pal.text, 18), 1))
+            painter.setBrush(qcolor(pal.text, 12))
+            painter.drawRoundedRect(body, radius, radius)
         tint = pal.ink if self._active else (pal.text if self._hover else pal.text_dim)
         size = 19
-        icon_x = (w - size) / 2.0 if self._compact else 14.0
+        icon_x = (w - size) / 2.0 if self._compact else 16.0
         painter.drawPixmap(QPointF(icon_x, (h - size) / 2.0), icon_pixmap(self._icon, size, tint))
         if not self._compact:
             font = QFont(self.font())
@@ -143,11 +147,39 @@ class _NavItem(QAbstractButton):
                 painter.drawText(pill, int(Qt.AlignmentFlag.AlignCenter), text)
 
 
-class _SectionLabel(QLabel):
+class _SectionLabel(QWidget):
+    """Group heading when expanded, a hairline divider when collapsed."""
+
     def __init__(self, text: str) -> None:
-        super().__init__(text)
-        self.setProperty("muted", True)
-        self.setStyleSheet("font-size: 8pt; font-weight: 700; letter-spacing: 1.4px; padding: 10px 14px 4px 14px; background: transparent;")
+        super().__init__()
+        self._text = text
+        self._compact = False
+        self.setFixedHeight(30)
+
+    def set_compact(self, compact: bool) -> None:
+        self._compact = compact
+        self.setFixedHeight(18 if compact else 30)
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        pal = get_palette()
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w, h = float(self.width()), float(self.height())
+        if self._compact:
+            painter.setPen(QPen(qcolor(pal.text, 26), 1))
+            painter.drawLine(QPointF(w * 0.28, h / 2.0), QPointF(w * 0.72, h / 2.0))
+            return
+        font = QFont(self.font())
+        font.setPointSizeF(7.5)
+        font.setWeight(QFont.Weight.Bold)
+        font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 1.4)
+        painter.setFont(font)
+        painter.setPen(QColor(pal.text_dim))
+        painter.drawText(QRectF(16, 8, w - 32, h - 8), int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft), self._text)
+        text_w = QFontMetrics(font).horizontalAdvance(self._text) + 28
+        painter.setPen(QPen(qcolor(pal.text, 22), 1))
+        painter.drawLine(QPointF(text_w, h / 2.0 + 4), QPointF(w - 14, h / 2.0 + 4))
 
 
 class _ThemeToggle(QAbstractButton):
@@ -185,10 +217,10 @@ class _ThemeToggle(QAbstractButton):
         if self._hover:
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(qcolor(pal.text, 14))
-            painter.drawRoundedRect(QRectF(0.5, 0.5, w - 1, h - 1), 11, 11)
+            painter.drawRoundedRect(QRectF(0.5, 0.5, w - 1, h - 1), h / 2.0, h / 2.0)
         size = 19
         icon = "sun" if self._dark else "moon"
-        x = (w - size) / 2.0 if self._compact else 14.0
+        x = (w - size) / 2.0 if self._compact else 16.0
         painter.drawPixmap(QPointF(x, (h - size) / 2.0), icon_pixmap(icon, size, pal.text_dim))
         if not self._compact:
             font = QFont(self.font())
@@ -211,10 +243,11 @@ class Sidebar(QFrame):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("sidebar")
-        self.setProperty("card", True)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
         self.setFixedWidth(FULL_WIDTH)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         self._compact = False
+        self._user_compact = False
 
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 16, 12, 12)
@@ -223,8 +256,12 @@ class Sidebar(QFrame):
         self.brand_row = QWidget()
         brand = QHBoxLayout(self.brand_row)
         brand.setContentsMargins(6, 0, 6, 0)
+        brand.setAlignment(Qt.AlignmentFlag.AlignLeft)
         brand.setSpacing(10)
         self.logo = LogoMark(size=30)
+        self.logo.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.logo.setToolTip("Collapse / expand menu")
+        self.logo.mousePressEvent = lambda _e: self.toggle_compact()
         brand.addWidget(self.logo)
         self.brand_text = QWidget()
         text_col = QVBoxLayout(self.brand_text)
@@ -297,13 +334,53 @@ class Sidebar(QFrame):
         self.search.setFocus()
         self.search.selectAll()
 
+    def paintEvent(self, event) -> None:
+        pal = get_palette()
+        dark = pal.name == "dark"
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w, h = float(self.width()), float(self.height())
+        radius = min(w / 2.0, 30.0) if self._compact else 28.0
+        rect = QRectF(0.5, 0.5, w - 1, h - 1)
+        path = QPainterPath()
+        path.addRoundedRect(rect, radius, radius)
+        fill = QLinearGradient(0, 0, w * 0.4, h)
+        if dark:
+            fill.setColorAt(0.0, QColor(255, 255, 255, 26))
+            fill.setColorAt(0.5, QColor(255, 255, 255, 11))
+            fill.setColorAt(1.0, QColor(255, 255, 255, 18))
+        else:
+            fill.setColorAt(0.0, QColor(255, 255, 255, 235))
+            fill.setColorAt(1.0, QColor(255, 255, 255, 170))
+        painter.fillPath(path, fill)
+        # soft lime light spilling from the top edge
+        glow = QRadialGradient(QPointF(w * 0.3, 0), w * 0.9)
+        glow.setColorAt(0.0, qcolor(pal.ink, 30 if dark else 16))
+        glow.setColorAt(1.0, qcolor(pal.ink, 0))
+        painter.fillPath(path, glow)
+        edge = QLinearGradient(0, 0, 0, h)
+        edge.setColorAt(0.0, QColor(255, 255, 255, 80 if dark else 255))
+        edge.setColorAt(0.4, QColor(255, 255, 255, 22 if dark else 120))
+        edge.setColorAt(1.0, QColor(255, 255, 255, 40 if dark else 200))
+        painter.setPen(QPen(edge, 1.2))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawPath(path)
+        if not dark:
+            painter.setPen(QPen(QColor(20, 40, 10, 38), 1))
+            painter.drawRoundedRect(rect.adjusted(-0.5, -0.5, 0.5, 0.5), radius, radius)
+
+    def toggle_compact(self) -> None:
+        self._user_compact = not self._compact
+        self.set_compact(self._user_compact)
+
     def set_compact(self, compact: bool) -> None:
         self._compact = compact
         self.setFixedWidth(COMPACT_WIDTH if compact else FULL_WIDTH)
         self.brand_text.setVisible(not compact)
         self.search.setVisible(not compact)
         for label in self._section_labels:
-            label.setVisible(not compact)
+            label.set_compact(compact)
+        self.update()
         for item in self._buttons.values():
             item.set_compact(compact)
         self.theme_toggle.set_compact(compact)
