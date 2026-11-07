@@ -49,9 +49,12 @@ class BatchRunner:
         self._queue.put((item, future))
         return future.result(timeout=timeout)
 
-    def close(self) -> None:
+    def close(self, timeout: float = 5.0) -> None:
+        """Stop the worker and wait for it to leave its queue/inference loop."""
         self._closed.set()
         self._drain(BatchClosed("batch runner closed"))
+        if self._thread is not threading.current_thread():
+            self._thread.join(timeout=max(0.0, timeout))
 
     def _drain(self, error: Exception) -> None:
         while True:
@@ -65,11 +68,16 @@ class BatchRunner:
     def _loop(self) -> None:
         while not self._closed.is_set():
             try:
-                first = self._queue.get(timeout=1.0)
+                first = self._queue.get(timeout=0.1)
             except queue.Empty:
                 if not self._alive():
                     break
                 continue
+            if self._closed.is_set():
+                _, future = first
+                if not future.done():
+                    future.set_exception(BatchClosed("batch runner closed"))
+                break
             batch = [first]
             deadline = time.monotonic() + self.max_wait
             while len(batch) < self.max_batch:
