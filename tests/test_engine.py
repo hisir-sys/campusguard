@@ -249,3 +249,12 @@ def test_footage_prebuffer_memory_cap(tmp_path):
     for _ in range(80):
         uncapped.update(frame, "NORMAL", False, 30.0)
     assert len(uncapped.prebuffer) == 60                # default behaviour unchanged
+
+
+
+def test_batch_runner_close_waits_for_worker_exit():
+    runner = BatchRunner(lambda items: list(items), max_wait=0.001)
+    assert runner.submit("ready") == "ready"
+    runner.close(timeout=2.0)
+    assert not runner.usable
+    assert not runner._thread.is_alive()
