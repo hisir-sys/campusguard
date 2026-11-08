@@ -14,7 +14,7 @@ from campusguard.ui.icons import IconLabel, icon_pixmap
 from campusguard.ui.theme import get_palette, qcolor
 
 BAR_HEIGHT = 42
-_CLOSE_RED = "#E5484D"
+_CLOSE_RED = "#B9656D"
 
 
 class _CaptionButton(QAbstractButton):

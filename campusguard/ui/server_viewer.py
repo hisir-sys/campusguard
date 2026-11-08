@@ -269,7 +269,7 @@ class ServerViewerPage(QWidget):
         self.remote_alert_banner = QLabel("")
         self.remote_alert_banner.setWordWrap(True)
         self.remote_alert_banner.setVisible(False)
-        self.remote_alert_banner.setStyleSheet("padding: 10px 14px; border: 1px solid #F07838; border-radius: 10px; font-weight: 700;")
+        self.remote_alert_banner.setStyleSheet("padding: 10px 14px; border: 1px solid #C79A7E; border-radius: 10px; font-weight: 700;")
         root.addWidget(self.remote_alert_banner)
         self._remote_alert_timer = QTimer(self)
         self._remote_alert_timer.setSingleShot(True)
@@ -494,7 +494,7 @@ class ServerViewerPage(QWidget):
                 self.remote_alert_banner.setText(
                     f"{severity} · {event} · {camera_name} · {score:.1f}% confidence · {public_id}"
                 )
-                accent = "#FF343F" if score >= 95 else "#F07838" if score >= 85 else "#D9A441"
+                accent = "#C58790" if score >= 95 else "#C79A7E" if score >= 85 else "#C4B085"
                 self.remote_alert_banner.setStyleSheet(
                     f"padding: 10px 14px; border: 1px solid {accent}; border-left: 4px solid {accent}; "
                     "border-radius: 10px; font-weight: 700;"

@@ -481,8 +481,8 @@ def _severity_widget(
     label.setProperty("severity", value.lower() if value in SEVERITY_TITLES else "low")
     color = severity_color(value)
     label.setStyleSheet(
-        f"color: {color}; border: 1px solid {color}; border-radius: 6px; "
-        "padding: 2px 8px; font-weight: 700; background: transparent;"
+        f"color: {color}; border: none; border-radius: 11px; "
+        f"padding: 3px 12px; font-size: 8pt; font-weight: 700; letter-spacing: 0.4px; background: {rgba(color, 34)};"
     )
 
     label.style().unpolish(label)
@@ -758,11 +758,12 @@ class _HistoryPopup(QWidget):
         )
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
+        _veil = "rgba(0, 0, 0, 125)" if get_palette().name == "dark" else "rgba(70, 70, 76, 80)"
         self.setStyleSheet(
-            """
-            QWidget#historyPopupOverlay {
-                background: rgba(0, 0, 0, 125);
-            }
+            f"""
+            QWidget#historyPopupOverlay {{
+                background: {_veil};
+            }}
             """
         )
 
@@ -793,8 +794,9 @@ class _HistoryPopup(QWidget):
         self.popup.setStyleSheet(
             f"""
             QFrame#historyPopup {{
-                background: {rgba(palette.surface, 248)};
-                border: 1px solid {rgba(palette.line, min(255, int(palette.line_alpha * 2.2)))};
+                background: {rgba(palette.surface, 226 if palette.name == "dark" else 232)};
+                border: 1px solid {rgba(palette.text, 46)};
+                border-top: 1px solid {rgba(palette.text, 80)};
                 border-radius: 28px;
             }}
             """
@@ -1591,7 +1593,7 @@ class IncidentsPage(QWidget):
             tint = severity_color(severity)
             entries.append(
                 f'<table width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 6px 0;">'
-                f'<tr><td style="padding:8px 10px;background:{rgba(palette.surface, 150)};border:1px solid {rgba(palette.line, 110)};border-radius:8px;">'
+                f'<tr><td style="padding:8px 10px;background:{rgba(palette.text, 14)};">'
                 f'<span style="color:{palette.text};font-weight:600;">{event}</span>'
                 f'<span style="color:{tint};font-weight:700;"> &nbsp; {severity_label}</span><br/>'
                 f'<span style="color:{palette.text_dim};font-size:9pt;">{camera} &nbsp; · &nbsp; {confidence:.0f}% confidence</span>'
@@ -1722,10 +1724,10 @@ class IncidentsPage(QWidget):
                 )
 
             table.setColumnWidth(3, 95)
-            table.setColumnWidth(4, 90)
+            table.setColumnWidth(4, 150)
             table.setColumnWidth(5, 105)
-            table.setColumnWidth(6, 145)
-            table.setColumnWidth(7, 145)
+            table.setColumnWidth(6, 150)
+            table.setColumnWidth(7, 190)
 
             _apply_table_palette(
                 table
@@ -1827,7 +1829,7 @@ class IncidentsPage(QWidget):
         available = Path(path).is_file()
 
         view_button = _action_button(
-            "View" if available else "Unavailable",
+            "View" if available else "No clip",
             "view",
         )
         view_button.setEnabled(available)
@@ -2237,7 +2239,7 @@ class AlertsPage(QWidget):
             tint = severity_color(severity)
             entries.append(
                 f'<table width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 6px 0;">'
-                f'<tr><td style="padding:8px 10px;background:{rgba(palette.surface, 150)};border:1px solid {rgba(palette.line, 110)};border-radius:8px;">'
+                f'<tr><td style="padding:8px 10px;background:{rgba(palette.text, 14)};">'
                 f'<span style="color:{palette.text};font-weight:600;">{event}</span>'
                 f'<span style="color:{tint};font-weight:700;"> &nbsp; {severity_title(severity)}</span><br/>'
                 f'<span style="color:{palette.text_dim};font-size:9pt;">{camera} &nbsp; · &nbsp; {confidence:.0f}% confidence</span>'
@@ -2379,8 +2381,8 @@ class AlertsPage(QWidget):
                 )
 
             table.setColumnWidth(2, 95)
-            table.setColumnWidth(3, 90)
-            table.setColumnWidth(4, 145)
+            table.setColumnWidth(3, 150)
+            table.setColumnWidth(4, 150)
             table.setColumnWidth(5, 115)
             table.setColumnWidth(6, 105)
 
@@ -2469,7 +2471,7 @@ class AlertsPage(QWidget):
         available = Path(path).is_file()
 
         button = _action_button(
-            "View" if available else "Unavailable",
+            "View" if available else "No clip",
             "view",
         )
         button.setEnabled(available)
