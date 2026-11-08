@@ -486,6 +486,8 @@ class DashboardPage(QWidget):
         self.repository = repository
         self._closing = False
         self._event_filter_targets: dict[QWidget, str] = {}
+        self._hover_frames: dict[QWidget, QGraphicsDropShadowEffect] = {}
+        self._hover_animations: dict[QWidget, QPropertyAnimation] = {}
 
         self._cameras: dict[str, CameraConfig] = {}
         self._stats: dict[str, CameraStats] = {}
@@ -638,8 +640,6 @@ class DashboardPage(QWidget):
         )
 
         self._popup.hide()
-        self._hover_frames: dict[QWidget, QGraphicsDropShadowEffect] = {}
-        self._hover_animations: dict[QWidget, QPropertyAnimation] = {}
         self._apply_dashboard_visuals()
 
     # ==================================================================
