@@ -17,7 +17,7 @@ from PySide6.QtGui import (
     QColor, QFont, QFontMetrics, QLinearGradient, QPainter, QPainterPath, QPen, QRadialGradient,
 )
 from PySide6.QtWidgets import (
-    QAbstractButton, QFrame, QGraphicsDropShadowEffect, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QLineEdit,
+    QAbstractButton, QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QLabel, QLineEdit,
     QListWidget, QListWidgetItem, QSizePolicy, QVBoxLayout, QWidget,
 )
 
@@ -480,6 +480,7 @@ class Sidebar(QWidget):
             if isinstance(item, _PanelItem):
                 item.set_count(0)
         self.panel.hide()
+        self.panel.setFixedWidth(0)
         outer.addWidget(self.panel, 0)
 
         self.login_button = self.account_button
@@ -491,14 +492,13 @@ class Sidebar(QWidget):
         self._width_animation.setDuration(270)
         self._width_animation.setEasingCurve(QEasingCurve.Type.InOutCubic)
         self._width_animation.valueChanged.connect(lambda value: self.setFixedWidth(int(value)))
-        self._panel_opacity = QGraphicsOpacityEffect(self.panel)
-        self._panel_opacity.setOpacity(0.0)
-        self.panel.setGraphicsEffect(self._panel_opacity)
-        self._panel_fade = QVariantAnimation(self)
-        self._panel_fade.setDuration(190)
-        self._panel_fade.setEasingCurve(QEasingCurve.Type.OutCubic)
-        self._panel_fade.valueChanged.connect(lambda value: self._panel_opacity.setOpacity(float(value)))
-        self._panel_fade.finished.connect(self._finish_panel_transition)
+        self._panel_width_animation = QVariantAnimation(self)
+        self._panel_width_animation.setDuration(240)
+        self._panel_width_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._panel_width_animation.valueChanged.connect(
+            lambda value: self.panel.setFixedWidth(int(value))
+        )
+        self._panel_width_animation.finished.connect(self._finish_panel_transition)
         self._filter_cameras("")
 
     # ----- internals ----------------------------------------------------
@@ -617,13 +617,13 @@ class Sidebar(QWidget):
         self._width_animation.setEndValue(target_width)
         self._width_animation.start()
 
-        self._panel_fade.stop()
-        self._panel_fade.setStartValue(self._panel_opacity.opacity())
-        self._panel_fade.setEndValue(0.0 if compact else 1.0)
-        self._panel_fade.start()
+        self._panel_width_animation.stop()
+        self._panel_width_animation.setStartValue(self.panel.width())
+        self._panel_width_animation.setEndValue(0 if compact else PANEL_WIDTH)
+        self._panel_width_animation.start()
 
     def _finish_panel_transition(self) -> None:
-        if self._compact and self._panel_opacity.opacity() <= 0.01:
+        if self._compact and self.panel.width() <= 1:
             self.panel.hide()
 
     def is_compact(self) -> bool:
