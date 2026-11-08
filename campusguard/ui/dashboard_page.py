@@ -472,7 +472,6 @@ class GlassPopup(QFrame):
 
 class DashboardPage(QWidget):
     camera_selected = Signal(str)
-    model_switch_requested = Signal(str)
     view_alerts_requested = Signal()
     clear_notifications_requested = Signal()
 
@@ -1378,35 +1377,19 @@ class DashboardPage(QWidget):
         title.setObjectName("popupSectionTitle")
         ml.addWidget(title)
 
-        model_names = {"fdsc_mc3": "Spontim 1.0", "mc3": "CampusGuard MC3-18", "x3d": "X3D-M"}
-        current_key = getattr(self._settings, "violence_model", "fdsc_mc3") if self._settings else "fdsc_mc3"
+        current_key = "fdsc_mc3"
+        model_names = {"fdsc_mc3": "Spontim 1.0"}
+        name_label = QLabel("Spontim 1.0")
+        name_label.setStyleSheet("font-size: 15pt; font-weight: 800;")
+        ml.addWidget(name_label)
+        for label_text, value_text in (
+            ("Architecture", "MC3-18 temporal classifier"),
+            ("Input", "16 frames · 112×112 RGB"),
+            ("Classes", "fight / no fight"),
+        ):
+            self._popup_key_value(ml, label_text, value_text)
 
-        # Horizontal choices use the popup width instead of stacking three
-        # tall buttons, keeping the full AI overview visible without scrolling.
-        choices = QHBoxLayout()
-        choices.setContentsMargins(0, 0, 0, 0)
-        choices.setSpacing(8)
-        options = (
-            ("Spontim 1.0", "fdsc_mc3"),
-            ("CampusGuard MC3-18", "mc3"),
-            ("X3D-M", "x3d"),
-        )
-        for label_text, key in options:
-            choice = QPushButton(label_text)
-            choice.setCheckable(True)
-            choice.setChecked(key == current_key)
-            choice.setCursor(Qt.CursorShape.PointingHandCursor)
-            choice.setMinimumHeight(36)
-            choice.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-            choice.setProperty("modelChoice", True)
-            choice.clicked.connect(
-                lambda _checked=False, selected_key=key:
-                self.model_switch_requested.emit(selected_key)
-            )
-            choices.addWidget(choice, 1)
-        ml.addLayout(choices)
-
-        desc = QLabel("Select the temporal classifier used by live camera workers.")
+        desc = QLabel("Spontim 1.0 is the detection model used by every live camera worker.")
         desc.setProperty("muted", True)
         desc.setWordWrap(True)
         ml.addWidget(desc)
@@ -1603,13 +1586,8 @@ class DashboardPage(QWidget):
         details_title.setObjectName("popupSectionTitle")
         details_layout.addWidget(details_title)
 
-        current_model = getattr(self._settings, "violence_model", "fdsc_mc3") if self._settings else "fdsc_mc3"
-        model_names = {
-            "fdsc_mc3": "Spontim 1.0",
-            "mc3": "CampusGuard MC3-18",
-            "x3d": "X3D-M",
-            "r3d": "R3D-18",
-        }
+        current_model = "fdsc_mc3"
+        model_names = {"fdsc_mc3": "Spontim 1.0"}
         rows = (
             ("Total connected cameras", str(total_cameras)),
             ("Stream availability", f"{online_count} Active / {offline_count} Offline"),
@@ -2119,7 +2097,7 @@ class DashboardPage(QWidget):
         if settings is None:
             return
 
-        model_names = {"fdsc_mc3": "Spontim 1.0", "mc3": "CampusGuard MC3-18", "x3d": "X3D-M"}
+        model_names = {"fdsc_mc3": "Spontim 1.0"}
         model_key = getattr(settings, "violence_model", "fdsc_mc3")
         model_name = model_names.get(model_key, "Spontim 1.0")
         self._set_value("violence_model", model_name, "good", "Active production fight-detection engine")

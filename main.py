@@ -428,7 +428,7 @@ def run_self_check(result_file: str | None) -> int:
     def models() -> None:
         from campusguard.ai_pipeline import resolve_model_path
 
-        for name in ("yolo11n.pt", "yolo11n-pose.pt", "fight_mc3_18.pth", "model_16_m3_0.8888.pth", "final_x3d_realtime.pt"):
+        for name in ("yolo11n.pt", "yolo11n-pose.pt", "model_16_m3_0.8888.pth"):
             if not resolve_model_path(f"models/{name}").is_file():
                 raise RuntimeError(f"model {name} not found in the bundle")
 

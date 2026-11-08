@@ -19,7 +19,7 @@ from campusguard.model_registry import (
 
 class SharedCameraModelTests(unittest.TestCase):
     def test_video_classifier_weights_are_shared_but_stream_state_is_not(self):
-        profile = MODEL_PROFILES["mc3"]
+        profile = MODEL_PROFILES["fdsc_mc3"]
         path = "tests/test-shared-camera-classifier.pth"
         key = (profile.architecture, str(Path(path).resolve()), str(torch.device("cpu")), None)
         with MODEL_CACHE_LOCK:

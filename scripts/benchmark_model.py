@@ -20,8 +20,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("video", type=Path, help="Input video path.")
     parser.add_argument(
         "--model",
-        choices=("mc3", "fdsc_mc3", "x3d"),
-        default="mc3",
+        choices=("fdsc_mc3",),
+        default="fdsc_mc3",
         help="Temporal violence model to validate.",
     )
     parser.add_argument(
@@ -87,9 +87,7 @@ def main() -> int:
 
     profile = MODEL_PROFILES[args.model]
     model_paths = {
-        "mc3": settings.fight_model_path,
         "fdsc_mc3": settings.fdsc_mc3_model_path,
-        "x3d": settings.x3d_model_path,
     }
 
     print("CampusGuard isolated temporal-model validation")
@@ -106,7 +104,7 @@ def main() -> int:
         settings.confidence_threshold,
         report_status,
         fight_class_override=(
-            settings.fight_positive_class if args.model == "mc3" else None
+            None
         ),
     )
 

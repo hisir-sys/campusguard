@@ -121,11 +121,6 @@ def main() -> int:
         print("  RESULT: READY")
         print()
 
-    print("[CampusGuard Enhanced]")
-    print("  Status: COMING SOON")
-    print("  Operational: NO")
-    print("  RESULT: NOT LOADED BY DESIGN")
-    print()
     print("=" * 72)
     print(f"Verified operational models: {verified_count}/{verified_count + technical_count + blocked_count}")
     print(f"Loaded but not semantically verified: {blocked_count}")

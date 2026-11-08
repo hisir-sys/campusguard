@@ -146,7 +146,7 @@ Copy the model checkpoints you are licensed to use into:
 
     %APPDATA%\CampusGuard\CampusGuard\models\
 
-Use the filenames expected by the current model configuration, normally yolo11n.pt (person detector), yolo11n-pose.pt (pose estimator), and one supported fight classifier such as fight_mc3_18.pth or model_16_m3_0.8888.pth. The server resolves relative models paths from this folder when a checkpoint is not bundled beside the application. Restart the server after adding or replacing weights. Missing weights are reported as model errors; CampusGuard must not pretend that a missing model is detecting fights.
+Use the filenames expected by the current model configuration, normally yolo11n.pt (person detector), yolo11n-pose.pt (pose estimator), and the Spontim 1.0 fight classifier model_16_m3_0.8888.pth. The server resolves relative models paths from this folder when a checkpoint is not bundled beside the application. Restart the server after adding or replacing weights. Missing weights are reported as model errors; CampusGuard must not pretend that a missing model is detecting fights.
 
 ### Connect a desktop client from another PC
 

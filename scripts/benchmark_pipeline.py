@@ -18,8 +18,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("video", type=Path, help="Input video path.")
     parser.add_argument(
         "--model",
-        choices=("mc3", "fdsc_mc3", "x3d"),
-        default="mc3",
+        choices=("fdsc_mc3",),
+        default="fdsc_mc3",
         help="Verified violence model to use.",
     )
     parser.add_argument(

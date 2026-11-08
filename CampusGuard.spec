@@ -13,7 +13,7 @@ from PyInstaller.utils.hooks import collect_all
 datas = [("models", "models"), ("assets", "assets")]
 binaries = []
 hiddenimports = ["campusguard._build_version"]
-for package in ("cv2", "torch", "torchvision", "ultralytics", "pytorchvideo", "keyring"):
+for package in ("cv2", "torch", "torchvision", "ultralytics", "keyring"):
     package_datas, package_binaries, package_hidden = collect_all(package)
     datas += package_datas
     binaries += package_binaries
@@ -43,8 +43,6 @@ DROP_PATTERNS = [
     r"(^|/)torch/share/cmake/",
     r"(^|/)torch/lib/cmake/",
     r"\.(lib|h|hpp|cuh|cmake|pdb)$",
-    # Identical to models/fight_mc3_18.pth (same SHA-256); resolved by model_paths.py.
-    r"(^|/)models/model_16_m3_0\.8888\.pth$",
 ]
 _drop = [re.compile(pattern) for pattern in DROP_PATTERNS]
 

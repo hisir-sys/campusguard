@@ -190,11 +190,6 @@ class VideoClassifier:
             if self.profile.architecture == "mc3":
                 from torchvision.models.video import mc3_18
                 model = mc3_18(weights=None)
-            elif self.profile.architecture == "r3d":
-                from torchvision.models.video import r3d_18
-                model = r3d_18(weights=None)
-            elif self.profile.architecture == "x3d":
-                model = self._create_x3d()
             else:
                 raise ValueError(f"Unsupported architecture: {self.profile.architecture}")
 
@@ -249,29 +244,7 @@ class VideoClassifier:
 
     @staticmethod
     def _load_checkpoint(path: Path):
-        """Load trusted CampusGuard checkpoints with PyTorch's safe unpickler."""
-        version_parts = torch.__version__.split("+")[0].split(".")
-        torch_major = int(version_parts[0])
-        torch_minor = int(version_parts[1]) if len(version_parts) > 1 else 0
-
-        if (torch_major, torch_minor) >= (2, 6) and path.suffix.lower() == ".pt":
-            try:
-                from numpy._core.multiarray import scalar
-            except ImportError:
-                from numpy.core.multiarray import scalar
-
-            # The verified X3D checkpoint contains NumPy scalar/dtype metadata.
-            # Allowlist only the NumPy types required by this trusted checkpoint
-            # instead of disabling PyTorch's weights-only safety mechanism.
-            numpy_dtype = np.dtype
-            numpy_dtype_instance_type = type(np.dtype(np.float32))
-            numpy_float64_dtype = type(np.dtype(np.float64))
-
-            with torch.serialization.safe_globals(
-                [scalar, numpy_dtype, numpy_dtype_instance_type, numpy_float64_dtype]
-            ):
-                return torch.load(path, map_location="cpu", weights_only=True)
-
+        """Load the trusted Spontim checkpoint with PyTorch's safe unpickler."""
         return torch.load(path, map_location="cpu", weights_only=True)
 
     @staticmethod
@@ -298,9 +271,6 @@ class VideoClassifier:
                 continue
             key = str(raw_key)
             # Some exporters stack wrappers such as model.module.model.
-            # The verified X3D checkpoint stores the network below a
-            # `backbone.` wrapper, while pytorchvideo's create_x3d()
-            # exposes those blocks directly.
             changed = True
             while changed:
                 changed = False
@@ -314,18 +284,10 @@ class VideoClassifier:
             raise ValueError("Checkpoint state dictionary contains no tensor parameters.")
         return cleaned
 
-    def _create_x3d(self):
-        try:
-            from pytorchvideo.models.x3d import create_x3d
-        except ImportError as exc:
-            raise RuntimeError("X3D requires pytorchvideo. Install dependencies from requirements.txt.") from exc
-        return create_x3d(input_channel=3, input_clip_length=16, input_crop_size=224, model_num_class=2, width_factor=2.0)
-
     @staticmethod
     def _find_classifier_key(state: dict[str, torch.Tensor]) -> str | None:
-        for key in ("fc.weight", "blocks.5.proj.weight", "blocks.5.proj.classifier.weight", "blocks.6.proj.weight"):
-            if key in state and getattr(state[key], "ndim", 0) == 2:
-                return key
+        if "fc.weight" in state and getattr(state["fc.weight"], "ndim", 0) == 2:
+            return "fc.weight"
         candidates = [key for key, value in state.items() if key.endswith(".weight") and getattr(value, "ndim", 0) == 2]
         return candidates[-1] if candidates else None
 
@@ -334,28 +296,6 @@ class VideoClassifier:
         if hasattr(model, "fc") and isinstance(model.fc, nn.Linear):
             model.fc = nn.Linear(model.fc.in_features, class_count)
             return
-        if hasattr(model, "blocks"):
-            for block in reversed(model.blocks):
-                if not hasattr(block, "proj"):
-                    continue
-                if isinstance(block.proj, nn.Linear):
-                    # Some verified X3D exports keep an otherwise parameter-free
-                    # wrapper before the final Linear layer, producing keys such
-                    # as blocks.5.proj.1.weight. Match that structure so the
-                    # checkpoint can load without dropping or renaming weights.
-                    if classifier_key.endswith(".proj.1.weight"):
-                        block.proj = nn.Sequential(
-                            nn.Identity(),
-                            nn.Linear(block.proj.in_features, class_count),
-                        )
-                    else:
-                        block.proj = nn.Linear(block.proj.in_features, class_count)
-                    return
-                if isinstance(block.proj, nn.Sequential):
-                    for layer in reversed(block.proj):
-                        if isinstance(layer, nn.Linear):
-                            block.proj[-1] = nn.Linear(layer.in_features, class_count)
-                            return
         raise ValueError("Unsupported classifier head for this checkpoint architecture.")
 
     def reset(self) -> None:
@@ -438,38 +378,3 @@ class VideoClassifier:
             raise ValueError("A loaded classifier and 16-frame clip are required.")
         # The model adapter owns color conversion, resizing, and normalization.
         return self._classify_clip(frames[-self.CLIP_LENGTH:])
-
-class EnhancedEnsemble:
-    """CampusGuard Enhanced combines every configured classifier that actually loads."""
-    def __init__(self, classifiers: list[VideoClassifier], threshold: float) -> None:
-        self.classifiers, self.threshold = classifiers, threshold
-        self.last_state = "MODEL NOT LOADED"
-        self.last_confidence: float | None = None
-
-    @property
-    def ready(self) -> bool:
-        return any(model.ready for model in self.classifiers)
-
-    def update(self, threshold: float) -> None:
-        self.threshold = threshold
-        for model in self.classifiers:
-            model.update(threshold)
-
-    def add_frame(self, frame: np.ndarray) -> tuple[str, float] | None:
-        predictions = []
-        for classifier in self.classifiers:
-            result = classifier.add_frame(frame)
-            if result is not None:
-                predictions.append(result)
-        if not predictions:
-            return None
-        scores = [confidence if state == "FIGHT DETECTED" else confidence * 0.75 if state == "POSSIBLE ALTERCATION" else max(0.0, confidence * 0.25) for state, confidence in predictions]
-        score = float(np.mean(scores))
-        if score >= max(0.65, self.threshold) and any(state == "FIGHT DETECTED" for state, _ in predictions):
-            state = "FIGHT DETECTED"
-        elif score >= self.threshold:
-            state = "POSSIBLE ALTERCATION"
-        else:
-            state = "NORMAL"
-        self.last_state, self.last_confidence = state, score
-        return state, score

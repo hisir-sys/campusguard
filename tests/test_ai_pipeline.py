@@ -18,93 +18,39 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(severity_for(0.949), "HIGH")
         self.assertEqual(severity_for(0.95), "CRITICAL")
 
-    def test_all_violence_models_round_trip(self):
-        for key in ("mc3", "fdsc_mc3", "r3d", "x3d"):
-            settings = AppSettings.from_dict({"violence_model": key})
-            self.assertEqual(settings.violence_model, key)
+    def test_spontim_is_the_only_model(self):
+        self.assertEqual(set(MODEL_PROFILES), {"fdsc_mc3"})
+        self.assertEqual(set(MODEL_INPUT_ADAPTERS), {"fdsc_mc3"})
+        self.assertEqual(MODEL_PROFILES["fdsc_mc3"].name, "Spontim 1.0")
 
-    def test_enhanced_falls_back_to_operational_default(self):
-        settings = AppSettings.from_dict({"violence_model": "enhanced"})
+    def test_any_saved_model_name_resolves_to_spontim(self):
+        for key in ("mc3", "fdsc_mc3", "r3d", "x3d", "enhanced", ""):
+            self.assertEqual(AppSettings.from_dict({"violence_model": key}).violence_model, "fdsc_mc3")
+
+    def test_old_settings_files_with_removed_model_paths_still_load(self):
+        settings = AppSettings.from_dict({"r3d_model_path": "x", "x3d_model_path": "y", "fight_model_path": "z"})
         self.assertEqual(settings.violence_model, "fdsc_mc3")
 
-    def test_mc3_fight_class_is_verified_from_manifest(self):
-        profile = MODEL_PROFILES["mc3"]
+    def test_spontim_contract(self):
+        profile = MODEL_PROFILES["fdsc_mc3"]
         self.assertEqual(profile.fight_class, 0)
         self.assertEqual(profile.class_labels, ("fight", "noFight"))
         self.assertTrue(profile.semantic_verified)
+        adapter = MODEL_INPUT_ADAPTERS["fdsc_mc3"]
+        self.assertEqual(adapter.clip_length, 16)
+        self.assertEqual(adapter.resize_size, (171, 128))
+        self.assertEqual(adapter.input_size, (112, 112))
+        self.assertEqual(adapter.mean, (0.43216, 0.394666, 0.37645))
+        self.assertEqual(adapter.std, (0.22803, 0.22145, 0.216989))
 
-    def test_unverified_models_cannot_guess_fight_class(self):
-        for key in ("r3d",):
-            profile = MODEL_PROFILES[key]
-            self.assertIsNone(profile.fight_class)
-            self.assertFalse(profile.semantic_verified)
-
-    def test_r3d_is_explicitly_marked_as_technical_issue(self):
-        r3d = MODEL_PROFILES["r3d"]
-        self.assertEqual(r3d.semantic_status, "technical_unavailable")
-        self.assertFalse(r3d.semantic_verified)
-        self.assertIsNone(r3d.fight_class)
-
-    def test_verified_external_model_contracts(self):
-        fdsc = MODEL_PROFILES["fdsc_mc3"]
-        self.assertEqual(fdsc.fight_class, 0)
-        self.assertEqual(fdsc.class_labels, ("fight", "noFight"))
-        self.assertTrue(fdsc.semantic_verified)
-
-        x3d = MODEL_PROFILES["x3d"]
-        self.assertEqual(x3d.fight_class, 1)
-        self.assertEqual(x3d.class_labels, ("non-violent", "violent"))
-        self.assertTrue(x3d.semantic_verified)
-        self.assertEqual(MODEL_INPUT_ADAPTERS["x3d"].input_size, (224, 224))
-        self.assertEqual(MODEL_INPUT_ADAPTERS["x3d"].mean, (0.45, 0.45, 0.45))
-        self.assertEqual(MODEL_INPUT_ADAPTERS["x3d"].std, (0.225, 0.225, 0.225))
-
-    def test_every_operational_checkpoint_family_has_an_input_adapter(self):
-        self.assertEqual(
-            set(MODEL_INPUT_ADAPTERS),
-            {"mc3", "fdsc_mc3", "r3d", "x3d"},
-        )
-        for key, adapter in MODEL_INPUT_ADAPTERS.items():
-            self.assertEqual(adapter.clip_length, 16)
-            self.assertEqual(len(adapter.mean), 3)
-            self.assertEqual(len(adapter.std), 3)
-
-        self.assertEqual(MODEL_INPUT_ADAPTERS["mc3"].input_size, (112, 112))
-        self.assertEqual(MODEL_INPUT_ADAPTERS["fdsc_mc3"].input_size, (112, 112))
-        self.assertEqual(MODEL_INPUT_ADAPTERS["r3d"].input_size, (112, 112))
-        self.assertEqual(MODEL_INPUT_ADAPTERS["x3d"].input_size, (224, 224))
-
-    def test_fdsc_adapters_use_published_resize_and_center_crop(self):
-        for key in ("fdsc_mc3", "r3d"):
-            adapter = MODEL_INPUT_ADAPTERS[key]
-            self.assertEqual(adapter.resize_size, (171, 128))
-            self.assertEqual(adapter.input_size, (112, 112))
-            self.assertEqual(adapter.mean, (0.43216, 0.394666, 0.37645))
-            self.assertEqual(adapter.std, (0.22803, 0.22145, 0.216989))
-
-    def test_input_adapter_produces_mc3_tensor_layout(self):
-        adapter = MODEL_INPUT_ADAPTERS["mc3"]
-        frames = [
-            np.zeros((80, 120, 3), dtype=np.uint8)
-            for _ in range(adapter.clip_length)
-        ]
-        tensor = __import__("torch").zeros((1, 3, 16, 112, 112))
+    def test_input_adapter_produces_expected_tensor_layout(self):
+        adapter = MODEL_INPUT_ADAPTERS["fdsc_mc3"]
+        frames = [np.zeros((80, 120, 3), dtype=np.uint8) for _ in range(adapter.clip_length)]
         prepared = adapter.prepare(frames, __import__("torch").device("cpu"))
-        self.assertEqual(tuple(prepared.shape), tuple(tensor.shape))
-
-    def test_fdsc_adapters_produce_expected_tensor_layout(self):
-        for key in ("fdsc_mc3", "r3d"):
-            adapter = MODEL_INPUT_ADAPTERS[key]
-            frames = [
-                np.zeros((80, 120, 3), dtype=np.uint8)
-                for _ in range(adapter.clip_length)
-            ]
-            prepared = adapter.prepare(frames, __import__("torch").device("cpu"))
-            self.assertEqual(tuple(prepared.shape), (1, 3, 16, 112, 112))
+        self.assertEqual(tuple(prepared.shape), (1, 3, 16, 112, 112))
 
     def test_model_defaults_are_portable(self):
         settings = AppSettings()
-        self.assertEqual(settings.fight_model_path, "models/fight_mc3_18.pth")
         self.assertEqual(settings.fdsc_mc3_model_path, "models/model_16_m3_0.8888.pth")
 
 

@@ -18,7 +18,6 @@ from campusguard.engine.batching import BatchRunner
 from campusguard.model_paths import with_aliases
 from campusguard.storage import application_data_dir
 from campusguard.model_registry import (
-    EnhancedEnsemble,
     MODEL_CACHE_LOCK,
     MODEL_PROFILES,
     VideoClassifier,
@@ -315,7 +314,6 @@ class VisionPipeline:
         self.batch_detector = False
         self.device = self._select_device(settings.device)
         self.classifiers: dict[str, VideoClassifier] = {}
-        self.ensemble: EnhancedEnsemble | None = None
         self.decision = FightDecision(settings.confidence_threshold)
         self.interactions = InteractionEngine()
         self.display_ids: dict[int, int] = {}
@@ -342,22 +340,12 @@ class VisionPipeline:
         self._load_models(settings)
 
     def configure(self, settings: AppSettings) -> None:
-        # Normalize input first. Enhanced is intentionally non-operational.
-        normalized = (
-            AppSettings.from_dict({**settings.to_dict(), "violence_model": "mc3"})
-            if settings.violence_model == "enhanced"
-            else settings
-        )
-        if settings.violence_model == "enhanced":
-            self.status("fight", "CampusGuard Enhanced — COMING SOON (not operational)")
+        normalized = settings
 
         reload_models = (
             normalized.detector_model_path != self.settings.detector_model_path
             or normalized.pose_model_path != self.settings.pose_model_path
-            or normalized.fight_model_path != self.settings.fight_model_path
             or normalized.fdsc_mc3_model_path != self.settings.fdsc_mc3_model_path
-            or normalized.r3d_model_path != self.settings.r3d_model_path
-            or normalized.x3d_model_path != self.settings.x3d_model_path
             or normalized.device != self.settings.device
         )
         selection_changed = normalized.violence_model != self.settings.violence_model
@@ -371,14 +359,10 @@ class VisionPipeline:
 
         for classifier in self.classifiers.values():
             classifier.update(normalized.confidence_threshold)
-        if self.ensemble:
-            self.ensemble.update(normalized.confidence_threshold)
 
     @staticmethod
     def model_display_name(key: str) -> str:
-        if key == "enhanced":
-            return "CampusGuard Enhanced"
-        return MODEL_PROFILES.get(key, MODEL_PROFILES["mc3"]).name
+        return MODEL_PROFILES.get(key, MODEL_PROFILES["fdsc_mc3"]).name
 
     def _select_device(self, requested: str) -> torch.device:
         if requested == "cuda" and not torch.cuda.is_available():
@@ -398,33 +382,15 @@ class VisionPipeline:
         self.pose_model = self._load_yolo("pose", settings.pose_model_path, "pose")
 
         self.classifiers.clear()
-        self.ensemble = None
 
-        selected_key = settings.violence_model
-        if selected_key == "enhanced":
-            self.status("fight", "CampusGuard Enhanced — COMING SOON (not operational)")
-            selected_key = "fdsc_mc3"
-
-        profile = MODEL_PROFILES.get(selected_key, MODEL_PROFILES["fdsc_mc3"])
-        paths = {
-            "mc3": settings.fight_model_path,
-            "fdsc_mc3": settings.fdsc_mc3_model_path,
-            "r3d": settings.r3d_model_path,
-            "x3d": settings.x3d_model_path,
-        }
-        fight_class_override = (
-            settings.fight_positive_class
-            if selected_key == "mc3"
-            else None
-        )
-
+        selected_key = "fdsc_mc3"
+        profile = MODEL_PROFILES[selected_key]
         self.classifiers[selected_key] = VideoClassifier(
             profile,
-            paths[selected_key],
+            settings.fdsc_mc3_model_path,
             self.device,
             settings.confidence_threshold,
             self.status,
-            fight_class_override=fight_class_override,
         )
         # The classifier reports under its own profile key; the dashboard's engine
         # status reads the "fight" component, so publish the real outcome there.
@@ -548,12 +514,12 @@ class VisionPipeline:
 
         self._note_people(len(people))
         pair_ids = self.interactions.update(people)
-        model_key = settings.violence_model if settings.violence_model != "enhanced" else "fdsc_mc3"
+        model_key = "fdsc_mc3"
         model = self._selected_model(model_key)
         if model is not None and model.ready:
             try:
                 inference_started = perf_counter()
-                if model_key in {"mc3", "fdsc_mc3"}:
+                if model_key in {"fdsc_mc3"}:
                     # MC3 was trained and validated on full-scene temporal clips.
                     # Do not crop the scene to individual people: that removes the
                     # interaction context that the verified checkpoint relies on.
@@ -633,8 +599,7 @@ class VisionPipeline:
 
     @property
     def fight_model_ready(self) -> bool:
-        key = self.settings.violence_model
-        model = self._selected_model("fdsc_mc3" if key == "enhanced" else key)
+        model = self._selected_model("fdsc_mc3")
         return model is not None and model.ready
 
     def enter_idle(self) -> None:
@@ -664,8 +629,6 @@ class VisionPipeline:
         return annotated
 
     def _selected_model(self, key: str):
-        if key == "enhanced":
-            return None
         return self.classifiers.get(key)
 
     def _update_person_clips(
@@ -1054,7 +1017,7 @@ class VisionPipeline:
         # YOLO person-detection confidence (which caused misleading values such
         # as 89% to appear repeatedly).
         if state in {"FIGHT DETECTED", "POSSIBLE ALTERCATION"}:
-            if self.settings.violence_model in {"mc3", "fdsc_mc3"}:
+            if self.settings.violence_model in {"fdsc_mc3"}:
                 involved_ids.update(person.track_id for person in people)
             elif not involved_ids and pair_ids:
                 involved_ids.update(track_id for pair in pair_ids for track_id in pair)
@@ -1067,7 +1030,7 @@ class VisionPipeline:
         for person in people:
             person.involved = person.track_id in involved_ids
             if person.involved:
-                if self.settings.violence_model in {"mc3", "fdsc_mc3"}:
+                if self.settings.violence_model in {"fdsc_mc3"}:
                     # Scene-level Spontim confidence: exactly the same value
                     # reported by the fight classifier/UI.
                     person.violence_confidence = confidence

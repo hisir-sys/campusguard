@@ -1090,7 +1090,6 @@ class MainWindow(QMainWindow):
 
         self.dashboard.camera_selected.connect(self.open_camera)
         self.dashboard.view_alerts_requested.connect(lambda: self.navigate("alerts"))
-        self.dashboard.model_switch_requested.connect(self._switch_violence_model)
         self.camera_page.add_requested.connect(self._add_camera)
         self.camera_page.local_test_requested.connect(self._open_local_file_test)
         self.camera_page.remove_requested.connect(self._remove_camera)
@@ -1394,32 +1393,6 @@ class MainWindow(QMainWindow):
                         self._camera_engine_error = None
                         self._begin_camera_engine_import()
         self.statusBar().showMessage("Settings saved and applied to the selected connection mode.", 1800)
-
-    def _switch_violence_model(self, model_key: str) -> None:
-        allowed = {"fdsc_mc3", "mc3", "x3d"}
-        if model_key not in allowed:
-            return
-        values = self.settings.to_dict()
-        values["violence_model"] = model_key
-        updated = AppSettings.from_dict(values)
-        self.settings = updated
-        self.repository.save_settings(updated)
-        if self.camera_manager is not None:
-            self.camera_manager.set_settings(updated)
-        self.dashboard.update_model_configuration(updated)
-        self.settings_page.set_saved()
-        self.statusBar().showMessage(
-            f"AI engine switched to {self._model_display_name(model_key)}.",
-            3000,
-        )
-
-    @staticmethod
-    def _model_display_name(model_key: str) -> str:
-        return {
-            "fdsc_mc3": "Spontim 1.0",
-            "mc3": "CampusGuard MC3-18",
-            "x3d": "X3D-M",
-        }.get(model_key, model_key)
 
     def _rebuild_information_pages(self) -> None:
         current_key = None

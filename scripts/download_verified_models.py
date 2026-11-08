@@ -9,10 +9,6 @@ ROOT = Path(__file__).resolve().parents[1]
 MODELS = ROOT / "models"
 
 FDSC_MC3_ID = "1MWDeLnpEaZDrKK-OjmzvYLxfjwp-GDcp"
-X3D_URL = (
-    "https://huggingface.co/visionlab-ai/school-violence-detection-models/"
-    "resolve/main/final/final_x3d_realtime.pt?download=true"
-)
 
 
 def download_url(url: str, destination: Path) -> None:
@@ -69,22 +65,14 @@ def main() -> None:
     print("CampusGuard verified optional model installer")
     print("=" * 72)
     print()
-    print("1/2 FDSC MC3-18")
+    print("Spontim 1.0 (FDSC MC3-18)")
     print("    Source: MohamedSebaie Fight Detection project")
     print("    Contract: 16 frames, fight/noFight, fight=class 0")
     download_fdsc()
 
     print()
-    print("2/2 X3D-M")
-    print("    Source: visionlab-ai/school-violence-detection-models")
-    print("    Contract: 16 frames, 224x224, non-violent/violent")
-    download_url(X3D_URL, MODELS / "final_x3d_realtime.pt")
-
-    print()
     print("=" * 72)
     print("Download step complete.")
-    print("R3D-18 was intentionally not downloaded because its checkpoint")
-    print("identity and class mapping are not sufficiently documented.")
     print("=" * 72)
 
 

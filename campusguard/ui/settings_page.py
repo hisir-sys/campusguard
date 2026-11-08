@@ -151,6 +151,9 @@ class SettingsPage(QWidget):
         self.device_status.setWordWrap(True)
         self.device_status.setProperty("muted", True)
 
+        self.model_label = QLabel("Spontim 1.0 (MC3-18 fight classifier)")
+        self.model_label.setProperty("muted", True)
+        form.addRow("Detection model", self.model_label)
         form.addRow("Minimum confidence", self.threshold_input)
         form.addRow("Person detection", self.detection_toggle)
         form.addRow("Tracking", self.tracking_toggle)
@@ -441,10 +444,7 @@ class SettingsPage(QWidget):
             theme=str(self.theme_input.currentData()),
             detector_model_path=self._initial_settings.detector_model_path,
             pose_model_path=self._initial_settings.pose_model_path,
-            fight_model_path=self._initial_settings.fight_model_path,
             fdsc_mc3_model_path=self._initial_settings.fdsc_mc3_model_path,
-            r3d_model_path=self._initial_settings.r3d_model_path,
-            x3d_model_path=self._initial_settings.x3d_model_path,
             violence_model="fdsc_mc3",
             device=str(self.device_input.currentData()),
             fight_positive_class=self._initial_settings.fight_positive_class,
