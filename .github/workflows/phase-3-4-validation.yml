@@ -72,7 +72,7 @@ jobs:
       - name: Verify and smoke-test desktop app bundle
         shell: pwsh
         run: |
-          $exe = "dist\\CampusGuard\\CampusGuard.exe"
+          $exe = "dist\CampusGuard\CampusGuard.exe"
           if (-not (Test-Path $exe)) { throw "CampusGuard.exe was not produced." }
           $size = (Get-Item $exe).Length
           Write-Host "CampusGuard.exe size: $size bytes"
