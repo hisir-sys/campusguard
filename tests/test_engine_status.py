@@ -43,7 +43,8 @@ def test_second_camera_still_loading_does_not_mask_ready_first(tmp_path):
 
 def test_dashboard_close_detaches_card_event_filters(tmp_path):
     page = _page(tmp_path)
-    assert page._event_filter_targets
+    assert set(page._event_filter_targets) == {page._engine_card, page._stats_card}
+    assert all(target is page._engine_card or target is page._stats_card for target in page._event_filter_targets)
     page.close()
     assert page._closing
     assert not page._event_filter_targets
