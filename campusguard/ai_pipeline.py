@@ -87,13 +87,35 @@ def _detector_batcher(model, device) -> BatchRunner:
         return runner
 
 
-def shutdown_detector_batchers(timeout: float = 5.0) -> None:
-    """Stop every shared detector worker before application/test teardown."""
+def shutdown_detector_batchers(timeout: float = 10.0) -> None:
+    """Stop shared detector workers and verify that every native thread exited.
+
+    Registry entries are removed only after their worker has stopped. If a
+    model inference call is stuck, the caller receives a timeout and can keep
+    the application alive instead of silently abandoning a native thread.
+    """
     with MODEL_CACHE_LOCK:
-        runners = [runner for _, runner in _DETECTOR_BATCHERS.values()]
-        _DETECTOR_BATCHERS.clear()
-    for runner in runners:
-        runner.close(timeout=timeout)
+        snapshot = list(_DETECTOR_BATCHERS.items())
+
+    failures: list[str] = []
+    stopped: set[int] = set()
+    for key, (_, runner) in snapshot:
+        try:
+            runner.close(timeout=timeout)
+            if runner.worker_alive:
+                raise TimeoutError(f"{runner._thread.name} is still alive")
+            stopped.add(key)
+        except Exception as error:
+            failures.append(f"{runner._thread.name}: {type(error).__name__}: {error}")
+
+    with MODEL_CACHE_LOCK:
+        for key in stopped:
+            current = _DETECTOR_BATCHERS.get(key)
+            if current is not None and any(current[1] is runner for old_key, (_, runner) in snapshot if old_key == key):
+                _DETECTOR_BATCHERS.pop(key, None)
+
+    if failures:
+        raise RuntimeError("Could not stop all detector workers: " + "; ".join(failures))
 
 
 def resolve_model_path(value: str) -> Path:
