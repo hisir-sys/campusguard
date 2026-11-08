@@ -258,3 +258,72 @@ def test_batch_runner_close_waits_for_worker_exit():
     runner.close(timeout=2.0)
     assert not runner.usable
     assert not runner._thread.is_alive()
+
+
+def test_batch_runner_close_serializes_against_submit_and_drains_accepted_work():
+    started = threading.Event()
+    release = threading.Event()
+    results = {}
+
+    def run(items):
+        started.set()
+        assert release.wait(3.0)
+        return list(items)
+
+    runner = BatchRunner(run, max_batch=1, max_wait=0.001)
+
+    def submit(key, value):
+        results[key] = runner.submit(value, timeout=4.0)
+
+    first = threading.Thread(target=submit, args=("first", "one"))
+    first.start()
+    assert started.wait(1.0)
+
+    second = threading.Thread(target=submit, args=("second", "two"))
+    second.start()
+    deadline = time.monotonic() + 1.0
+    while runner._queue.qsize() < 1 and time.monotonic() < deadline:
+        time.sleep(0.005)
+    assert runner._queue.qsize() == 1
+
+    close_result = {}
+    closer = threading.Thread(
+        target=lambda: close_result.setdefault("closed", runner.close(timeout=3.0))
+    )
+    closer.start()
+    with pytest.raises(BatchClosed):
+        runner.submit("late", timeout=0.1)
+
+    release.set()
+    first.join(2.0)
+    second.join(2.0)
+    closer.join(2.0)
+    assert not first.is_alive() and not second.is_alive() and not closer.is_alive()
+    assert results == {"first": "one", "second": "two"}
+    assert not runner.worker_alive
+
+
+def test_batch_runner_close_reports_a_worker_that_exceeds_deadline():
+    started = threading.Event()
+    release = threading.Event()
+    result = {}
+
+    def run(items):
+        started.set()
+        release.wait(3.0)
+        return list(items)
+
+    runner = BatchRunner(run, max_batch=1, max_wait=0.001)
+    caller = threading.Thread(target=lambda: result.setdefault("value", runner.submit(7, timeout=4.0)))
+    caller.start()
+    assert started.wait(1.0)
+
+    with pytest.raises(TimeoutError, match="did not stop"):
+        runner.close(timeout=0.01)
+
+    release.set()
+    runner.close(timeout=2.0)
+    caller.join(2.0)
+    assert not caller.is_alive()
+    assert result["value"] == 7
+    assert not runner.worker_alive
