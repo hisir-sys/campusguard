@@ -7,7 +7,6 @@ import time
 from concurrent.futures import Future, TimeoutError as FutureTimeout
 from typing import Callable
 
-from concurrent.futures import CancelledError
 
 
 class BatchClosed(RuntimeError):
