@@ -24,7 +24,7 @@ class UpdateDialog(QDialog):
             QDialog#updateDialog {{ background: {p.popup}; border: 1px solid {rgba(p.ink, 90)}; border-radius: 14px; }}
             QLabel#updateTitle {{ color: {p.text}; font-size: 18pt; font-weight: 700; }}
             QLabel#updateBody {{ color: {p.text_dim}; }}
-            QPushButton#updateNow {{ background: {p.accent}; color: #0A0D08; border: none; border-radius: 9px; padding: 10px 22px; font-weight: 700; }}
+            QPushButton#updateNow {{ background: {p.accent}; color: {'#0E0F11' if p.name == 'dark' else '#F4F4F5'}; border: none; border-radius: 9px; padding: 10px 22px; font-weight: 700; }}
             QPushButton#updateNow:hover {{ background: {p.accent_hover}; }}
             QPushButton#updateNow:disabled {{ background: {rgba(p.accent, 90)}; }}
             QPushButton#updateLater {{ background: transparent; color: {p.text}; border: 1px solid {rgba(p.text, 60)}; border-radius: 9px; padding: 10px 22px; }}
