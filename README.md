@@ -1,16 +1,51 @@
-# CampusGuard Desktop
+# CampusGuard
 
-CampusGuard is a Windows desktop application built with PySide6. It keeps the
-CampusGuard ZIP's dashboard, camera network, incidents, alerts, settings,
-services, tools, about, and how-it-works workflow, with real local video and
-model inference instead of the ZIP's browser-based simulated detections.
+**AI fight detection for school and college CCTV.** CampusGuard is a Windows desktop app (PySide6) that watches your existing cameras, detects physical fights in real time with the **Spontim 1.0** model, and alerts staff instantly. It also has a headless server mode for schools, and a website (`campusguardweb`) for account approval and synced summaries.
+
+![CampusGuard dashboard (dark)](docs/screenshots/dark-dashboard.png)
+
+## What it does
+
+- **Real-time detection.** Person detection (YOLO), tracking (ByteTrack), pose (YOLO Pose) and the **Spontim 1.0** MC3-18 temporal classifier run on every live camera. No new hardware: any USB, RTSP, HTTP/MJPEG or IP camera that OpenCV can open.
+- **Tiered alerts, not one alarm.** Incidents are graded LOW / MEDIUM / HIGH / CRITICAL by confidence (70% / 85% / 95%), with calm glass pop-ups and an optional alarm sound, so staff are not flooded by normal horseplay.
+- **Evidence for review.** Every incident saves a clip, timeline and confidence so an administrator can review it fairly afterwards. No facial recognition or identity matching.
+- **Smart search (Ctrl+K).** Type a camera name and press Enter to open it, or type a page, setting or action ("mute", "dark mode", "update"). If nothing matches, it searches incident history.
+- **Dark and light themes** in a graphite and silver glass design, with a hover navigation rail.
+- **School server mode.** One headless program runs all cameras, records incidents, and serves a token-protected API to viewers on the school network.
+- **Account sync.** Approved accounts, schools or individuals, sync summaries and incident metadata (never video) to the website.
+- **Runs on modest hardware.** Lite / Standard / Server engine profiles and a motion gate keep CPU and GPU use low.
+
+## Screenshots
+
+| Dark | Light |
+|---|---|
+| ![Dashboard](docs/screenshots/dark-dashboard.png) | ![Dashboard](docs/screenshots/light-dashboard.png) |
+| ![Cameras](docs/screenshots/dark-cameras.png) | ![Cameras](docs/screenshots/light-cameras.png) |
+| ![Incidents](docs/screenshots/dark-incidents.png) | ![Incidents](docs/screenshots/light-incidents.png) |
+| ![Alerts](docs/screenshots/dark-alerts.png) | ![Alerts](docs/screenshots/light-alerts.png) |
+| ![Settings](docs/screenshots/dark-settings.png) | ![Settings](docs/screenshots/light-settings.png) |
+| ![Navigation panel](docs/screenshots/dark-navigation.png) | ![Navigation panel](docs/screenshots/light-navigation.png) |
+| ![Incident list](docs/screenshots/dark-incident-popup.png) | ![Incident list](docs/screenshots/light-incident-popup.png) |
+| ![Alert pop-up](docs/screenshots/dark-alert-toast.png) | ![Alert pop-up](docs/screenshots/light-alert-toast.png) |
+| ![School server](docs/screenshots/dark-server-viewer.png) | ![School server](docs/screenshots/light-server-viewer.png) |
+
+More pages (Services, About, Tools, How it works) are in [`docs/screenshots`](docs/screenshots). Screenshots show demo data on a machine with no cameras attached.
+
+## How detection works
+
+1. Each camera frame goes through a tiny motion check; the heavy models only run while the scene is moving.
+2. YOLO finds people, ByteTrack gives each person a stable ID, YOLO Pose draws the skeleton.
+3. **Spontim 1.0** (MC3-18, fine-tuned on surveillance fight data) looks at 16 frames at a time and outputs a fight confidence from 0 to 100%.
+4. The confidence is compared with your threshold (default 65%), graded into a severity, and an incident, clip and alert are created.
+
+Spontim 1.0 is the only detection model. Its weights are `models/model_16_m3_0.8888.pth`.
 
 ## Windows requirements
 
 - Windows 10 or 11, 64-bit
 - Python 3.14, 64-bit (install from python.org and enable the Python Launcher)
 - An external USB, RTSP, HTTP/MJPEG, or IP camera source that OpenCV can open
-- Optional local model weights; none are bundled with this source
+- Model weights: `models/model_16_m3_0.8888.pth` (Spontim 1.0) is in the repo; add `yolo11n.pt` and `yolo11n-pose.pt` yourself
 
 ## Install (customers)
 
@@ -73,32 +108,15 @@ Examples of source addresses:
 The camera must be reachable from the Windows machine. Stream paths and
 protocol support vary by camera and OpenCV's installed video backend.
 
-## Configure real model weights
+## Model files
 
-Weights are deliberately not included. Select local files under
-**Settings → Model Files**:
+Select local files under **Settings → Model Files**:
 
-- **Person detector:** a compatible Ultralytics YOLO detection checkpoint
-  with COCO person class `0`
-- **Pose estimator:** a compatible Ultralytics YOLO Pose checkpoint using the
-  17-keypoint COCO pose layout
-- **Fight classifier:** the verified MohamedSebaie FDSC MC3-18 checkpoint
-  `models/model_16_m3_0.8888.pth` is the default classifier. The source project
-  reports a 92.5% top-1 accuracy run with 0.90 fight recall.
+- **Person detector:** an Ultralytics YOLO detection checkpoint with COCO person class `0` (normally `models/yolo11n.pt`)
+- **Pose estimator:** an Ultralytics YOLO Pose checkpoint, 17-keypoint COCO layout (normally `models/yolo11n-pose.pt`)
+- **Fight classifier:** **Spontim 1.0**, `models/model_16_m3_0.8888.pth`. MC3-18, classes `fight` / `noFight` (fight = class 0), 16 RGB frames resized to 171x128, center-cropped to 112x112 with Kinetics-style normalization.
 
-For the MohamedSebaie FDSC MC3-18 checkpoint, output class `0` is treated as `fight`.
-For a three-class checkpoint, output indices must be ordered as normal,
-possible altercation, fight. The classifier preprocessing expects 16 RGB frames; the FDSC MC3-18 adapter
-resizes to 171×128, center-crops to 112×112, then applies Kinetics-style
-normalization. A checkpoint with a
-different architecture, class mapping, or preprocessing will be reported as
-unloaded or errored.
-
-The app starts without weights. Missing or incompatible files are reported in
-the AI Engine and Settings pages. A model that is missing does not produce its
-own outputs; detection and pose can still run when their respective weights
-are loaded. Incidents and alerts are created only after the loaded action
-classifier produces a stable above-threshold result.
+The app starts without the YOLO weights. Missing or incompatible files are reported in the AI Engine and Settings pages, and a missing model never produces simulated output. Incidents are created only after Spontim returns a stable above-threshold result.
 
 ## Data and privacy
 
@@ -122,7 +140,7 @@ classifier produces a stable above-threshold result.
 - **Model not loaded:** verify the selected file exists and matches the
   checkpoint requirements above. The app reports model errors without
   substituting simulated output.
-- **No incidents:** confirm that a compatible MC3-18 checkpoint is loaded,
+- **No incidents:** confirm that Spontim 1.0 is loaded,
   camera AI is enabled, and the model returns a stable above-threshold event.
 
 
@@ -165,18 +183,24 @@ From the Start Menu shortcuts, you can sign in, show the token, open status, sta
 ## Source layout
 
 ```text
-campusguard-desktop/
+campusguard/
 ├── campusguard/
-│   ├── ai_pipeline.py       # YOLO, ByteTrack, YOLO Pose, MC3-18 inference
+│   ├── ai_pipeline.py       # YOLO, ByteTrack, YOLO Pose, Spontim inference
+│   ├── model_registry.py    # Spontim 1.0 loader (MC3-18)
 │   ├── camera_runtime.py    # OpenCV capture, analysis workers, latest-frame mailbox
-│   ├── credentials.py       # OS credential-vault access
-│   ├── settings.py          # Application and camera data models
+│   ├── engine/              # hardware profiles, motion gate, GPU batching
+│   ├── server/              # headless server, API, recorder, retention, sync
 │   ├── storage.py           # SQLite repository
-│   └── ui/                  # PySide6 pages and shared widgets
+│   ├── credentials.py       # OS credential-vault access
+│   ├── alarm_sound.py       # alert audio
+│   └── ui/                  # PySide6 pages, glass sidebar, theme, command search
+├── docs/screenshots/        # UI screenshots used in this README
+├── models/                  # Spontim 1.0 weights
+├── tests/
 ├── main.py
-├── requirements.txt
-└── setup_windows.bat
+└── requirements.txt
 ```
+
 ## Analysis engine profiles (Lite / Standard / Server)
 
 The app picks a profile automatically from the machine and the number of running cameras:
