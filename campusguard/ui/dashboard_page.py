@@ -550,24 +550,28 @@ class DashboardPage(QWidget):
         root.setContentsMargins(24, 18, 24, 28)
         root.setSpacing(14)
 
-        # --------------------------------------------------------------
-        # Operations overview
-        #
-        # A single three-column status strip keeps the most important
-        # information visible at a glance. The camera wall sits underneath
-        # as the main visual surface.
-        # --------------------------------------------------------------
-        header = QVBoxLayout()
-        header.setContentsMargins(2, 0, 0, 4)
-        header.setSpacing(2)
-        self._welcome_title = QLabel("Welcome back")
-        self._welcome_title.setStyleSheet("font-size: 24px; font-weight: 700; background: transparent;")
-        self._welcome_subtitle = QLabel("Live overview of your campus cameras and incidents")
-        self._welcome_subtitle.setObjectName("mutedLabel")
-        self._welcome_subtitle.setStyleSheet("font-size: 13px; background: transparent;")
-        header.addWidget(self._welcome_title)
-        header.addWidget(self._welcome_subtitle)
-        root.addLayout(header, 0)
+        # Clear, editorial header with a quiet security-operations eyebrow.
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(2, 0, 2, 5)
+        header_row.setSpacing(18)
+        title_stack = QVBoxLayout()
+        title_stack.setContentsMargins(0, 0, 0, 0)
+        title_stack.setSpacing(5)
+        eyebrow = QLabel("CAMPUSGUARD  /  SECURITY OPERATIONS")
+        eyebrow.setObjectName("overviewEyebrow")
+        self._welcome_title = QLabel("Campus overview")
+        self._welcome_title.setObjectName("overviewTitle")
+        self._welcome_subtitle = QLabel("A live view of cameras, incidents and campus activity")
+        self._welcome_subtitle.setObjectName("overviewSubtitle")
+        title_stack.addWidget(eyebrow)
+        title_stack.addWidget(self._welcome_title)
+        title_stack.addWidget(self._welcome_subtitle)
+        header_row.addLayout(title_stack, 1)
+        self._overview_badge = QLabel("●  MONITORING CONSOLE")
+        self._overview_badge.setObjectName("overviewBadge")
+        self._overview_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        header_row.addWidget(self._overview_badge, 0, Qt.AlignmentFlag.AlignVCenter)
+        root.addLayout(header_row, 0)
 
         main_row = QHBoxLayout()
         main_row.setContentsMargins(0, 0, 0, 0)
@@ -578,19 +582,15 @@ class DashboardPage(QWidget):
         self._notifications_card = self._build_notifications_card()
         self._network_card = self._build_network_card()
 
-        self._engine_card.setMinimumHeight(170)
-        self._engine_card.setMaximumHeight(170)
-        self._stats_card.setMinimumHeight(170)
-        self._stats_card.setMaximumHeight(170)
-        self._notifications_card.setMinimumHeight(170)
-        self._notifications_card.setMaximumHeight(170)
-
-        main_row.addWidget(self._engine_card, 11)
+        for card in (self._engine_card, self._stats_card, self._notifications_card):
+            card.setMinimumHeight(184)
+            card.setMaximumHeight(184)
+        main_row.addWidget(self._engine_card, 10)
         main_row.addWidget(self._stats_card, 11)
         main_row.addWidget(self._notifications_card, 15)
         root.addLayout(main_row, 0)
 
-        self._network_card.setMinimumHeight(410)
+        self._network_card.setMinimumHeight(430)
         root.addWidget(self._network_card, 1)
 
         # Keep a dedicated bottom breathing space in the scrollable content.
@@ -638,6 +638,9 @@ class DashboardPage(QWidget):
         )
 
         self._popup.hide()
+        self._hover_frames: dict[QWidget, QGraphicsDropShadowEffect] = {}
+        self._hover_animations: dict[QWidget, QPropertyAnimation] = {}
+        self._apply_dashboard_visuals()
 
     # ==================================================================
     # RESIZE
@@ -744,7 +747,9 @@ class DashboardPage(QWidget):
 
     def _build_engine_card(self) -> QFrame:
         frame, layout = make_card("AI Engine", icon="cpu")
-        frame.setMinimumHeight(170)
+        frame.setObjectName("dashboardGlassCard")
+        self._install_hover_effect(frame)
+        frame.setMinimumHeight(184)
         frame.setMaximumHeight(170)
         frame.setCursor(Qt.CursorShape.PointingHandCursor)
         self._install_card_event_filters(frame, "ai")
@@ -788,7 +793,9 @@ class DashboardPage(QWidget):
 
     def _build_stats_card(self) -> QFrame:
         frame, layout = make_card("System Stats", icon="server")
-        frame.setMinimumHeight(222)
+        frame.setObjectName("dashboardGlassCard")
+        self._install_hover_effect(frame)
+        frame.setMinimumHeight(184)
         frame.setMaximumHeight(222)
         frame.setCursor(Qt.CursorShape.PointingHandCursor)
         self._install_card_event_filters(frame, "stats")
@@ -850,6 +857,8 @@ class DashboardPage(QWidget):
             "Notifications",
             icon="bell",
         )
+        frame.setObjectName("dashboardGlassCard")
+        self._install_hover_effect(frame)
 
         view_all = QPushButton("See All")
         view_all.setProperty("link", True)
@@ -951,6 +960,8 @@ class DashboardPage(QWidget):
             "Live Network",
             icon="activity",
         )
+        frame.setObjectName("dashboardGlassCard")
+        self._install_hover_effect(frame)
 
         self.camera_count_pill = QLabel(
             "0 cameras"
@@ -1008,6 +1019,161 @@ class DashboardPage(QWidget):
         return frame
 
     # ==================================================================
+    # DASHBOARD VISUAL SYSTEM
+    # ==================================================================
+
+    def _apply_dashboard_visuals(self) -> None:
+        """Apply a dashboard-only frosted-glass treatment without retheming other pages."""
+        palette = get_palette()
+        dark = palette.name == "dark"
+        if dark:
+            canvas_top, canvas_bottom = "#0A0E13", "#111923"
+            glass_top, glass_bottom = rgba("#FFFFFF", 18), rgba("#FFFFFF", 7)
+            border = rgba("#FFFFFF", 34)
+            tile_top, tile_bottom = rgba("#FFFFFF", 17), rgba("#FFFFFF", 6)
+            text = "#F5F7FA"
+            muted = "#A8B3C2"
+            accent = "#C8FF52"
+            highlight = rgba("#FFFFFF", 42)
+            shadow_alpha = 115
+        else:
+            canvas_top, canvas_bottom = "#EEF2F7", "#E6ECF3"
+            glass_top, glass_bottom = rgba("#FFFFFF", 242), rgba("#FFFFFF", 190)
+            border = rgba("#FFFFFF", 235)
+            tile_top, tile_bottom = rgba("#FFFFFF", 224), rgba("#F7FAFD", 166)
+            text = "#17212D"
+            muted = "#647386"
+            accent = "#628E20"
+            highlight = rgba("#FFFFFF", 250)
+            shadow_alpha = 48
+
+        self._dashboard_content.setStyleSheet(f"""
+            QWidget#dashboardContent {{
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 {canvas_top}, stop:1 {canvas_bottom});
+                color: {text};
+            }}
+            QLabel#overviewEyebrow {{
+                color: {accent}; background: transparent;
+                font-size: 8pt; font-weight: 800; letter-spacing: 1.6px;
+            }}
+            QLabel#overviewTitle {{
+                color: {text}; background: transparent;
+                font-size: 25pt; font-weight: 760;
+            }}
+            QLabel#overviewSubtitle {{
+                color: {muted}; background: transparent; font-size: 10pt;
+            }}
+            QLabel#overviewBadge {{
+                color: {text}; background: {glass_top};
+                border: 1px solid {border}; border-radius: 15px;
+                padding: 9px 14px; font-size: 8pt; font-weight: 750;
+                letter-spacing: .5px;
+            }}
+            QFrame#dashboardGlassCard {{
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 {glass_top}, stop:1 {glass_bottom});
+                border: 1px solid {border}; border-top: 1px solid {highlight};
+                border-radius: 23px;
+            }}
+            QFrame#dashboardGlassCard QLabel[cardtitle="true"] {{
+                color: {text}; font-size: 10.5pt; font-weight: 750;
+            }}
+            QFrame#dashboardStatTile {{
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 {tile_top}, stop:1 {tile_bottom});
+                border: 1px solid {border}; border-radius: 17px;
+            }}
+            QFrame#dashboardStatTile:hover {{
+                border: 1px solid {accent};
+                background: {glass_top};
+            }}
+            QScrollArea#dashboardWorkspaceScroll,
+            QScrollArea#liveNetworkScroll {{
+                background: transparent; border: none;
+            }}
+            QScrollArea#dashboardWorkspaceScroll > QWidget > QWidget,
+            QScrollArea#liveNetworkScroll > QWidget > QWidget {{
+                background: transparent;
+            }}
+        """)
+        for frame in (self._engine_card, self._stats_card, self._notifications_card, self._network_card):
+            effect = frame.graphicsEffect()
+            if isinstance(effect, QGraphicsDropShadowEffect):
+                effect.setBlurRadius(34 if dark else 28)
+                effect.setOffset(0, 12 if dark else 8)
+                effect.setColor(QColor(0, 0, 0, shadow_alpha))
+        self._overview_badge.setStyleSheet(
+            f"color: {text}; background: {glass_top}; border: 1px solid {border}; "
+            "border-radius: 15px; padding: 9px 14px; font-size: 8pt; "
+            "font-weight: 750; letter-spacing: .5px;"
+        )
+
+    def _install_hover_effect(self, frame: QFrame) -> None:
+        effect = frame.graphicsEffect()
+        if not isinstance(effect, QGraphicsDropShadowEffect):
+            effect = QGraphicsDropShadowEffect(frame)
+            frame.setGraphicsEffect(effect)
+        palette = get_palette()
+        effect.setBlurRadius(34 if palette.name == "dark" else 28)
+        effect.setOffset(0, 12 if palette.name == "dark" else 8)
+        effect.setColor(QColor(0, 0, 0, 115 if palette.name == "dark" else 48))
+        self._hover_frames[frame] = effect
+        frame.installEventFilter(self)
+
+    def _animate_card_hover(self, frame: QWidget, hovered: bool) -> None:
+        effect = self._hover_frames.get(frame)
+        if effect is None:
+            return
+        animation = self._hover_animations.get(frame)
+        if animation is None:
+            animation = QPropertyAnimation(effect, b"blurRadius", self)
+            animation.setDuration(180)
+            animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+            self._hover_animations[frame] = animation
+        animation.stop()
+        palette = get_palette()
+        base = 34 if palette.name == "dark" else 28
+        animation.setStartValue(effect.blurRadius())
+        animation.setEndValue(base + (13 if hovered else 0))
+        animation.start()
+        effect.setOffset(0, (15 if hovered else 12) if palette.name == "dark" else (11 if hovered else 8))
+
+    def _style_camera_preview(self, tile: CameraPreview) -> None:
+        palette = get_palette()
+        dark = palette.name == "dark"
+        border = rgba("#FFFFFF", 52 if dark else 210)
+        fill = rgba("#FFFFFF", 9 if dark else 150)
+        tile.setMinimumHeight(270)
+        tile.setStyleSheet(f"""
+            QFrame#cameraPreview {{
+                background: {fill}; border: 1px solid {border};
+                border-radius: 21px;
+            }}
+            QFrame#cameraPreview:hover {{
+                border: 1px solid {rgba(palette.accent, 180)};
+            }}
+            QFrame#cameraPreview QLabel[videoSurface="true"] {{
+                border: 1px solid {border}; border-radius: 19px;
+            }}
+        """)
+        tile.name_overlay.setStyleSheet(
+            "background: rgba(8, 13, 19, 205); color: #FFFFFF; "
+            "border: 1px solid rgba(255,255,255,65); "
+            "border-radius: 11px; padding: 6px 10px; font-weight: 750;"
+        )
+        tile.status_overlay.setStyleSheet(
+            "background: rgba(8, 13, 19, 205); color: #FFFFFF; "
+            "border: 1px solid rgba(255,255,255,70); "
+            "border-radius: 11px; padding: 5px 9px; font-size: 8pt; font-weight: 750;"
+        )
+        tile.analysis_overlay.setStyleSheet(
+            "background: rgba(8, 13, 19, 220); color: #DCE6F0; "
+            "border: 1px solid rgba(255,255,255,90); "
+            "border-radius: 11px; padding: 5px 9px; font-size: 8pt; font-weight: 800;"
+        )
+
+    # ==================================================================
     # POPUP EVENT HANDLING
     # ==================================================================
 
@@ -1045,7 +1211,11 @@ class DashboardPage(QWidget):
         if self._closing:
             return False
         kind = self._event_filter_targets.get(watched)
-        if kind and event.type() == QEvent.Type.MouseButtonPress:
+        hover_frame = watched if watched in self._hover_frames else None
+        if hover_frame is not None:
+            if event.type() in (QEvent.Type.Enter, QEvent.Type.Leave):
+                self._animate_card_hover(hover_frame, event.type() == QEvent.Type.Enter)
+        if kind in ("ai", "stats") and event.type() == QEvent.Type.MouseButtonPress:
             self._open_popup(kind)
             return True
         return super().eventFilter(watched, event)
@@ -1641,6 +1811,7 @@ class DashboardPage(QWidget):
                 tile = CameraPreview(
                     camera
                 )
+                self._style_camera_preview(tile)
 
                 tile.selected.connect(
                     self.camera_selected.emit
