@@ -487,6 +487,18 @@ class Sidebar(QWidget):
         self.brand_name = QLabel("")
         self.brand_tag = QLabel("")
         self.setFixedWidth(COMPACT_WIDTH)
+        self._width_animation = QVariantAnimation(self)
+        self._width_animation.setDuration(270)
+        self._width_animation.setEasingCurve(QEasingCurve.Type.InOutCubic)
+        self._width_animation.valueChanged.connect(lambda value: self.setFixedWidth(int(value)))
+        self._panel_opacity = QGraphicsOpacityEffect(self.panel)
+        self._panel_opacity.setOpacity(0.0)
+        self.panel.setGraphicsEffect(self._panel_opacity)
+        self._panel_fade = QVariantAnimation(self)
+        self._panel_fade.setDuration(190)
+        self._panel_fade.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._panel_fade.valueChanged.connect(lambda value: self._panel_opacity.setOpacity(float(value)))
+        self._panel_fade.finished.connect(self._finish_panel_transition)
         self._filter_cameras("")
 
     # ----- internals ----------------------------------------------------
@@ -589,14 +601,30 @@ class Sidebar(QWidget):
 
     def set_compact(self, compact: bool) -> None:
         compact = bool(compact)
-        if compact == self._compact and self.width() == (COMPACT_WIDTH if compact else EXPANDED_WIDTH):
+        target_width = COMPACT_WIDTH if compact else EXPANDED_WIDTH
+        if compact == self._compact and self.width() == target_width:
             return
         self._compact = compact
-        self.panel.setVisible(not compact)
         self._apply_shadow()
-        self.setFixedWidth(COMPACT_WIDTH if compact else EXPANDED_WIDTH)
         if compact:
             self.camera_search.clearFocus()
+        else:
+            self.panel.show()
+            self.panel.raise_()
+
+        self._width_animation.stop()
+        self._width_animation.setStartValue(self.width())
+        self._width_animation.setEndValue(target_width)
+        self._width_animation.start()
+
+        self._panel_fade.stop()
+        self._panel_fade.setStartValue(self._panel_opacity.opacity())
+        self._panel_fade.setEndValue(0.0 if compact else 1.0)
+        self._panel_fade.start()
+
+    def _finish_panel_transition(self) -> None:
+        if self._compact and self._panel_opacity.opacity() <= 0.01:
+            self.panel.hide()
 
     def is_compact(self) -> bool:
         return self._compact
