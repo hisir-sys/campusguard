@@ -41,7 +41,7 @@ from campusguard.ui.dashboard_page import DashboardPage
 from campusguard.ui.glass_nav import BackdropWidget
 from campusguard.ui.sidebar import COMPACT_WIDTH, Sidebar
 from campusguard.ui.title_bar import TitleBar
-from campusguard.ui.history_pages import AlertsPage, IncidentsPage
+from campusguard.ui.history_pages import AlertsPage, FootagePlayerDialog, IncidentsPage
 from campusguard.ui.icons import set_icon_theme
 from campusguard.ui.screen_fit import compute_fit
 from campusguard.ui.settings_page import SettingsPage
@@ -54,6 +54,8 @@ from campusguard.ui.theme import get_palette, rgba
 class InAppOverlay(QFrame):
     confirmed = Signal()
     closed = Signal()
+    footage_requested = Signal(str)
+    incidents_requested = Signal(str)
 
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent)
@@ -418,10 +420,21 @@ class InAppOverlay(QFrame):
         info.setProperty("muted", True)
         self._body_layout.addWidget(info)
 
+        footage = QPushButton("Saved footage")
+        footage.setProperty("secondaryButton", True)
+        footage.setToolTip("Open the latest saved incident clip for this camera")
+        footage.clicked.connect(lambda _checked=False, camera_id=camera.camera_id:
+                                 self.footage_requested.emit(camera_id))
+        incidents = QPushButton("Camera incidents")
+        incidents.setProperty("secondaryButton", True)
+        incidents.clicked.connect(lambda _checked=False, camera_id=camera.camera_id:
+                                   self.incidents_requested.emit(camera_id))
         close = QPushButton("Close")
-        close.setProperty("secondaryButton", True)
+        close.setProperty("primary", True)
         close.clicked.connect(self._close_overlay)
         row = QHBoxLayout()
+        row.addWidget(footage)
+        row.addWidget(incidents)
         row.addStretch(1)
         row.addWidget(close)
         self._body_layout.addLayout(row)
@@ -507,6 +520,8 @@ class MainWindow(QMainWindow):
         self._camera_view_camera_id: str | None = None
         self.operator_name: str | None = account_email or None
         self._pending_footage_incidents: dict[str, str] = {}
+        self._camera_engine_thread: threading.Thread | None = None
+        self._camera_footage_viewer: FootagePlayerDialog | None = None
 
         # Pick the icon/palette theme before any widget is built so nothing flashes.
         set_icon_theme(self.settings.theme)
@@ -563,11 +578,12 @@ class MainWindow(QMainWindow):
             finally:
                 self._camera_engine_importing = False
 
-        threading.Thread(
+        self._camera_engine_thread = threading.Thread(
             target=load_module,
             name="CampusGuard-AI-Import",
             daemon=True,
-        ).start()
+        )
+        self._camera_engine_thread.start()
         self._camera_engine_poll = QTimer(self)
         self._camera_engine_poll.setInterval(50)
         self._camera_engine_poll.timeout.connect(self._finish_camera_engine_import)
@@ -687,6 +703,8 @@ class MainWindow(QMainWindow):
             self.setMenuWidget(self.title_bar)
         self._in_app_overlay = InAppOverlay(central)
         self._in_app_overlay.closed.connect(self._on_overlay_closed)
+        self._in_app_overlay.footage_requested.connect(self.open_camera_footage)
+        self._in_app_overlay.incidents_requested.connect(self.open_camera_incidents)
         self._in_app_overlay.hide()
         self._severity_alert = SeverityAlertToast(central)
         self._severity_alert.view_requested.connect(self._view_alert_incident)
@@ -1161,6 +1179,47 @@ class MainWindow(QMainWindow):
             camera,
             stats=self.camera_stats.get(camera_id, CameraStats()),
         )
+
+    def open_camera_incidents(self, camera_id: str) -> None:
+        """Open the incident history filtered to the selected camera."""
+        camera = self.cameras.get(camera_id)
+        if camera is None:
+            return
+        self._in_app_overlay._close_overlay()
+        self.navigate("incidents")
+        self.incidents_page.search_input.setText(camera.name)
+        self.incidents_page.refresh()
+
+    def open_camera_footage(self, camera_id: str) -> None:
+        """Play the newest saved incident clip belonging to the selected camera."""
+        camera = self.cameras.get(camera_id)
+        if camera is None:
+            return
+        rows = self.repository.list_incidents(limit=1000)
+        matches = [
+            row for row in rows
+            if row.get("camera_id") == camera_id and row.get("footage_path")
+            and Path(str(row["footage_path"])).is_file()
+        ]
+        self._in_app_overlay._close_overlay()
+        if not matches:
+            self._in_app_overlay.show_notice(
+                "No saved footage",
+                f"No saved incident footage is available for {camera.name} yet. "
+                "New clips will appear here after an incident recording is completed.",
+            )
+            return
+        latest = max(matches, key=lambda row: str(row.get("happened_at", "")))
+        viewer = FootagePlayerDialog(
+            str(latest["footage_path"]),
+            f"{camera.name} · {latest.get('public_id', 'Incident footage')}",
+            self.centralWidget(),
+        )
+        viewer.setGeometry(self.centralWidget().rect())
+        self._camera_footage_viewer = viewer
+        viewer.destroyed.connect(lambda _obj=None: setattr(self, "_camera_footage_viewer", None))
+        viewer.show()
+        viewer.raise_()
 
     # ------------------------------------------------------------------
     # Cameras
@@ -1872,17 +1931,47 @@ class MainWindow(QMainWindow):
             sync.stop()
 
     def closeEvent(self, event) -> None:
-        # Stop everything that could create camera workers after the window is gone
-        # (matters when the user logs out while the AI engine is still importing).
+        # Keep the window alive if any native worker cannot be joined. This
+        # makes shutdown failure visible and gives the operator a safe retry.
         self._closing = True
         self._stop_cloud_sync()
-        if hasattr(self, "server_viewer_page"):
-            self.server_viewer_page.shutdown()
         for timer_name in ("_camera_engine_poll", "_refresh_timer"):
             timer = getattr(self, timer_name, None)
             if timer is not None:
                 timer.stop()
-        if self.camera_manager is not None:
-            self.camera_manager.stop_all(timeout_ms=5000)
+
+        try:
+            if hasattr(self, "server_viewer_page"):
+                self.server_viewer_page.shutdown()
+
+            import_thread = self._camera_engine_thread
+            if import_thread is not None and import_thread.is_alive():
+                import_thread.join(timeout=10.0)
+                if import_thread.is_alive():
+                    raise TimeoutError("AI runtime import thread did not stop within 10 seconds")
+
+            if self.camera_manager is not None:
+                self.camera_manager.stop_all(timeout_ms=10000)
+
+            from campusguard.ai_pipeline import shutdown_detector_batchers
+            shutdown_detector_batchers(timeout=10.0)
+
+            if self._camera_footage_viewer is not None:
+                self._camera_footage_viewer.close()
+                self._camera_footage_viewer = None
+        except Exception as error:
+            self._closing = False
+            if getattr(self, "_refresh_timer", None) is not None:
+                self._refresh_timer.start()
+            QMessageBox.warning(
+                self,
+                "CampusGuard is still stopping",
+                "CampusGuard could not safely stop every background worker. "
+                "The application has stayed open so shutdown can be retried.\n\n"
+                f"{type(error).__name__}: {error}",
+            )
+            event.ignore()
+            return
+
         event.accept()
         self.closed.emit()
