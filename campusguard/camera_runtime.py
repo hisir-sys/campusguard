@@ -795,6 +795,7 @@ class CameraManager(QObject):
         self._sessions: dict[str, CameraSession] = {}
         self._retiring: list[CameraSession] = []
         self._settings = AppSettings()
+        self._shutting_down = False
         # Headless server: nobody watches live frames, so skip rendering them.
         self.default_preview = True
         self._purge_timer = QTimer(self)
@@ -803,6 +804,8 @@ class CameraManager(QObject):
         self._purge_timer.start()
 
     def start_camera(self, camera: CameraConfig) -> None:
+        if self._shutting_down:
+            raise RuntimeError("camera manager is shutting down")
         self.stop_camera(camera.camera_id)
         try:
             credentials = self.vault.load(camera.camera_id)
@@ -889,6 +892,8 @@ class CameraManager(QObject):
             session.options.update_ai_enabled(enabled)
 
     def reconnect(self, camera_id: str, camera: CameraConfig | None = None) -> None:
+        if self._shutting_down:
+            return
         session = self._sessions.get(camera_id)
         if session is None:
             if camera is not None:
@@ -903,17 +908,42 @@ class CameraManager(QObject):
                 lambda: self._start_after_stop(camera, session),
             )
 
-    def stop_all(self, timeout_ms: int = 5000) -> None:
-        sessions = list(self._sessions.values()) + self._retiring
+    def stop_all(self, timeout_ms: int = 10000) -> None:
+        """Stop camera threads and fail visibly if any thread misses its deadline.
+
+        Unlike the previous unbounded second wait, shutdown now has a finite
+        deadline. References to unfinished sessions are retained so a caller
+        can retry cleanup instead of losing track of live QThreads.
+        """
+        self._shutting_down = True
+        self._purge_timer.stop()
+        sessions_by_id = {
+            id(session): session
+            for session in (*self._sessions.values(), *self._retiring)
+        }
+        sessions = list(sessions_by_id.values())
         self._sessions.clear()
-        self._retiring.clear()
+
         for session in sessions:
             session.stop()
+
+        deadline = time.monotonic() + max(0, timeout_ms) / 1000.0
+        unfinished: list[str] = []
         for session in sessions:
-            if not session.capture_thread.wait(timeout_ms):
-                session.capture_thread.wait()
-            if not session.analysis_thread.wait(timeout_ms):
-                session.analysis_thread.wait()
+            for thread in (session.capture_thread, session.analysis_thread):
+                remaining_ms = max(0, int((deadline - time.monotonic()) * 1000))
+                if thread.isRunning() and not thread.wait(remaining_ms):
+                    unfinished.append(thread.objectName() or thread.metaObject().className())
+
+        self._retiring = [
+            session for session in sessions
+            if session.capture_thread.isRunning() or session.analysis_thread.isRunning()
+        ]
+        if unfinished:
+            raise TimeoutError(
+                "Camera workers did not stop before shutdown deadline: "
+                + ", ".join(unfinished)
+            )
 
     def _purge_finished_sessions(self) -> None:
         self._retiring = [
@@ -927,6 +957,8 @@ class CameraManager(QObject):
         camera: CameraConfig,
         previous_session: CameraSession,
     ) -> None:
+        if self._shutting_down:
+            return
         if (
             previous_session.capture_thread.isRunning()
             or previous_session.analysis_thread.isRunning()
