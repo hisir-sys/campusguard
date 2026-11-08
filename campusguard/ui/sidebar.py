@@ -390,7 +390,7 @@ class Sidebar(QWidget):
         pill = QVBoxLayout(self.nav_pill)
         pill.setContentsMargins(5, 10, 5, 10)
         pill.setSpacing(4)
-        self.logo = LogoMark(size=28, tint="#F2F2F3")
+        self.logo = LogoMark(size=28, tint="#C8FF52")
         self.logo.setToolTip("CampusGuard")
         pill.addWidget(self.logo, 0, Qt.AlignmentFlag.AlignHCenter)
         pill.addSpacing(6)
