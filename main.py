@@ -276,23 +276,33 @@ class AppController:
         if not self._closing_for_flow:
             self.app.quit()
 
-    def _close_window_for_flow(self, window) -> None:
+    def _close_window_for_flow(self, window) -> bool:
+        """Close a window for logout/update, reporting when its close was rejected."""
         self._closing_for_flow = True
         try:
-            window.close()
+            return bool(window.close())
         finally:
             self._closing_for_flow = False
 
     def logout(self, email: str) -> None:
         from campusguard import auth
 
-        window, self.window = self.window, None
+        window = self.window
         self.startup.set_status("Signing out…")
         self.startup.show()  # keep a window visible so closing the main one does not quit
         self.app.processEvents()
+        if window is not None and not self._close_window_for_flow(window):
+            # MainWindow rejected close because a native worker is still active.
+            # Keep the session and the live window; never delete a window whose
+            # closeEvent deliberately refused to shut down safely.
+            self.startup.hide()
+            window.raise_()
+            window.activateWindow()
+            return
+
+        self.window = None
         auth.clear_saved()
         if window is not None:
-            self._close_window_for_flow(window)
             window.deleteLater()
         QTimer.singleShot(0, lambda: self.show_login(prefill=email, notice="You have been signed out."))
 
@@ -375,7 +385,13 @@ class AppController:
         window, self.window = self.window, None
         if dialog is not None:
             dialog.close()
-        self._close_window_for_flow(window)
+        if not self._close_window_for_flow(window):
+            self.window = window
+            if dialog is not None:
+                dialog.show_failed()
+            return
+        self.window = None
+        window.deleteLater()
         self.app.quit()
 
 
