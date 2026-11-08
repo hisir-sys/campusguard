@@ -1,9 +1,7 @@
-"""CampusGuard logo: a lime shield with a check mark, drawn in code so it is sharp at any size.
+"""CampusGuard's current shield-and-check mark, drawn sharply at any size.
 
-LogoMark   - the static logo.
-LogoReveal - the launch animation from the brand film: glass disc with a check, melting into
-             a glass tile while the shield draws in, then the plain lime shield stays.
-Colours follow the active theme (dark / light).
+LogoMark is the static neon-green brand mark. LogoReveal animates a restrained
+frosted-glass disc and silver/lime edge before settling on that same mark.
 """
 from __future__ import annotations
 
