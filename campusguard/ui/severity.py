@@ -5,7 +5,7 @@ Names match the pop-up alert: MEDIUM = ALERT, HIGH = CRITICAL ALERT, CRITICAL = 
 from __future__ import annotations
 
 SEVERITY_TITLES = {"LOW": "LOW", "MEDIUM": "ALERT", "HIGH": "CRITICAL ALERT", "CRITICAL": "DANGER"}
-SEVERITY_COLORS = {"LOW": "#34D399", "MEDIUM": "#FBBF24", "HIGH": "#FB923C", "CRITICAL": "#F87171"}
+SEVERITY_COLORS = {"LOW": "#8DB4A0", "MEDIUM": "#C4B085", "HIGH": "#C79A7E", "CRITICAL": "#C58790"}
 URGENT = {"HIGH", "CRITICAL"}
 
 
@@ -14,7 +14,7 @@ def severity_title(severity: str) -> str:
     return SEVERITY_TITLES.get(value, value)
 
 
-LIGHT_THEME_COLORS = {"LOW": "#15803D", "MEDIUM": "#A16207", "HIGH": "#C2410C", "CRITICAL": "#B91C1C"}
+LIGHT_THEME_COLORS = {"LOW": "#3F6B57", "MEDIUM": "#75613A", "HIGH": "#85553A", "CRITICAL": "#8B4048"}
 
 
 def _is_light_theme() -> bool:

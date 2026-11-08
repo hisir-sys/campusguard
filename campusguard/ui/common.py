@@ -227,13 +227,13 @@ class CameraPreview(QFrame):
         normalized_state = (state or "UNKNOWN").upper()
         text = normalized_state
         colors = {
-            "FIGHT DETECTED": ("#FF626B", "rgba(255, 98, 107, 130)"),
-            "POSSIBLE ALTERCATION": ("#F3B64B", "rgba(243, 182, 75, 130)"),
-            "NORMAL": ("#73D69A", "rgba(115, 214, 154, 100)"),
+            "FIGHT DETECTED": ("#D8949B", "rgba(216, 148, 155, 120)"),
+            "POSSIBLE ALTERCATION": ("#CDB98D", "rgba(205, 185, 141, 120)"),
+            "NORMAL": ("#9CC2AE", "rgba(156, 194, 174, 100)"),
             "AI DISABLED": ("#B8C0CC", "rgba(184, 192, 204, 100)"),
             "MODEL NOT LOADED": ("#B8C0CC", "rgba(184, 192, 204, 100)"),
-            "MODEL ERROR": ("#FF626B", "rgba(255, 98, 107, 130)"),
-            "AI ERROR": ("#FF626B", "rgba(255, 98, 107, 130)"),
+            "MODEL ERROR": ("#D8949B", "rgba(216, 148, 155, 120)"),
+            "AI ERROR": ("#D8949B", "rgba(216, 148, 155, 120)"),
         }
         color, border = colors.get(normalized_state, ("#B8C0CC", "rgba(184, 192, 204, 100)"))
         self.analysis_overlay.setText(text)
@@ -495,7 +495,7 @@ class CameraFormDialog(QDialog):
     def _show_test_result(self, success: bool, message: str) -> None:
         self.test_status.setText(message)
         self.test_status.setStyleSheet(
-            "color: #5cae80;" if success else "color: #dc766d;"
+            "color: #8DB4A0;" if success else "color: #C58790;"
         )
 
     def _restore_buttons(self) -> None:

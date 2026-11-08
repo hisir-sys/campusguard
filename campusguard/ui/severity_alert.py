@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from campusguard import alarm_sound
+from campusguard.ui.severity import severity_color
 from campusguard.ui.theme import get_palette, rgba
 
 
@@ -25,9 +26,9 @@ class SeverityAlertToast(QFrame):
     view_requested = Signal(str)
 
     _LEVELS = {
-        "medium": {"title": "ALERT", "accent": "#E0A93B", "popup_ms": 5000, "glyph": "!"},
-        "high": {"title": "CRITICAL ALERT", "accent": "#F07838", "popup_ms": 7000, "glyph": "!!"},
-        "critical": {"title": "DANGER", "accent": "#FF343F", "popup_ms": 15000, "glyph": "!!!"},
+        "medium": {"title": "ALERT", "accent": "#C4B085", "popup_ms": 5000, "glyph": "!"},
+        "high": {"title": "CRITICAL ALERT", "accent": "#C79A7E", "popup_ms": 7000, "glyph": "!!"},
+        "critical": {"title": "DANGER", "accent": "#C58790", "popup_ms": 15000, "glyph": "!!!"},
     }
 
     def __init__(self, parent: QWidget) -> None:
@@ -144,11 +145,12 @@ class SeverityAlertToast(QFrame):
 
     def _apply_theme(self, border_alpha: int | None = None) -> None:
         palette = get_palette()
-        accent = self._LEVELS[self._level]["accent"]
+        accent = severity_color(self._level.upper())
+        on_accent = "#121315" if palette.name == "dark" else "#F4F4F5"
         is_critical = self._level == "critical"
         glass_alpha = 236 if palette.name == "dark" else 244
         if border_alpha is None:
-            border_alpha = 190 if is_critical else 130
+            border_alpha = 150 if is_critical else 100
         self._badge.setText(self._LEVELS[self._level]["glyph"])
         self.setStyleSheet(
             f"""
@@ -156,7 +158,6 @@ class SeverityAlertToast(QFrame):
                 background: {rgba(palette.glass, glass_alpha)};
                 color: {palette.text};
                 border: 1px solid {rgba(accent, border_alpha)};
-                border-left: 5px solid {accent};
                 border-radius: 18px;
             }}
             QLabel {{ background: transparent; }}
@@ -174,7 +175,7 @@ class SeverityAlertToast(QFrame):
             }}
             QPushButton#severityAlertClose:hover {{ background: {rgba(palette.text, 24)}; color: {palette.text}; }}
             QPushButton#severityAlertView {{
-                background: {accent}; color: #130d06; border: none; border-radius: 10px;
+                background: {accent}; color: {on_accent}; border: none; border-radius: 10px;
                 padding: 0 16px; font-weight: 800;
             }}
             QPushButton#severityAlertView:hover {{ background: {rgba(accent, 225)}; }}
@@ -195,7 +196,7 @@ class SeverityAlertToast(QFrame):
     def _pulse(self) -> None:
         """Critical alerts breathe: the border glows in and out until dismissed."""
         phase = (time.monotonic() - self._pulse_started) * 5.0
-        self._apply_theme(border_alpha=int(150 + 100 * (0.5 + 0.5 * math.sin(phase))))
+        self._apply_theme(border_alpha=int(110 + 60 * (0.5 + 0.5 * math.sin(phase))))
 
     def _present(self, incident_id: str, event: str, camera_name: str, score: float, peak: bool) -> None:
         self._level = "medium" if score < 85 else "high" if score < 95 else "critical"
