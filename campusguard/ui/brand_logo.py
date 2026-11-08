@@ -224,22 +224,21 @@ class LogoReveal(QWidget):
         painter.restore()
 
     def _paint_liquid_edge(self, painter: QPainter, path: QPainterPath, centre: QPointF, rect: QRectF, strength: float, t: float) -> None:
-        """Lime / amber / red / cyan colour gathering along the tile's edge."""
+        """A restrained silver-to-brand-lime highlight around the glass tile."""
         if strength <= 0.004:
             return
         light = get_palette().name == "light"
         painter.save()
         painter.setClipPath(path)
         stops = (
-            (0.00, "#B5F23D"), (0.08, "#B5F23D"), (0.17, "#F4803A"), (0.25, "#35C6E8"),
-            (0.33, "#B5F23D"), (0.42, "#E2452F"), (0.50, "#B5F23D"), (0.58, "#B5F23D"),
-            (0.67, "#F4803A"), (0.75, "#35C6E8"), (0.83, "#B5F23D"), (0.92, "#E2452F"),
+            (0.00, "#FFFFFF"), (0.18, "#D7DBDA"), (0.34, "#C8FF52"),
+            (0.66, "#C8FF52"), (0.84, "#D7DBDA"), (0.98, "#FFFFFF"),
         )
-        for width_factor, alpha in ((0.24, 0.14), (0.15, 0.30), (0.08, 0.58)):
-            gradient = QConicalGradient(centre, -(t * 55.0) % 360.0)
+        for width_factor, alpha in ((0.20, 0.10), (0.11, 0.24), (0.055, 0.48)):
+            gradient = QConicalGradient(centre, -(t * 34.0) % 360.0)
             for position, hex_color in stops:
-                gradient.setColorAt(position, _alpha(QColor(hex_color), alpha * strength * (0.7 if light else 1.0)))
-            gradient.setColorAt(1.0, _alpha(QColor(stops[0][1]), alpha * strength * (0.7 if light else 1.0)))
+                gradient.setColorAt(position, _alpha(QColor(hex_color), alpha * strength * (0.72 if light else 1.0)))
+            gradient.setColorAt(1.0, _alpha(QColor(stops[0][1]), alpha * strength * (0.72 if light else 1.0)))
             painter.setPen(QPen(QBrush(gradient), rect.width() * width_factor, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawPath(path)
