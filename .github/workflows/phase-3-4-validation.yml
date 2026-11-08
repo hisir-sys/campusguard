@@ -61,6 +61,14 @@ jobs:
         shell: pwsh
         run: python scripts/render_dashboard.py --output artifacts/ui-renders
 
+      - name: Prepare YOLO runtime weights for packaged app
+        shell: pwsh
+        run: |
+          python -c "from ultralytics import YOLO; YOLO('yolo11n.pt'); YOLO('yolo11n-pose.pt')"
+          New-Item -ItemType Directory -Force models | Out-Null
+          Copy-Item yolo11n.pt models/yolo11n.pt -Force
+          Copy-Item yolo11n-pose.pt models/yolo11n-pose.pt -Force
+
       - name: Install Windows packaging tools
         shell: pwsh
         run: |
