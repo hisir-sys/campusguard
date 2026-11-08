@@ -805,7 +805,7 @@ class MainWindow(QMainWindow):
         step = QLabel(number)
         step.setAlignment(Qt.AlignmentFlag.AlignCenter)
         step.setStyleSheet(
-            "font-size: 8pt; font-weight: 800; color: #090C0A; "
+            f"font-size: 8pt; font-weight: 800; color: {'#0E0F11' if get_palette().name == 'dark' else '#F4F4F5'}; "
             "background: transparent; border: none;"
         )
         badge_layout.addWidget(step)
@@ -840,7 +840,7 @@ class MainWindow(QMainWindow):
         line = QFrame()
         line.setFixedHeight(2)
         line.setStyleSheet(
-            "background: rgba(200,255,82,0.22); border: none;"
+            "background: rgba(128,130,136,0.30); border: none;"
         )
         layout.addWidget(line, 1, Qt.AlignmentFlag.AlignVCenter)
         layout.addStretch(1)

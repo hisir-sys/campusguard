@@ -74,7 +74,7 @@ class _LiveFeedDialog(QDialog):
         self.frame = QLabel("Connecting to camera…")
         self.frame.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.frame.setMinimumSize(640, 360)
-        self.frame.setStyleSheet("background: #05070b; border-radius: 10px;")
+        self.frame.setStyleSheet("background: #111215; border-radius: 10px;")
         layout.addWidget(self.frame, 1)
         footer = QHBoxLayout()
         footer.addStretch(1)

@@ -40,40 +40,42 @@ class Palette:
     ink: str  # accent for text/icons/lines drawn on surfaces (deep green in light mode)
 
 
+# Graphite / steel palette: no neon. Dark = near-black graphite with silver
+# accents; light = the neutral grey reference (charcoal accent, black text).
 DARK = Palette(
     "dark",
-    "#090C0A", "#090C0A",
-    "#C8FF52", 9, "#879080", 6,
-    "#F7F8F4", "#D2D8CE", "#8D958B",
-    "#C8FF52", "#D8FF83",
-    "#6DD6A0", "#E5B85C", "#F06B70",
-    "#111512", 224,
-    "#F7F8F4", 25,
-    "#F7F8F4", 12,
-    "#111512", 224,
-    "#0D100E", 245,
-    "#C8FF52",
+    "#0F1012", "#0F1012",
+    "#FFFFFF", 5, "#8A8F98", 4,
+    "#F2F2F3", "#C3C5CA", "#8A8D95",
+    "#DADCE0", "#F0F1F3",
+    "#6CC49A", "#D6AE63", "#E5707A",
+    "#17181B", 232,
+    "#FFFFFF", 22,
+    "#FFFFFF", 10,
+    "#17181B", 232,
+    "#0C0D0F", 245,
+    "#DADCE0",
     8,
-    "#111512",
-    "#C8FF52",
+    "#17181B",
+    "#E4E6EA",
 )
 
 LIGHT = Palette(
     "light",
-    "#E8E8E6", "#E8E8E6",
-    "#C8FF52", 14, "#171B16", 4,
-    "#20211F", "#414340", "#747672",
-    "#A6D84B", "#B9E56A",
-    "#277A4C", "#986D0C", "#C74752",
-    "#F0F0EE", 232,
-    "#292B28", 30,
-    "#20211F", 10,
-    "#DADAD8", 232,
-    "#E5E5E3", 245,
-    "#A6D84B",
-    12,
-    "#F0F0EE",
-    "#456A1C",
+    "#AAAAAA", "#A7A7A7",
+    "#FFFFFF", 22, "#000000", 4,
+    "#0A0A0B", "#2B2C2E", "#4C4D50",
+    "#252326", "#3A383C",
+    "#1F6B45", "#7A5A10", "#A82F3A",
+    "#B8B8B8", 238,
+    "#1A1A1A", 40,
+    "#1A1A1A", 14,
+    "#B2B2B2", 238,
+    "#A1A1A1", 255,
+    "#D7DBDA",
+    14,
+    "#B4B4B4",
+    "#252326",
 )
 
 _current: Palette = DARK
@@ -179,10 +181,10 @@ QFrame#cameraPreview, QFrame#offlineCameraTile {
   border-radius: 14px;
 }
 QLabel[videoSurface="true"] {
-  background: #0B0F0D;
+  background: @video@;
   border: 1px solid @line_strong@;
   border-radius: 14px;
-  color: #98A296;
+  color: #A3A5AA;
 }
 QFrame#cameraPreview:hover QLabel[videoSurface="true"] {
   border-color: @accent_line@;
@@ -227,7 +229,7 @@ QPushButton:focus {
 }
 QPushButton:disabled { color: @muted@; }
 QPushButton[primary="true"] {
-  background: @accent@; border-color: @accent@; color: #090C0A; font-weight: 700;
+  background: @accent@; border-color: @accent@; color: @on_accent@; font-weight: 700;
 }
 QPushButton[primary="true"]:hover {
   background: @accent_hover@; border-color: @accent_hover@;
@@ -243,7 +245,7 @@ QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
   background: @field@; color: @text@;
   border: 1px solid @line@; border-radius: 9px;
   padding: 8px 9px;
-  selection-background-color: @accent@; selection-color: #090C0A;
+  selection-background-color: @accent@; selection-color: @on_accent@;
 }
 QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover {
   border-color: @line_strong@;
@@ -266,7 +268,7 @@ QSpinBox::down-arrow, QDoubleSpinBox::down-arrow { image: url(@chev_down@); widt
 QComboBox QAbstractItemView {
   background: @popup@; color: @text@;
   border: 1px solid @line@;
-  selection-background-color: @accent@; selection-color: #090C0A;
+  selection-background-color: @accent@; selection-color: @on_accent@;
   outline: 0;
 }
 
@@ -391,7 +393,7 @@ def _ui_assets(p: "Palette") -> dict[str, str]:
             return ""
         return path.as_posix()
 
-    tick = "#090C0A" if p.name == "dark" else "#FFFFFF"
+    tick = "#0E0F11" if p.name == "dark" else "#FFFFFF"
     return {
         "check_icon": svg("check", '<path d="m5 12.5 4.5 4.5L19 7.5"/>', tick, 3.2),
         "chev_down": svg("chev-down", '<path d="m6 9 6 6 6-6"/>', p.text_dim, 2.4),
@@ -426,6 +428,8 @@ def build_qss(theme: str) -> str:
         "bad_line": rgba(p.bad, 100),
         "accent_line": rgba(p.ink, 190)
         , "ink": p.ink,
+        "video": "#111215" if p.name == "dark" else "#232124",
+        "on_accent": "#0E0F11" if p.name == "dark" else "#F4F4F5",
         "base_pt": str(_base_pt),
         **_ui_assets(p),
     }

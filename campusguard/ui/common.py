@@ -552,7 +552,7 @@ class EnlargedCameraDialog(QDialog):
         self._confidence: float | None = None
         self.image_label = QLabel("Waiting for camera frames")
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.image_label.setStyleSheet("background: #080d11; color: #9ba5aa;")
+        self.image_label.setStyleSheet("background: #111215; color: #a3a5aa;")
         self.info_label = QLabel("FPS: N/A   Resolution: N/A")
         layout = QVBoxLayout(self)
         layout.addWidget(self.image_label, 1)

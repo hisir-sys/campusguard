@@ -55,32 +55,32 @@ def _tones() -> dict[str, QColor]:
     pal = get_palette()
     if pal.name == "dark":
         return {
-            "outer_top": QColor(255, 255, 255, 22), "outer_bottom": QColor(255, 255, 255, 8),
-            "outer_edge": QColor(255, 255, 255, 60),
-            "pill_top": QColor("#101411"), "pill_bottom": QColor("#070A08"),
-            "pill_edge": QColor(255, 255, 255, 26),
-            "icon": QColor("#8C968F"), "icon_hot": QColor(pal.ink),
-            "tile": qcolor(pal.ink, 40), "tile_edge": qcolor(pal.ink, 110),
-            "panel_top": QColor("#1A1F1B"), "panel_bottom": QColor("#0F130F"),
-            "panel_edge": QColor(255, 255, 255, 44),
-            "active_top": QColor(255, 255, 255, 40), "active_bottom": QColor(255, 255, 255, 14),
-            "active_edge": QColor(255, 255, 255, 60),
-            "caption": QColor(255, 255, 255, 60),
-            "badge": QColor(255, 255, 255, 26),
+            "outer_top": QColor(255, 255, 255, 20), "outer_bottom": QColor(255, 255, 255, 7),
+            "outer_edge": QColor(255, 255, 255, 52),
+            "pill_top": QColor("#1B1C20"), "pill_bottom": QColor("#0B0C0E"),
+            "pill_edge": QColor(255, 255, 255, 24),
+            "icon": QColor("#8D9098"), "icon_hot": QColor("#FFFFFF"),
+            "tile": QColor(255, 255, 255, 30), "tile_edge": QColor(255, 255, 255, 52),
+            "panel_top": QColor("#202125"), "panel_bottom": QColor("#141518"),
+            "panel_edge": QColor(255, 255, 255, 40),
+            "active_top": QColor(255, 255, 255, 38), "active_bottom": QColor(255, 255, 255, 14),
+            "active_edge": QColor(255, 255, 255, 58),
+            "caption": QColor(255, 255, 255, 56),
+            "badge": QColor(255, 255, 255, 24),
         }
     return {
-        "outer_top": QColor("#D9D9D7"), "outer_bottom": QColor("#CBCBC9"),
-        "outer_edge": QColor(255, 255, 255, 190),
-        "pill_top": QColor("#313133"), "pill_bottom": QColor("#232325"),
-        "pill_edge": QColor(0, 0, 0, 60),
-        "icon": QColor("#A4A4A6"), "icon_hot": QColor("#FFFFFF"),
-        "tile": QColor("#58595D"), "tile_edge": QColor(255, 255, 255, 40),
-        "panel_top": QColor("#DADAD8"), "panel_bottom": QColor("#CDCDCB"),
-        "panel_edge": QColor(255, 255, 255, 200),
-        "active_top": QColor(255, 255, 255, 215), "active_bottom": QColor(255, 255, 255, 120),
-        "active_edge": QColor(255, 255, 255, 235),
-        "caption": QColor(0, 0, 0, 55),
-        "badge": QColor(0, 0, 0, 24),
+        "outer_top": QColor("#B6B6B6"), "outer_bottom": QColor("#9F9F9F"),
+        "outer_edge": QColor(255, 255, 255, 110),
+        "pill_top": QColor("#2B292C"), "pill_bottom": QColor("#1F1D20"),
+        "pill_edge": QColor(0, 0, 0, 70),
+        "icon": QColor("#A8A7AA"), "icon_hot": QColor("#FFFFFF"),
+        "tile": QColor("#838383"), "tile_edge": QColor(255, 255, 255, 50),
+        "panel_top": QColor("#B0B0B0"), "panel_bottom": QColor("#A3A3A3"),
+        "panel_edge": QColor(255, 255, 255, 120),
+        "active_top": QColor(218, 223, 221, 245), "active_bottom": QColor(186, 192, 190, 235),
+        "active_edge": QColor(255, 255, 255, 190),
+        "caption": QColor(0, 0, 0, 70),
+        "badge": QColor("#D7DBDA"),
     }
 
 
@@ -390,7 +390,7 @@ class Sidebar(QWidget):
         pill = QVBoxLayout(self.nav_pill)
         pill.setContentsMargins(5, 10, 5, 10)
         pill.setSpacing(4)
-        self.logo = LogoMark(size=28)
+        self.logo = LogoMark(size=28, tint="#F2F2F3")
         self.logo.setToolTip("CampusGuard")
         pill.addWidget(self.logo, 0, Qt.AlignmentFlag.AlignHCenter)
         pill.addSpacing(6)

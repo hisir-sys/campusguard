@@ -28,6 +28,11 @@ def logo_color() -> QColor:
     return QColor(LOGO_LIME_LIGHT if get_palette().name == "light" else LOGO_LIME_DARK)
 
 
+def ui_logo_color() -> QColor:
+    """Neutral (palette) colour for the logo inside the app chrome."""
+    return QColor(get_palette().ink)
+
+
 def saved_theme() -> str:
     """The theme saved in the app database ("dark" when unknown). Read-only and cheap,
     so the launch screen can match the user's theme before the app is fully loaded."""
@@ -116,8 +121,9 @@ def _stroke_partial(painter: QPainter, path: QPainterPath, pen: QPen, length: fl
 class LogoMark(QWidget):
     """The static logo (shield + check)."""
 
-    def __init__(self, parent: QWidget | None = None, size: int = 64) -> None:
+    def __init__(self, parent: QWidget | None = None, size: int = 64, tint: str | None = None) -> None:
         super().__init__(parent)
+        self._tint = tint
         self.setFixedSize(size, size)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
@@ -131,8 +137,8 @@ class LogoMark(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         box = QRectF(0, 0, self.width(), self.height())
         width = self.width() * 0.07
-        _draw_progress(painter, shield_path(box), 1.0, logo_color(), width, 0.6)
-        _draw_progress(painter, check_path(box), 1.0, logo_color(), width, 0.6)
+        _draw_progress(painter, shield_path(box), 1.0, (QColor(self._tint) if self._tint else ui_logo_color()), width, 0.6)
+        _draw_progress(painter, check_path(box), 1.0, (QColor(self._tint) if self._tint else ui_logo_color()), width, 0.6)
         painter.end()
 
 
