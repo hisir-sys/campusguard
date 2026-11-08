@@ -1109,6 +1109,15 @@ class DashboardPage(QWidget):
             "font-weight: 750; letter-spacing: .5px;"
         )
 
+    def retint(self) -> None:
+        """Refresh dashboard glass surfaces when the app switches theme."""
+        self._apply_dashboard_visuals()
+        for tile in self._tiles.values():
+            self._style_camera_preview(tile)
+        if hasattr(self, "_popup"):
+            self._popup.retint()
+            self._popup_overlay.retint()
+
     def _install_hover_effect(self, frame: QFrame) -> None:
         effect = frame.graphicsEffect()
         if not isinstance(effect, QGraphicsDropShadowEffect):
