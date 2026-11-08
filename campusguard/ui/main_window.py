@@ -1216,6 +1216,7 @@ class MainWindow(QMainWindow):
             self.centralWidget(),
         )
         viewer.setGeometry(self.centralWidget().rect())
+        viewer.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         self._camera_footage_viewer = viewer
         viewer.destroyed.connect(lambda _obj=None: setattr(self, "_camera_footage_viewer", None))
         viewer.show()
