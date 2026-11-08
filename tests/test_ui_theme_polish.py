@@ -3,11 +3,12 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtGui import QColor
+from PySide6.QtCore import QTest
 from PySide6.QtWidgets import QApplication, QWidget
 
 from campusguard.ui import theme
 from campusguard.ui.glass_nav import AccountButton
-from campusguard.ui.sidebar import Sidebar
+from campusguard.ui.sidebar import COMPACT_WIDTH, EXPANDED_WIDTH, PANEL_WIDTH, Sidebar
 from campusguard.ui.title_bar import TitleBar
 
 APP = QApplication.instance() or QApplication([])
@@ -70,3 +71,21 @@ def test_title_bar_buttons_drive_the_window():
     bar.sync_state()
     bar.minimize_button.click()
     window.close()
+
+
+def test_sidebar_hover_panel_expands_and_collapses_with_animation():
+    bar = Sidebar()
+    assert bar.width() == COMPACT_WIDTH
+    assert bar.panel.width() == 0
+
+    bar.set_compact(False)
+    assert not bar.panel.isHidden()
+    QTest.qWait(330)
+    assert bar.width() == EXPANDED_WIDTH
+    assert bar.panel.width() == PANEL_WIDTH
+
+    bar.set_compact(True)
+    QTest.qWait(330)
+    assert bar.width() == COMPACT_WIDTH
+    assert bar.panel.isHidden()
+    bar.close()
