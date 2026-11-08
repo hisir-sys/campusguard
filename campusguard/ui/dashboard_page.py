@@ -549,8 +549,8 @@ class DashboardPage(QWidget):
             self._dashboard_content
         )
 
-        root.setContentsMargins(24, 18, 24, 28)
-        root.setSpacing(14)
+        root.setContentsMargins(28, 22, 28, 30)
+        root.setSpacing(18)
 
         # Clear, editorial header with a quiet security-operations eyebrow.
         header_row = QHBoxLayout()
@@ -577,7 +577,7 @@ class DashboardPage(QWidget):
 
         main_row = QHBoxLayout()
         main_row.setContentsMargins(0, 0, 0, 0)
-        main_row.setSpacing(18)
+        main_row.setSpacing(20)
 
         self._engine_card = self._build_engine_card()
         self._stats_card = self._build_stats_card()
@@ -592,7 +592,7 @@ class DashboardPage(QWidget):
         main_row.addWidget(self._notifications_card, 15)
         root.addLayout(main_row, 0)
 
-        self._network_card.setMinimumHeight(430)
+        self._network_card.setMinimumHeight(440)
         root.addWidget(self._network_card, 1)
 
         # Keep a dedicated bottom breathing space in the scrollable content.
@@ -1023,58 +1023,62 @@ class DashboardPage(QWidget):
     # ==================================================================
 
     def _apply_dashboard_visuals(self) -> None:
-        """Apply a dashboard-only frosted-glass treatment without retheming other pages."""
+        """Paint a restrained, theme-aware frosted-glass operations workspace."""
         palette = get_palette()
         dark = palette.name == "dark"
         if dark:
-            canvas_top, canvas_bottom = "#0A0E13", "#111923"
-            glass_top, glass_bottom = rgba("#FFFFFF", 18), rgba("#FFFFFF", 7)
-            border = rgba("#FFFFFF", 34)
-            tile_top, tile_bottom = rgba("#FFFFFF", 17), rgba("#FFFFFF", 6)
-            text = "#F5F7FA"
-            muted = "#A8B3C2"
-            accent = "#C8FF52"
-            highlight = rgba("#FFFFFF", 42)
-            shadow_alpha = 115
+            canvas_top, canvas_bottom = "#0C0D10", "#17191D"
+            glass_top, glass_bottom = rgba("#FFFFFF", 24), rgba("#FFFFFF", 8)
+            tile_top, tile_bottom = rgba("#FFFFFF", 22), rgba("#FFFFFF", 7)
+            border = rgba("#FFFFFF", 46)
+            highlight = rgba("#FFFFFF", 86)
+            text, muted = "#F5F6F8", "#AEB3BC"
+            accent = palette.accent
+            divider = rgba("#FFFFFF", 24)
+            shadow_alpha = 125
         else:
-            canvas_top, canvas_bottom = "#EEF2F7", "#E6ECF3"
-            glass_top, glass_bottom = rgba("#FFFFFF", 242), rgba("#FFFFFF", 190)
-            border = rgba("#FFFFFF", 235)
-            tile_top, tile_bottom = rgba("#FFFFFF", 224), rgba("#F7FAFD", 166)
-            text = "#17212D"
-            muted = "#647386"
-            accent = "#628E20"
-            highlight = rgba("#FFFFFF", 250)
-            shadow_alpha = 48
+            canvas_top, canvas_bottom = "#A5A5A5", "#C0C0C0"
+            glass_top, glass_bottom = rgba("#FFFFFF", 184), rgba("#FFFFFF", 118)
+            tile_top, tile_bottom = rgba("#FFFFFF", 190), rgba("#F5F5F5", 112)
+            border = rgba("#FFFFFF", 190)
+            highlight = rgba("#FFFFFF", 245)
+            text, muted = "#151518", "#505156"
+            accent = palette.ink
+            divider = rgba("#252326", 30)
+            shadow_alpha = 58
 
         self._dashboard_content.setStyleSheet(f"""
             QWidget#dashboardContent {{
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 {canvas_top}, stop:1 {canvas_bottom});
+                    stop:0 {canvas_top}, stop:.52 {canvas_bottom}, stop:1 {canvas_top});
                 color: {text};
+                font-family: "DM Sans", "Segoe UI", sans-serif;
             }}
             QLabel#overviewEyebrow {{
-                color: {accent}; background: transparent;
-                font-size: 8pt; font-weight: 800; letter-spacing: 1.6px;
+                color: {muted}; background: transparent;
+                font-size: 8pt; font-weight: 800; letter-spacing: 1.7px;
             }}
             QLabel#overviewTitle {{
                 color: {text}; background: transparent;
-                font-size: 25pt; font-weight: 760;
+                font-family: "Manrope", "DM Sans", sans-serif;
+                font-size: 27pt; font-weight: 800;
+                letter-spacing: -0.5px;
             }}
             QLabel#overviewSubtitle {{
                 color: {muted}; background: transparent; font-size: 10pt;
             }}
             QLabel#overviewBadge {{
                 color: {text}; background: {glass_top};
-                border: 1px solid {border}; border-radius: 15px;
-                padding: 9px 14px; font-size: 8pt; font-weight: 750;
-                letter-spacing: .5px;
+                border: 1px solid {border}; border-top: 1px solid {highlight};
+                border-radius: 16px; padding: 10px 15px;
+                font-size: 8pt; font-weight: 750; letter-spacing: .55px;
             }}
             QFrame#dashboardGlassCard {{
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 {glass_top}, stop:1 {glass_bottom});
-                border: 1px solid {border}; border-top: 1px solid {highlight};
-                border-radius: 23px;
+                    stop:0 {glass_top}, stop:.12 {glass_top}, stop:1 {glass_bottom});
+                border: 1px solid {border};
+                border-top: 1px solid {highlight};
+                border-radius: 25px;
             }}
             QFrame#dashboardGlassCard QLabel[cardtitle="true"] {{
                 color: {text}; font-size: 10.5pt; font-weight: 750;
@@ -1082,7 +1086,8 @@ class DashboardPage(QWidget):
             QFrame#dashboardStatTile {{
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                     stop:0 {tile_top}, stop:1 {tile_bottom});
-                border: 1px solid {border}; border-radius: 17px;
+                border: 1px solid {border}; border-top: 1px solid {highlight};
+                border-radius: 18px;
             }}
             QFrame#dashboardStatTile:hover {{
                 border: 1px solid {accent};
@@ -1091,13 +1096,13 @@ class DashboardPage(QWidget):
             QFrame#notificationRow {{
                 background: transparent;
                 border: none;
-                border-bottom: 1px solid {rgba("#FFFFFF", 28 if dark else 160)};
+                border-bottom: 1px solid {divider};
             }}
             QScrollBar:vertical {{
                 background: transparent; width: 7px; margin: 3px 1px 3px 1px;
             }}
             QScrollBar::handle:vertical {{
-                background: {rgba("#FFFFFF", 62 if dark else 115)};
+                background: {rgba("#FFFFFF", 72 if dark else 132)};
                 border-radius: 3px; min-height: 26px;
             }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
@@ -1115,13 +1120,13 @@ class DashboardPage(QWidget):
         for frame in (self._engine_card, self._stats_card, self._notifications_card, self._network_card):
             effect = frame.graphicsEffect()
             if isinstance(effect, QGraphicsDropShadowEffect):
-                effect.setBlurRadius(34 if dark else 28)
-                effect.setOffset(0, 12 if dark else 8)
+                effect.setBlurRadius(38 if dark else 32)
+                effect.setOffset(0, 14 if dark else 10)
                 effect.setColor(QColor(0, 0, 0, shadow_alpha))
         self._overview_badge.setStyleSheet(
             f"color: {text}; background: {glass_top}; border: 1px solid {border}; "
-            "border-radius: 15px; padding: 9px 14px; font-size: 8pt; "
-            "font-weight: 750; letter-spacing: .5px;"
+            f"border-top: 1px solid {highlight}; border-radius: 16px; padding: 10px 15px; "
+            "font-size: 8pt; font-weight: 750; letter-spacing: .55px;"
         )
 
     def retint(self) -> None:
@@ -1168,42 +1173,44 @@ class DashboardPage(QWidget):
     def _style_offline_preview(self, tile: QFrame) -> None:
         palette = get_palette()
         dark = palette.name == "dark"
+        fill = rgba("#FFFFFF", 14 if dark else 142)
+        edge = rgba("#FFFFFF", 58 if dark else 210)
         tile.setStyleSheet(
-            f"QFrame#offlineCameraTile {{ background: {rgba('#FFFFFF', 9 if dark else 150)}; "
-            f"border: 1px solid {rgba('#FFFFFF', 52 if dark else 210)}; border-radius: 21px; }}"
+            f"QFrame#offlineCameraTile {{ background: {fill}; "
+            f"border: 1px solid {edge}; border-top: 1px solid {rgba('#FFFFFF', 92 if dark else 245)}; "
+            "border-radius: 22px; }}"
         )
 
     def _style_camera_preview(self, tile: CameraPreview) -> None:
         palette = get_palette()
         dark = palette.name == "dark"
-        border = rgba("#FFFFFF", 52 if dark else 210)
-        fill = rgba("#FFFFFF", 9 if dark else 150)
-        tile.setMinimumHeight(270)
+        border = rgba("#FFFFFF", 58 if dark else 205)
+        fill = rgba("#FFFFFF", 12 if dark else 145)
+        overlay = rgba("#111215", 218 if dark else 206)
+        tile.setMinimumHeight(280)
         tile.setStyleSheet(f"""
             QFrame#cameraPreview {{
                 background: {fill}; border: 1px solid {border};
-                border-radius: 21px;
+                border-top: 1px solid {rgba('#FFFFFF', 100 if dark else 245)};
+                border-radius: 22px;
             }}
             QFrame#cameraPreview:hover {{
-                border: 1px solid {rgba(palette.accent, 180)};
+                border: 1px solid {palette.accent};
             }}
             QFrame#cameraPreview QLabel[videoSurface="true"] {{
+                background: {rgba('#0C0D0F', 248)};
                 border: 1px solid {border}; border-radius: 19px;
             }}
         """)
-        tile.name_overlay.setStyleSheet(
-            "background: rgba(8, 13, 19, 205); color: #FFFFFF; "
-            "border: 1px solid rgba(255,255,255,65); "
-            "border-radius: 11px; padding: 6px 10px; font-weight: 750;"
-        )
-        tile.status_overlay.setStyleSheet(
-            "background: rgba(8, 13, 19, 205); color: #FFFFFF; "
-            "border: 1px solid rgba(255,255,255,70); "
-            "border-radius: 11px; padding: 5px 9px; font-size: 8pt; font-weight: 750;"
-        )
+        for label in (tile.name_overlay, tile.status_overlay, tile.analysis_overlay):
+            label.setStyleSheet(
+                f"background: {overlay}; color: #FFFFFF; "
+                f"border: 1px solid {rgba('#FFFFFF', 76 if dark else 108)}; "
+                "border-radius: 11px; padding: 6px 10px; font-weight: 750;"
+            )
         tile.analysis_overlay.setStyleSheet(
-            "background: rgba(8, 13, 19, 220); color: #DCE6F0; "
-            "border: 1px solid rgba(255,255,255,90); "
+            f"background: {overlay}; color: #FFFFFF; "
+            f"border: 1px solid {rgba('#FFFFFF', 100)}; "
             "border-radius: 11px; padding: 5px 9px; font-size: 8pt; font-weight: 800;"
         )
 
