@@ -1050,7 +1050,7 @@ class DashboardPage(QWidget):
         self._dashboard_content.setStyleSheet(f"""
             QWidget#dashboardContent {{
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 {canvas_top}, stop:.52 {canvas_bottom}, stop:1 {canvas_top});
+                    stop:0 {canvas_top}, stop:0.52 {canvas_bottom}, stop:1 {canvas_top});
                 color: {text};
                 font-family: "DM Sans", "Segoe UI", sans-serif;
             }}
