@@ -3,15 +3,8 @@ from __future__ import annotations
 
 
 def pytest_sessionfinish(session, exitstatus):
-    """Stop background workers and dispose Qt widgets without forced process exit."""
+    """Stop camera QThreads, dispose Qt widgets, then join shared AI workers."""
     cleanup_errors: list[str] = []
-
-    try:
-        from campusguard.ai_pipeline import shutdown_detector_batchers
-
-        shutdown_detector_batchers(timeout=15.0)
-    except Exception as error:
-        cleanup_errors.append(f"detector workers: {type(error).__name__}: {error}")
 
     try:
         from PySide6.QtCore import QEvent
@@ -28,7 +21,23 @@ def pytest_sessionfinish(session, exitstatus):
                     except RuntimeError as error:
                         cleanup_errors.append(f"dashboard filters: {error}")
 
-            for widget in app.topLevelWidgets():
+            top_level = list(app.topLevelWidgets())
+            blocked_close: set[int] = set()
+            # Camera QThreads must stop before shared detector batch workers.
+            for widget in top_level:
+                manager = getattr(widget, "camera_manager", None)
+                if manager is not None:
+                    try:
+                        manager.stop_all(timeout_ms=15000)
+                    except Exception as error:
+                        blocked_close.add(id(widget))
+                        cleanup_errors.append(
+                            f"camera workers: {type(error).__name__}: {error}"
+                        )
+
+            for widget in top_level:
+                if id(widget) in blocked_close:
+                    continue
                 try:
                     widget.close()
                     widget.deleteLater()
@@ -39,6 +48,15 @@ def pytest_sessionfinish(session, exitstatus):
             app.processEvents()
     except Exception as error:
         cleanup_errors.append(f"Qt application cleanup: {type(error).__name__}: {error}")
+
+    # Camera analysis workers are now stopped; it is safe to stop the shared
+    # detector workers. close() verifies the join and reports a timeout.
+    try:
+        from campusguard.ai_pipeline import shutdown_detector_batchers
+
+        shutdown_detector_batchers(timeout=15.0)
+    except Exception as error:
+        cleanup_errors.append(f"detector workers: {type(error).__name__}: {error}")
 
     if cleanup_errors:
         # A teardown failure is a real validation failure, not something to
