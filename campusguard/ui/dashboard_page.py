@@ -523,7 +523,7 @@ class DashboardPage(QWidget):
 
         self._device_text: str | None = None
         self._settings = None
-        self._notification_key: tuple = ()
+        self._notification_key = None
 
         self._popup_kind: str | None = None
 
@@ -1178,7 +1178,7 @@ class DashboardPage(QWidget):
         tile.setStyleSheet(
             f"QFrame#offlineCameraTile {{ background: {fill}; "
             f"border: 1px solid {edge}; border-top: 1px solid {rgba('#FFFFFF', 92 if dark else 245)}; "
-            "border-radius: 22px; }}"
+            "border-radius: 22px; }"
         )
 
     def _style_camera_preview(self, tile: CameraPreview) -> None:

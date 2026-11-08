@@ -537,14 +537,8 @@ class Sidebar(QWidget):
             self.camera_selected.emit(str(camera_id))
 
     def _apply_shadow(self) -> None:
-        if self._compact:
-            self.panel.setGraphicsEffect(None)
-            return
-        shadow = QGraphicsDropShadowEffect(self.panel)
-        shadow.setBlurRadius(34)
-        shadow.setOffset(8, 0)
-        shadow.setColor(QColor(0, 0, 0, 120 if get_palette().name == "dark" else 70))
-        self.panel.setGraphicsEffect(shadow)
+        # A drop shadow is clipped at the widget edge and leaves a hard strip.
+        self.panel.setGraphicsEffect(None)
 
     # ----- API used by the main window ---------------------------------
     def set_cameras(self, cameras) -> None:
