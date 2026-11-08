@@ -1219,11 +1219,17 @@ class DashboardPage(QWidget):
     # ==================================================================
 
     def _install_card_event_filters(self, frame: QFrame, kind: str) -> None:
-        """Track every clickable card widget so filters can be detached safely."""
-        targets = [frame, *frame.findChildren(QWidget)]
-        for target in targets:
-            self._event_filter_targets[target] = kind
-            target.installEventFilter(self)
+        """Filter only the card surface; transparent children avoid dangling Qt filters.
+
+        The AI and statistics cards contain no interactive controls. Let mouse
+        events pass through their labels/tiles to the frame, so one parent-owned
+        filter handles clicks and hover without registering the DashboardPage
+        on dozens of child QObjects that may be destroyed during Qt teardown.
+        """
+        for child in frame.findChildren(QWidget):
+            child.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self._event_filter_targets[frame] = kind
+        frame.installEventFilter(self)
 
     def _detach_card_event_filters(self) -> None:
         self._closing = True
