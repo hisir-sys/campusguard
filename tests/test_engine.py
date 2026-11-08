@@ -291,6 +291,10 @@ def test_batch_runner_close_serializes_against_submit_and_drains_accepted_work()
         target=lambda: close_result.setdefault("closed", runner.close(timeout=3.0))
     )
     closer.start()
+    close_deadline = time.monotonic() + 1.0
+    while runner.usable and time.monotonic() < close_deadline:
+        time.sleep(0.005)
+    assert not runner.usable
     with pytest.raises(BatchClosed):
         runner.submit("late", timeout=0.1)
 
