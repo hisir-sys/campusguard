@@ -39,7 +39,7 @@ from campusguard.ui.camera_page import CamerasPage, LocalVideoTestDialog
 from campusguard.ui.common import apply_theme, make_card, make_page_title
 from campusguard.ui.dashboard_page import DashboardPage
 from campusguard.ui.glass_nav import BackdropWidget
-from campusguard.ui.sidebar import Sidebar
+from campusguard.ui.sidebar import COMPACT_WIDTH, Sidebar
 from campusguard.ui.title_bar import TitleBar
 from campusguard.ui.history_pages import AlertsPage, IncidentsPage
 from campusguard.ui.icons import set_icon_theme
@@ -642,8 +642,12 @@ class MainWindow(QMainWindow):
 
         # Left operations rail. It stays visually quiet when collapsed and
         # expands on hover so the workspace remains the hero.
-        self.top_bar = Sidebar()
-        outer.addWidget(self.top_bar, 0)
+        # The sidebar floats above the workspace: a fixed placeholder keeps
+        # the page layout still while the rail expands over it on hover.
+        self.top_bar = Sidebar(central)
+        self._nav_placeholder = QWidget()
+        self._nav_placeholder.setFixedWidth(COMPACT_WIDTH)
+        outer.addWidget(self._nav_placeholder, 0)
 
         workspace = QVBoxLayout()
         workspace.setContentsMargins(0, 0, 0, 0)
@@ -703,11 +707,14 @@ class MainWindow(QMainWindow):
         self._position_bottom_bar()
 
     def _position_bottom_bar(self) -> None:
-        """Compact the sidebar to icons on narrow windows."""
+        """Keep the floating sidebar docked to the left edge, above the pages."""
         if hasattr(self, "top_bar"):
-            narrow = self.width() < 1180 or self.top_bar._user_compact
-            if narrow != self.top_bar.is_compact():
-                self.top_bar.set_compact(narrow)
+            central = self.centralWidget()
+            if central is None:
+                return
+            self.top_bar.move(12, 12)
+            self.top_bar.setFixedHeight(max(200, central.height() - 24))
+            self.top_bar.raise_()
 
     # ------------------------------------------------------------------
     # Long-form technical information pages

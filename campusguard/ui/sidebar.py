@@ -10,7 +10,7 @@ from PySide6.QtCore import QEasingCurve, QPointF, QRectF, QSize, Qt, QVariantAni
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QLinearGradient, QPainter, QPainterPath, QPen, QRadialGradient
 from PySide6.QtWidgets import (
     QAbstractButton, QFrame, QHBoxLayout, QLabel, QLineEdit, QListWidget,
-    QListWidgetItem, QSizePolicy, QVBoxLayout, QWidget,
+    QListWidgetItem, QSizePolicy, QGraphicsDropShadowEffect, QVBoxLayout, QWidget,
 )
 
 from campusguard.ui.brand_logo import LogoMark
@@ -297,6 +297,9 @@ class Sidebar(QWidget):
         self.camera_search.setClearButtonEnabled(True)
         self.camera_search.setFixedHeight(35)
         self.camera_search.textChanged.connect(self._filter_cameras)
+        self.camera_search.editingFinished.connect(
+            lambda: None if self.underMouse() else self.set_compact(True)
+        )
         root.addWidget(self.camera_search)
         self.camera_results = QListWidget()
         self.camera_results.setObjectName("sidebarCameraResults")
@@ -360,7 +363,9 @@ class Sidebar(QWidget):
         super().enterEvent(event)
 
     def leaveEvent(self, event) -> None:
-        self.set_compact(True)
+        # Stay open while the camera search is being used.
+        if not self.camera_search.hasFocus():
+            self.set_compact(True)
         super().leaveEvent(event)
 
     def _filter_cameras(self, query: str) -> None:
@@ -416,8 +421,20 @@ class Sidebar(QWidget):
         if compact == self._compact and self.width() == (COMPACT_WIDTH if compact else EXPANDED_WIDTH):
             return
         self._compact = compact
+        self._apply_shadow()
         self._apply_compact_visibility()
         self._animate_width(COMPACT_WIDTH if compact else EXPANDED_WIDTH)
+
+    def _apply_shadow(self) -> None:
+        """Lift the expanded sidebar off the page it floats over."""
+        if self._compact:
+            self.surface.setGraphicsEffect(None)
+            return
+        shadow = QGraphicsDropShadowEffect(self.surface)
+        shadow.setBlurRadius(34)
+        shadow.setOffset(8, 0)
+        shadow.setColor(QColor(0, 0, 0, 120 if get_palette().name == "dark" else 60))
+        self.surface.setGraphicsEffect(shadow)
 
     def is_compact(self) -> bool:
         return self._compact
