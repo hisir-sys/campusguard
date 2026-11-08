@@ -44,7 +44,7 @@ class StartupWindow(QWidget):
     def __init__(self) -> None:
         super().__init__()
         from campusguard.ui.brand_logo import LogoReveal, saved_theme
-        from campusguard.ui.theme import get_palette, set_current
+        from campusguard.ui.theme import get_palette, rgba, set_current
 
         self.setWindowTitle("CampusGuard")
         self.setWindowIcon(QApplication.windowIcon())
@@ -55,16 +55,16 @@ class StartupWindow(QWidget):
         set_current(saved_theme())
         palette = get_palette()
         light = palette.name == "light"
-        accent_text = "#5E8F0B" if light else "#C8FF52"
         panel = QFrame(self)
         panel.setObjectName("startupPanel")
         panel.setGeometry(0, 0, 380, 420)
         panel.setStyleSheet(
             f"""
             QFrame#startupPanel {{
-                background: {"#FAFBF8" if light else "#050606"};
-                border: 1px solid {"rgba(23,27,22,0.10)" if light else "rgba(255,255,255,0.06)"};
-                border-radius: 28px;
+                background: {rgba(palette.glass, 244 if light else 238)};
+                border: 1px solid {rgba(palette.line, 68 if light else 42)};
+                border-top: 1px solid {rgba("#FFFFFF", 210 if light else 92)};
+                border-radius: 30px;
             }}
             QLabel {{ background: transparent; border: none; }}
             """
@@ -91,9 +91,24 @@ class StartupWindow(QWidget):
         self._logo_fade.setOpacity(1.0)
         self.logo.setGraphicsEffect(self._logo_fade)
         layout.addWidget(self._stage, 0, Qt.AlignmentFlag.AlignCenter)
-        layout.addSpacing(18)
+        layout.addSpacing(12)
 
-        layout.addSpacing(10)
+        self.brand_title = QLabel("CampusGuard")
+        self.brand_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.brand_title.setStyleSheet(
+            f"color: {palette.text}; font-family: Manrope, 'DM Sans', sans-serif; "
+            "font-size: 20pt; font-weight: 800; letter-spacing: -0.4px;"
+        )
+        layout.addWidget(self.brand_title)
+
+        self.brand_subtitle = QLabel("SECURITY OPERATIONS")
+        self.brand_subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.brand_subtitle.setStyleSheet(
+            f"color: {palette.muted}; font-size: 8pt; font-weight: 750; "
+            "letter-spacing: 2.0px;"
+        )
+        layout.addWidget(self.brand_subtitle)
+        layout.addSpacing(22)
 
         self.status = QLabel("Starting…")
         self.status.setAlignment(Qt.AlignmentFlag.AlignCenter)
