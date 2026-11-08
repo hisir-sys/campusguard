@@ -750,7 +750,7 @@ class DashboardPage(QWidget):
         frame.setObjectName("dashboardGlassCard")
         self._install_hover_effect(frame)
         frame.setMinimumHeight(184)
-        frame.setMaximumHeight(170)
+        frame.setMaximumHeight(184)
         frame.setCursor(Qt.CursorShape.PointingHandCursor)
         self._install_card_event_filters(frame, "ai")
 
@@ -1129,6 +1129,8 @@ class DashboardPage(QWidget):
         self._apply_dashboard_visuals()
         for tile in self._tiles.values():
             self._style_camera_preview(tile)
+        for tile in self._offline_tiles:
+            self._style_offline_preview(tile)
         if hasattr(self, "_popup"):
             self._popup.retint()
             self._popup_overlay.retint()
@@ -1162,6 +1164,14 @@ class DashboardPage(QWidget):
         animation.setEndValue(base + (13 if hovered else 0))
         animation.start()
         effect.setOffset(0, (15 if hovered else 12) if palette.name == "dark" else (11 if hovered else 8))
+
+    def _style_offline_preview(self, tile: QFrame) -> None:
+        palette = get_palette()
+        dark = palette.name == "dark"
+        tile.setStyleSheet(
+            f"QFrame#offlineCameraTile {{ background: {rgba('#FFFFFF', 9 if dark else 150)}; "
+            f"border: 1px solid {rgba('#FFFFFF', 52 if dark else 210)}; border-radius: 21px; }}"
+        )
 
     def _style_camera_preview(self, tile: CameraPreview) -> None:
         palette = get_palette()
@@ -1884,6 +1894,8 @@ class DashboardPage(QWidget):
                         None
                     )
 
+        self._offline_tiles.clear()
+
         # Always render two equal panes in the default wall. A missing
         # source is shown as an OFFLINE pane only; it is not a fake camera
         # configuration and does not start any capture worker.
@@ -1937,12 +1949,8 @@ class DashboardPage(QWidget):
         tile.setProperty("card", True)
         tile.setObjectName("offlineCameraTile")
         tile.setMinimumHeight(270)
-        palette = get_palette()
-        dark = palette.name == "dark"
-        tile.setStyleSheet(
-            f"QFrame#offlineCameraTile {{ background: {rgba('#FFFFFF', 9 if dark else 150)}; "
-            f"border: 1px solid {rgba('#FFFFFF', 52 if dark else 210)}; border-radius: 21px; }}"
-        )
+        self._style_offline_preview(tile)
+        self._offline_tiles.append(tile)
 
         surface = QLabel("OFFLINE")
         surface.setAlignment(Qt.AlignmentFlag.AlignCenter)
