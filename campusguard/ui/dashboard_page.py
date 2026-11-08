@@ -1088,6 +1088,21 @@ class DashboardPage(QWidget):
                 border: 1px solid {accent};
                 background: {glass_top};
             }}
+            QFrame#notificationRow {{
+                background: transparent;
+                border: none;
+                border-bottom: 1px solid {rgba("#FFFFFF", 28 if dark else 160)};
+            }}
+            QScrollBar:vertical {{
+                background: transparent; width: 7px; margin: 3px 1px 3px 1px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: {rgba("#FFFFFF", 62 if dark else 115)};
+                border-radius: 3px; min-height: 26px;
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0px; background: transparent;
+            }}
             QScrollArea#dashboardWorkspaceScroll,
             QScrollArea#liveNetworkScroll {{
                 background: transparent; border: none;
@@ -1921,7 +1936,13 @@ class DashboardPage(QWidget):
         tile = QFrame()
         tile.setProperty("card", True)
         tile.setObjectName("offlineCameraTile")
-        tile.setMinimumHeight(238)
+        tile.setMinimumHeight(270)
+        palette = get_palette()
+        dark = palette.name == "dark"
+        tile.setStyleSheet(
+            f"QFrame#offlineCameraTile {{ background: {rgba('#FFFFFF', 9 if dark else 150)}; "
+            f"border: 1px solid {rgba('#FFFFFF', 52 if dark else 210)}; border-radius: 21px; }}"
+        )
 
         surface = QLabel("OFFLINE")
         surface.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -1932,13 +1953,15 @@ class DashboardPage(QWidget):
 
         name = QLabel(f"Camera {slot}", tile)
         name.setStyleSheet(
-            "background: rgba(5, 9, 12, 190); color: white; "
-            "border-radius: 9px; padding: 5px 9px; font-weight: 700;"
+            "background: rgba(8, 13, 19, 205); color: white; "
+            "border: 1px solid rgba(255,255,255,65); "
+            "border-radius: 11px; padding: 6px 10px; font-weight: 750;"
         )
         status = QLabel("OFFLINE", tile)
         status.setStyleSheet(
-            "background: rgba(5, 9, 12, 190); color: white; "
-            "border-radius: 9px; padding: 5px 9px; font-size: 8pt; font-weight: 700;"
+            "background: rgba(8, 13, 19, 205); color: white; "
+            "border: 1px solid rgba(255,255,255,70); "
+            "border-radius: 11px; padding: 5px 9px; font-size: 8pt; font-weight: 750;"
         )
 
         outer = QVBoxLayout(tile)
