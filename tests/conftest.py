@@ -1,16 +1,17 @@
-import os
-import sys
+"""Shared pytest cleanup for Qt widgets and native inference workers."""
+from __future__ import annotations
 
 
 def pytest_sessionfinish(session, exitstatus):
-    """Release native workers and Qt event filters before process shutdown."""
+    """Stop background workers and dispose Qt widgets without forced process exit."""
+    cleanup_errors: list[str] = []
+
     try:
         from campusguard.ai_pipeline import shutdown_detector_batchers
 
-        shutdown_detector_batchers(timeout=5.0)
-    except Exception:
-        # Teardown must not mask the actual test result.
-        pass
+        shutdown_detector_batchers(timeout=15.0)
+    except Exception as error:
+        cleanup_errors.append(f"detector workers: {type(error).__name__}: {error}")
 
     try:
         from PySide6.QtCore import QEvent
@@ -18,33 +19,33 @@ def pytest_sessionfinish(session, exitstatus):
 
         app = QApplication.instance()
         if app is not None:
-            # Dashboard pages are often children of a top-level MainWindow,
-            # so closing only top-level widgets would not invoke their
-            # closeEvent. Detach their child filters explicitly first.
             from campusguard.ui.dashboard_page import DashboardPage
 
             for widget in app.allWidgets():
                 if isinstance(widget, DashboardPage):
-                    widget._detach_card_event_filters()
+                    try:
+                        widget._detach_card_event_filters()
+                    except RuntimeError as error:
+                        cleanup_errors.append(f"dashboard filters: {error}")
 
             for widget in app.topLevelWidgets():
                 try:
                     widget.close()
                     widget.deleteLater()
-                except RuntimeError:
-                    pass
+                except RuntimeError as error:
+                    cleanup_errors.append(f"Qt widget cleanup: {error}")
+
             app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
             app.processEvents()
-    except Exception:
-        # Some non-UI test environments do not create a QApplication.
-        pass
+    except Exception as error:
+        cleanup_errors.append(f"Qt application cleanup: {type(error).__name__}: {error}")
 
-    if os.environ.get("CAMPUSGUARD_TEST_CLEAN_EXIT") == "1":
-        return
-    try:
-        sys.stdout.flush()
-        sys.stderr.flush()
-    finally:
-        # Keep the project's existing protection against late Qt/PyTorch
-        # interpreter-finalization crashes, but only after orderly cleanup.
-        os._exit(int(exitstatus))
+    if cleanup_errors:
+        # A teardown failure is a real validation failure, not something to
+        # hide by terminating the process with os._exit().
+        session.exitstatus = 3
+        terminal = session.config.pluginmanager.get_plugin("terminalreporter")
+        if terminal is not None:
+            terminal.write_sep("=", "CampusGuard cleanup errors")
+            for message in cleanup_errors:
+                terminal.write_line(message)
