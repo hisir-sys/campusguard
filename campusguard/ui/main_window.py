@@ -39,6 +39,7 @@ from campusguard.ui.camera_page import CamerasPage, LocalVideoTestDialog
 from campusguard.ui.common import apply_theme, make_card, make_page_title
 from campusguard.ui.dashboard_page import DashboardPage
 from campusguard.ui.glass_nav import BackdropWidget
+from campusguard.ui.command_search import Command
 from campusguard.ui.sidebar import COMPACT_WIDTH, Sidebar
 from campusguard.ui.title_bar import TitleBar
 from campusguard.ui.history_pages import AlertsPage, FootagePlayerDialog, IncidentsPage
@@ -566,6 +567,8 @@ class MainWindow(QMainWindow):
         self._add_shortcut("Ctrl+4", lambda: self.navigate("alerts"))
         self._add_shortcut("Ctrl+5", lambda: self.navigate("settings"))
         self._add_shortcut("Ctrl+K", self.top_bar.focus_search)
+        self._apply_runtime_settings()
+        self.navigate(self.settings.start_page)
 
     def _begin_camera_engine_import(self) -> None:
         """Import the heavy AI stack off the Qt UI thread."""
@@ -1365,6 +1368,7 @@ class MainWindow(QMainWindow):
         self.settings_page.set_theme(self.settings.theme)
         if previous_theme != self.settings.theme:
             self._rebuild_information_pages()
+        self._apply_runtime_settings()
         self.settings_page.set_saved()
         if previous_mode != self.settings.connection_mode:
             self._stop_cloud_sync()
@@ -1577,8 +1581,50 @@ class MainWindow(QMainWindow):
         self.top_bar.set_operator(self.operator_name)
 
     def _run_global_search(self, query: str) -> None:
+        """Fallback when no camera or command matched: search incident history."""
         self.incidents_page.search_input.setText(query.strip())
         self.navigate("incidents")
+        self.statusBar().showMessage(f"No camera or command matched \"{query.strip()}\" - showing incident search.", 6000)
+
+    def _apply_runtime_settings(self) -> None:
+        from campusguard import alarm_sound
+        alarm_sound.set_enabled(self.settings.alert_sound_enabled)
+        self.top_bar.set_hover_open(self.settings.sidebar_hover_open)
+        self.top_bar.set_commands(self._build_commands())
+
+    def _build_commands(self) -> list[Command]:
+        def page(title: str, key: str, *words: str) -> Command:
+            return Command(title, "Page", lambda: self.navigate(key), tuple(words))
+
+        def setting(title: str, widget: str, *words: str) -> Command:
+            def run() -> None:
+                self.navigate("settings")
+                self.settings_page.focus_setting(widget)
+            return Command(title, "Setting", run, tuple(words))
+
+        return [
+            page("Dashboard", "dashboard", "home", "overview"),
+            page("Cameras", "cameras", "video", "feed", "footage", "live"),
+            page("Incidents", "incidents", "history", "fights", "events", "clips"),
+            page("Alerts", "alerts", "notifications", "alarms"),
+            page("Settings", "settings", "preferences", "options", "configure"),
+            page("School server", "server-viewer", "server", "remote"),
+            page("Services", "services"), page("About", "about"), page("Tools", "tools"),
+            page("How it works", "how-it-works", "help", "guide"),
+            setting("Minimum confidence", "threshold_input", "sensitivity", "threshold"),
+            setting("Alert cooldown", "cooldown_input", "repeat", "interval"),
+            setting("Alarm sound", "alert_sound_toggle", "volume", "mute", "audio"),
+            setting("Compute device", "device_input", "gpu", "cuda", "cpu"),
+            setting("Pose overlay", "pose_toggle", "skeleton"),
+            setting("Tracking", "tracking_toggle", "bytetrack", "ids"),
+            setting("Camera reconnect", "reconnect_toggle", "auto reconnect"),
+            setting("Open on start", "start_page_input", "startup", "launch", "default page"),
+            setting("Interface theme", "theme_input", "dark", "light", "appearance"),
+            setting("Connection mode", "connection_mode_input", "local", "server"),
+            Command("Toggle light / dark theme", "Action", self._toggle_theme, ("theme", "dark mode", "light mode")),
+            Command("Check for updates", "Action", self.update_check_requested.emit, ("update", "version", "upgrade")),
+            Command("Reset all settings", "Action", lambda: (self.navigate("settings"), self.settings_page.focus_setting("reset_button")), ("defaults", "restore")),
+        ]
 
     # ------------------------------------------------------------------
     # Camera runtime callbacks

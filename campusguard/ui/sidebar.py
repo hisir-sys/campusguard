@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from campusguard.ui.brand_logo import LogoMark
+from campusguard.ui.command_search import Command, search_commands
 from campusguard.ui.glass_nav import AccountButton
 from campusguard.ui.icons import icon_pixmap
 from campusguard.ui.theme import get_palette, qcolor
@@ -356,6 +357,19 @@ class _Divider(QWidget):
                          self._text.title())
 
 
+class _SearchEdit(QLineEdit):
+    """Search box whose Up/Down keys move through the result list."""
+    step = Signal(int)
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() == Qt.Key.Key_Down:
+            self.step.emit(1)
+        elif event.key() == Qt.Key.Key_Up:
+            self.step.emit(-1)
+        else:
+            super().keyPressEvent(event)
+
+
 class Sidebar(QWidget):
     page_requested = Signal(str)
     theme_toggle_requested = Signal()
@@ -369,6 +383,8 @@ class Sidebar(QWidget):
         self.setMouseTracking(True)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         self._compact = True
+        self._commands: list[Command] = []
+        self._hover_open = True
         self._dark = True
         self._cameras: list = []
         self._items: dict[str, list] = {}
@@ -390,7 +406,7 @@ class Sidebar(QWidget):
         pill = QVBoxLayout(self.nav_pill)
         pill.setContentsMargins(5, 10, 5, 10)
         pill.setSpacing(4)
-        self.logo = LogoMark(size=28, tint="#C8FF52")
+        self.logo = LogoMark(size=28, tint="#EEF0F3")
         self.logo.setToolTip("CampusGuard")
         pill.addWidget(self.logo, 0, Qt.AlignmentFlag.AlignHCenter)
         pill.addSpacing(6)
@@ -460,13 +476,14 @@ class Sidebar(QWidget):
                 panel.addWidget(item)
         panel.addStretch(1)
 
-        panel.addWidget(_Divider("Cameras"))
-        self.camera_search = QLineEdit()
-        self.camera_search.setPlaceholderText("Search cameras")
+        panel.addWidget(_Divider("Search"))
+        self.camera_search = _SearchEdit()
+        self.camera_search.setPlaceholderText("Search cameras, pages, settings")
         self.camera_search.setClearButtonEnabled(True)
         self.camera_search.setFixedHeight(38)
         self.camera_search.textChanged.connect(self._filter_cameras)
-        self.camera_search.returnPressed.connect(lambda: self.search_submitted.emit(self.camera_search.text().strip()))
+        self.camera_search.returnPressed.connect(self._submit_search)
+        self.camera_search.step.connect(self._step_results)
         panel.addWidget(self.camera_search)
         panel.addSpacing(4)
         self.camera_results = QListWidget()
@@ -505,8 +522,12 @@ class Sidebar(QWidget):
     def _register(self, key: str, widget) -> None:
         self._items.setdefault(key, []).append(widget)
 
+    def set_hover_open(self, enabled: bool) -> None:
+        self._hover_open = bool(enabled)
+
     def _open_panel(self) -> None:
-        self.set_compact(False)
+        if self._hover_open:
+            self.set_compact(False)
 
     def _close_panel(self) -> None:
         if not self.camera_search.hasFocus():
@@ -516,6 +537,10 @@ class Sidebar(QWidget):
         self._close_panel()
         super().leaveEvent(event)
 
+    def set_commands(self, commands: list[Command]) -> None:
+        self._commands = list(commands)
+        self._filter_cameras(self.camera_search.text())
+
     def _filter_cameras(self, query: str) -> None:
         needle = query.casefold().strip()
         self.camera_results.clear()
@@ -523,18 +548,53 @@ class Sidebar(QWidget):
             haystack = f"{camera.name} {camera.camera_id} {camera.source_address}".casefold()
             if not needle or needle in haystack:
                 item = QListWidgetItem(camera.name)
-                item.setData(Qt.ItemDataRole.UserRole, camera.camera_id)
+                item.setData(Qt.ItemDataRole.UserRole, ("camera", str(camera.camera_id)))
                 item.setToolTip(f"{camera.name} · {camera.camera_id}")
                 self.camera_results.addItem(item)
+        for index, command in enumerate(search_commands(self._commands, needle)):
+            item = QListWidgetItem(f"{command.title}  ·  {command.group}")
+            item.setData(Qt.ItemDataRole.UserRole, ("command", index, command))
+            self.camera_results.addItem(item)
         if self.camera_results.count() == 0:
-            hint = QListWidgetItem("No cameras yet" if not self._cameras else "No match")
+            hint = QListWidgetItem("No cameras yet" if not self._cameras and not needle else "No match - Enter searches incidents")
             hint.setFlags(Qt.ItemFlag.NoItemFlags)
             self.camera_results.addItem(hint)
+        elif needle:
+            self.camera_results.setCurrentRow(0)
+
+    def _step_results(self, delta: int) -> None:
+        count = self.camera_results.count()
+        if not count:
+            return
+        row = max(0, min(count - 1, self.camera_results.currentRow() + delta))
+        self.camera_results.setCurrentRow(row)
+
+    def _run_result(self, data) -> bool:
+        if not data:
+            return False
+        if data[0] == "camera":
+            self.camera_selected.emit(data[1])
+        else:
+            data[2].run()
+        return True
+
+    def _submit_search(self) -> None:
+        """Enter: empty -> Cameras page; match -> that camera / command; else search incidents."""
+        text = self.camera_search.text().strip()
+        if not text:
+            self.page_requested.emit("cameras")
+            return
+        current = self.camera_results.currentItem()
+        data = current.data(Qt.ItemDataRole.UserRole) if current is not None else None
+        if self._run_result(data):
+            self.camera_search.clear()
+            self.camera_search.clearFocus()
+            return
+        self.search_submitted.emit(text)
 
     def _open_camera_result(self, item: QListWidgetItem) -> None:
-        camera_id = item.data(Qt.ItemDataRole.UserRole)
-        if camera_id:
-            self.camera_selected.emit(str(camera_id))
+        if self._run_result(item.data(Qt.ItemDataRole.UserRole)):
+            self.camera_search.clear()
 
     def _apply_shadow(self) -> None:
         # A drop shadow is clipped at the widget edge and leaves a hard strip.

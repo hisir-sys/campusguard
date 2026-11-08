@@ -1,7 +1,9 @@
-"""CampusGuard's current shield-and-check mark, drawn sharply at any size.
+"""CampusGuard logo: a lime shield with a check mark, drawn in code so it is sharp at any size.
 
-LogoMark is the static neon-green brand mark. LogoReveal animates a restrained
-frosted-glass disc and silver/lime edge before settling on that same mark.
+LogoMark   - the static logo.
+LogoReveal - the launch animation from the brand film: glass disc with a check, melting into
+             a glass tile while the shield draws in, then the plain lime shield stays.
+Colours follow the active theme (dark / light).
 """
 from __future__ import annotations
 
@@ -18,8 +20,8 @@ from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from campusguard.ui.theme import get_palette
 
-LOGO_LIME_DARK = "#C8FF52"
-LOGO_LIME_LIGHT = "#6FA60F"          # darker lime so the mark stays readable on near-white
+LOGO_LIME_DARK = "#EEF0F3"          # silver-white mark on graphite
+LOGO_LIME_LIGHT = "#262428"          # charcoal mark on the light grey
 
 
 def logo_color() -> QColor:
@@ -207,36 +209,37 @@ class LogoReveal(QWidget):
         body = QRadialGradient(QPointF(rect.center().x(), rect.top() + rect.height() * 0.22), rect.width() * 0.85)
         if light:
             body.setColorAt(0.0, QColor(255, 255, 255))
-            body.setColorAt(1.0, QColor(226, 232, 220))
+            body.setColorAt(1.0, QColor(204, 205, 208))
         else:
             body.setColorAt(0.0, QColor(66, 70, 76))
             body.setColorAt(1.0, QColor(9, 11, 12))
         painter.fillPath(path, QBrush(body))
         rim = QLinearGradient(rect.topLeft(), rect.bottomRight())
         rim.setColorAt(0.0, QColor(255, 255, 255, 235 if not light else 200))
-        rim.setColorAt(0.5, QColor(190, 205, 230, 70))
-        rim.setColorAt(1.0, QColor(200, 255, 82, 210 if not light else 150))
+        rim.setColorAt(0.5, QColor(190, 194, 202, 70))
+        rim.setColorAt(1.0, QColor(150, 156, 166, 210 if not light else 150))
         painter.setPen(QPen(QBrush(rim), max(1.2, rect.width() * 0.016)))
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawPath(path)
         painter.restore()
 
     def _paint_liquid_edge(self, painter: QPainter, path: QPainterPath, centre: QPointF, rect: QRectF, strength: float, t: float) -> None:
-        """A restrained silver-to-brand-lime highlight around the glass tile."""
+        """Silver light gathering and drifting along the tile's edge."""
         if strength <= 0.004:
             return
         light = get_palette().name == "light"
         painter.save()
         painter.setClipPath(path)
         stops = (
-            (0.00, "#FFFFFF"), (0.18, "#D7DBDA"), (0.34, "#C8FF52"),
-            (0.66, "#C8FF52"), (0.84, "#D7DBDA"), (0.98, "#FFFFFF"),
+            (0.00, "#F4F5F7"), (0.08, "#F4F5F7"), (0.17, "#7C828C"), (0.25, "#C9CDD4"),
+            (0.33, "#F4F5F7"), (0.42, "#8A8F99"), (0.50, "#F4F5F7"), (0.58, "#F4F5F7"),
+            (0.67, "#7C828C"), (0.75, "#C9CDD4"), (0.83, "#F4F5F7"), (0.92, "#8A8F99"),
         )
-        for width_factor, alpha in ((0.20, 0.10), (0.11, 0.24), (0.055, 0.48)):
-            gradient = QConicalGradient(centre, -(t * 34.0) % 360.0)
+        for width_factor, alpha in ((0.24, 0.14), (0.15, 0.30), (0.08, 0.58)):
+            gradient = QConicalGradient(centre, -(t * 55.0) % 360.0)
             for position, hex_color in stops:
-                gradient.setColorAt(position, _alpha(QColor(hex_color), alpha * strength * (0.72 if light else 1.0)))
-            gradient.setColorAt(1.0, _alpha(QColor(stops[0][1]), alpha * strength * (0.72 if light else 1.0)))
+                gradient.setColorAt(position, _alpha(QColor(hex_color), alpha * strength * (0.7 if light else 1.0)))
+            gradient.setColorAt(1.0, _alpha(QColor(stops[0][1]), alpha * strength * (0.7 if light else 1.0)))
             painter.setPen(QPen(QBrush(gradient), rect.width() * width_factor, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawPath(path)

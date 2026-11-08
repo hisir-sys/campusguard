@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from campusguard.ui.theme import get_palette
 
-LIME = QColor("#C8FF52")
+LIME = QColor("#E8EAEE")
 
 
 def _alpha(color: QColor, alpha: float) -> QColor:
@@ -52,7 +52,7 @@ class ThinkingOrb(QWidget):
         t = self._seconds()
         palette = get_palette()
         light = palette.name == "light"
-        accent = QColor("#7DB313") if light else QColor(LIME)
+        accent = QColor("#3A383C") if light else QColor(LIME)
         size = float(min(self.width(), self.height()))
         centre = QPointF(self.width() / 2.0, self.height() / 2.0)
         radius = size * 0.31
@@ -65,8 +65,8 @@ class ThinkingOrb(QWidget):
         # 1) Ambient glow (dark) or soft contact shadow (light).
         if light:
             shadow = QRadialGradient(QPointF(centre.x(), centre.y() + radius * 1.18), radius * 1.25)
-            shadow.setColorAt(0.0, QColor(23, 27, 22, 52))
-            shadow.setColorAt(1.0, QColor(23, 27, 22, 0))
+            shadow.setColorAt(0.0, QColor(20, 20, 22, 52))
+            shadow.setColorAt(1.0, QColor(20, 20, 22, 0))
             painter.setBrush(QBrush(shadow))
             painter.drawEllipse(QPointF(centre.x(), centre.y() + radius * 1.18), radius * 1.25, radius * 0.32)
         halo = QRadialGradient(centre, radius * 1.9)
@@ -90,12 +90,12 @@ class ThinkingOrb(QWidget):
         body = QRadialGradient(QPointF(centre.x() - radius * 0.35, centre.y() - radius * 0.45), radius * 1.6)
         if light:
             body.setColorAt(0.0, QColor(255, 255, 255, 250))
-            body.setColorAt(0.65, QColor(238, 243, 230, 235))
-            body.setColorAt(1.0, QColor(214, 224, 200, 235))
+            body.setColorAt(0.65, QColor(226, 226, 228, 235))
+            body.setColorAt(1.0, QColor(196, 197, 200, 235))
         else:
-            body.setColorAt(0.0, QColor(44, 54, 42, 245))
-            body.setColorAt(0.6, QColor(18, 24, 18, 248))
-            body.setColorAt(1.0, QColor(7, 10, 7, 252))
+            body.setColorAt(0.0, QColor(52, 54, 60, 245))
+            body.setColorAt(0.6, QColor(20, 21, 24, 248))
+            body.setColorAt(1.0, QColor(8, 9, 11, 252))
         painter.setBrush(QBrush(body))
         painter.drawEllipse(centre, radius, radius)
 
@@ -106,8 +106,8 @@ class ThinkingOrb(QWidget):
         painter.setClipPath(clip)
         blobs = (
             (accent, 0.0, 0.55, 0.9),
-            (QColor("#5FF0C2") if not light else QColor("#3FCFA0"), 2.1, 0.50, -1.1),
-            (QColor("#E7FF8A") if not light else QColor("#B6D94A"), 4.2, 0.45, 0.7),
+            (QColor("#9AA3B2") if not light else QColor("#6B7280"), 2.1, 0.50, -1.1),
+            (QColor("#FFFFFF") if not light else QColor("#4A4D55"), 4.2, 0.45, 0.7),
         )
         painter.setCompositionMode(
             QPainter.CompositionMode.CompositionMode_SourceOver if light else QPainter.CompositionMode.CompositionMode_Plus

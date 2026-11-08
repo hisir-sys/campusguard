@@ -2,6 +2,9 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, fields
 from typing import Any
 
+START_PAGES = ("dashboard", "cameras", "incidents", "alerts")
+
+
 @dataclass(frozen=True)
 class AppSettings:
     confidence_threshold: float = 0.65
@@ -22,6 +25,9 @@ class AppSettings:
     fight_positive_class: int = 0
     connection_mode: str = "local"
     server_address: str = ""
+    alert_sound_enabled: bool = True
+    start_page: str = "dashboard"
+    sidebar_hover_open: bool = True
 
     @classmethod
     def from_dict(cls, values: dict[str, Any]) -> "AppSettings":
@@ -53,6 +59,9 @@ class AppSettings:
             fight_positive_class=0 if int(candidate.fight_positive_class) == 0 else 1,
             connection_mode=candidate.connection_mode if candidate.connection_mode in {"local", "server"} else "local",
             server_address=str(candidate.server_address).strip()[:2048],
+            alert_sound_enabled=bool(candidate.alert_sound_enabled),
+            start_page=candidate.start_page if candidate.start_page in START_PAGES else "dashboard",
+            sidebar_hover_open=bool(candidate.sidebar_hover_open),
         )
 
     def to_dict(self) -> dict[str, Any]:

@@ -23,6 +23,7 @@ SAMPLE_RATE = 22050
 LEVEL_VOLUME = {"medium": 0.38, "high": 0.68, "critical": 0.96}
 LEVEL_SECONDS = {"medium": 2.0, "high": 5.0, "critical": 10.0}
 
+_enabled = True
 _cache: dict[str, bytes] = {}
 _lock = threading.Lock()
 
@@ -112,8 +113,17 @@ def prewarm() -> None:
     threading.Thread(target=lambda: [build_wav(level) for level in _BUILDERS], daemon=True, name="alarm-prewarm").start()
 
 
+def set_enabled(enabled: bool) -> None:
+    global _enabled
+    _enabled = bool(enabled)
+    if not _enabled:
+        stop()
+
+
 def play(level: str) -> None:
     """Start the level's alarm (asynchronous). Never raises."""
+    if not _enabled:
+        return
     try:
         data = build_wav(level)
         if winsound is not None:

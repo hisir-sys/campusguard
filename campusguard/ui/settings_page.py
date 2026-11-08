@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from campusguard.settings import AppSettings
+from campusguard.settings import START_PAGES, AppSettings
 from campusguard.ui.common import make_card, make_page_title
 
 
@@ -93,7 +93,7 @@ class SettingsPage(QWidget):
         header.addWidget(self.status_pill, 0, Qt.AlignmentFlag.AlignTop)
         root.addLayout(header)
 
-        scroll = QScrollArea()
+        scroll = self.scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -203,6 +203,36 @@ class SettingsPage(QWidget):
 
         appearance_section.body.addLayout(theme_row)
         content_layout.addWidget(appearance_section)
+
+        # ------------------------------------------------------------------
+        # ALERTS & WORKSPACE
+        # ------------------------------------------------------------------
+        workspace_section = SettingsSection(
+            "ALERTS & WORKSPACE",
+            "Sound, start-up page and navigation behaviour.",
+        )
+        workspace_form = QFormLayout()
+        workspace_form.setHorizontalSpacing(24)
+        workspace_form.setVerticalSpacing(14)
+        self.alert_sound_toggle = QCheckBox("Play an alarm sound when an incident is raised")
+        self.alert_sound_toggle.setChecked(settings.alert_sound_enabled)
+        self.start_page_input = QComboBox()
+        for page in START_PAGES:
+            self.start_page_input.addItem(page.title(), page)
+        self.start_page_input.setCurrentIndex(max(0, self.start_page_input.findData(settings.start_page)))
+        self.sidebar_hover_toggle = QCheckBox("Open the navigation panel when hovering Home")
+        self.sidebar_hover_toggle.setChecked(settings.sidebar_hover_open)
+        self.reset_button = QPushButton("Reset all settings to defaults")
+        workspace_form.addRow("Alarm sound", self.alert_sound_toggle)
+        workspace_form.addRow("Open on start", self.start_page_input)
+        workspace_form.addRow("Navigation", self.sidebar_hover_toggle)
+        workspace_form.addRow("", self.reset_button)
+        workspace_section.body.addLayout(workspace_form)
+        content_layout.addWidget(workspace_section)
+        self.alert_sound_toggle.toggled.connect(self._emit_settings)
+        self.start_page_input.currentIndexChanged.connect(self._emit_settings)
+        self.sidebar_hover_toggle.toggled.connect(self._emit_settings)
+        self.reset_button.clicked.connect(self._reset_defaults)
 
         # ------------------------------------------------------------------
         # CONNECTION MODE
@@ -372,6 +402,31 @@ class SettingsPage(QWidget):
         frame.value_label = value_label  # type: ignore[attr-defined]
         return frame
 
+    def focus_setting(self, name: str) -> None:
+        """Scroll to and focus a named control (used by whole-app search)."""
+        widget = getattr(self, name, None)
+        if widget is not None:
+            self.scroll.ensureWidgetVisible(widget, 40, 80)
+            widget.setFocus()
+
+    def _reset_defaults(self) -> None:
+        defaults = AppSettings(theme=self.theme_input.currentData())
+        self._updating = True
+        try:
+            self.threshold_input.setValue(defaults.confidence_threshold)
+            self.detection_toggle.setChecked(defaults.detection_enabled)
+            self.tracking_toggle.setChecked(defaults.tracking_enabled)
+            self.pose_toggle.setChecked(defaults.pose_enabled)
+            self.cooldown_input.setValue(defaults.alert_cooldown_seconds)
+            self.reconnect_toggle.setChecked(defaults.auto_reconnect)
+            self.device_input.setCurrentIndex(max(0, self.device_input.findData(defaults.device)))
+            self.alert_sound_toggle.setChecked(defaults.alert_sound_enabled)
+            self.start_page_input.setCurrentIndex(max(0, self.start_page_input.findData(defaults.start_page)))
+            self.sidebar_hover_toggle.setChecked(defaults.sidebar_hover_open)
+        finally:
+            self._updating = False
+        self._emit_settings()
+
     def _emit_settings(self, *_args) -> None:
         if self._updating:
             return
@@ -395,6 +450,9 @@ class SettingsPage(QWidget):
             fight_positive_class=self._initial_settings.fight_positive_class,
             connection_mode=str(self.connection_mode_input.currentData()),
             server_address=self.server_address_input.text().strip(),
+            alert_sound_enabled=self.alert_sound_toggle.isChecked(),
+            start_page=str(self.start_page_input.currentData()),
+            sidebar_hover_open=self.sidebar_hover_toggle.isChecked(),
         )
 
         self._refresh_status_cards()
