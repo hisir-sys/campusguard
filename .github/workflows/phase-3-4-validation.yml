@@ -57,6 +57,10 @@ jobs:
         shell: pwsh
         run: python scripts/render_server_viewer.py --output artifacts/ui-renders
 
+      - name: Render redesigned dashboard in dark/light themes
+        shell: pwsh
+        run: python scripts/render_dashboard.py --output artifacts/ui-renders
+
       - name: Install Windows packaging tools
         shell: pwsh
         run: |
@@ -64,6 +68,22 @@ jobs:
           python scripts/generate_app_icon.py
           if (-not (Test-Path "models")) { New-Item -ItemType Directory -Force models | Out-Null }
           python -m PyInstaller --noconfirm --clean CampusGuard.spec
+
+      - name: Verify and smoke-test desktop app bundle
+        shell: pwsh
+        run: |
+          $exe = "dist\\CampusGuard\\CampusGuard.exe"
+          if (-not (Test-Path $exe)) { throw "CampusGuard.exe was not produced." }
+          $size = (Get-Item $exe).Length
+          Write-Host "CampusGuard.exe size: $size bytes"
+          if ($size -lt 100000) { throw "Desktop executable is unexpectedly small." }
+          $out = Join-Path $env:RUNNER_TEMP "campusguard-selfcheck.txt"
+          Remove-Item $out -ErrorAction SilentlyContinue
+          $p = Start-Process -FilePath $exe -ArgumentList "--self-check", "`"$out`"" -PassThru
+          if (-not $p.WaitForExit(300000)) { $p.Kill(); throw "CampusGuard.exe self-check timed out." }
+          if (-not (Test-Path $out)) { throw "CampusGuard.exe did not write self-check results." }
+          Get-Content $out | Write-Host
+          if (-not ((Get-Content $out -Raw).StartsWith("OK"))) { throw "CampusGuard.exe failed its packaged self-check." }
 
       - name: Build dedicated school-server installer
         shell: pwsh
