@@ -472,6 +472,14 @@ class HostBackend:
             self.host.manager.set_camera_ai(camera_id, enabled)
         self._on_qt(work)
 
+    def set_camera_sensitivity(self, camera_id: str, offset: float) -> None:
+        def work() -> None:
+            camera = self._require(camera_id)
+            self.host.repository.set_camera_threshold_offset(camera_id, offset)
+            self.host.cameras[camera_id] = replace(camera, threshold_offset=float(offset))
+            self.host.manager.set_camera_threshold_offset(camera_id, float(offset))
+        self._on_qt(work)
+
     def reconnect_camera(self, camera_id: str) -> None:
         def work() -> None:
             camera = self._require(camera_id)

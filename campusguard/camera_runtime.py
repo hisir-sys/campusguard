@@ -84,6 +84,15 @@ def enumerate_local_cameras(max_devices: int = 80) -> list[dict[str, object]]:
 
     return found
 
+_GPU_DECODE = False
+
+
+def set_gpu_decode(enabled: bool) -> None:
+    """Ask OpenCV/FFmpeg to decode network streams on the GPU (NVDEC) when it can."""
+    global _GPU_DECODE
+    _GPU_DECODE = bool(enabled)
+
+
 def _open_capture(source: int | str) -> cv2.VideoCapture:
     """Open a camera and reject backends that open but cannot deliver a frame."""
     def _usable(capture: cv2.VideoCapture) -> bool:
@@ -129,6 +138,17 @@ def _open_capture(source: int | str) -> cv2.VideoCapture:
         cv2.CAP_PROP_READ_TIMEOUT_MSEC,
         3000,
     ]
+    if _GPU_DECODE and hasattr(cv2, "CAP_PROP_HW_ACCELERATION"):
+        # Unverified on real GPUs: fall back to software decoding on any failure.
+        try:
+            gpu = cv2.VideoCapture()
+            gpu.open(source, cv2.CAP_FFMPEG, timeout_parameters + [
+                cv2.CAP_PROP_HW_ACCELERATION, cv2.VIDEO_ACCELERATION_ANY])
+            if gpu.isOpened() and _usable(gpu):
+                return gpu
+            gpu.release()
+        except Exception:
+            pass
     try:
         capture.open(source, cv2.CAP_FFMPEG, timeout_parameters)
     except (TypeError, cv2.error):

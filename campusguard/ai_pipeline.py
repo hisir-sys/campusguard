@@ -234,13 +234,21 @@ class FightDecision:
     # Do not silently require a second, higher persistence threshold.
     MIN_TRIGGER_CONFIDENCE = 0.0
 
-    def __init__(self, threshold: float) -> None:
+    def __init__(self, threshold: float, confirm_predictions: int | None = None) -> None:
         self.threshold = threshold
-        self.states: deque[str] = deque(maxlen=self.TRIGGER_PREDICTIONS)
-        self.confidences: deque[float] = deque(maxlen=self.TRIGGER_PREDICTIONS)
+        self.confirm = max(2, int(confirm_predictions or self.TRIGGER_PREDICTIONS))
+        self.states: deque[str] = deque(maxlen=self.confirm)
+        self.confidences: deque[float] = deque(maxlen=self.confirm)
         self.event_latched = False
         self.normal_release_count = 0
         self.peak_confidence: float | None = None
+
+    def set_confirm_predictions(self, count: int) -> None:
+        count = max(2, int(count))
+        if count != self.confirm:
+            self.confirm = count
+            self.states = deque(maxlen=count)
+            self.confidences = deque(maxlen=count)
 
     def reset(self) -> None:
         self.states.clear()
@@ -279,7 +287,7 @@ class FightDecision:
                 self.peak_confidence = observed
                 return "UPDATE", observed, "HIGH"
             return None
-        if len(self.states) < self.TRIGGER_PREDICTIONS:
+        if len(self.states) < self.confirm:
             return None
         if not all(item == "FIGHT DETECTED" for item in self.states):
             return None
@@ -314,7 +322,7 @@ class VisionPipeline:
         self.batch_detector = False
         self.device = self._select_device(settings.device)
         self.classifiers: dict[str, VideoClassifier] = {}
-        self.decision = FightDecision(settings.confidence_threshold)
+        self.decision = FightDecision(settings.confidence_threshold, settings.alert_confirm_predictions)
         self.interactions = InteractionEngine()
         self.display_ids: dict[int, int] = {}
         self.display_track_memory: dict[int, tuple[tuple[int, int, int, int], int]] = {}
@@ -352,6 +360,7 @@ class VisionPipeline:
 
         self.settings = normalized
         self.decision.threshold = normalized.confidence_threshold
+        self.decision.set_confirm_predictions(normalized.alert_confirm_predictions)
 
         if reload_models or selection_changed:
             self.device = self._select_device(normalized.device)

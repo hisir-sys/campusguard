@@ -70,6 +70,34 @@ class CredentialVault:
             keyring.delete_password(self.SERVICE_NAME, camera_id)
         except keyring.errors.PasswordDeleteError:
             pass
+    # -- Secrets for phone alerts and the evidence-deletion PIN ----------------------
+    WHATSAPP_SERVICE = "CampusGuard WhatsApp"
+    EVIDENCE_PIN_SERVICE = "CampusGuard evidence PIN"
+
+    def save_whatsapp_token(self, token: str) -> None:
+        if token:
+            keyring.set_password(self.WHATSAPP_SERVICE, "cloud-api-token", token)
+        else:
+            try:
+                keyring.delete_password(self.WHATSAPP_SERVICE, "cloud-api-token")
+            except keyring.errors.PasswordDeleteError:
+                pass
+
+    def load_whatsapp_token(self) -> str:
+        return keyring.get_password(self.WHATSAPP_SERVICE, "cloud-api-token") or ""
+
+    def save_evidence_pin_hash(self, value: str) -> None:
+        if value:
+            keyring.set_password(self.EVIDENCE_PIN_SERVICE, "supervisor", value)
+        else:
+            try:
+                keyring.delete_password(self.EVIDENCE_PIN_SERVICE, "supervisor")
+            except keyring.errors.PasswordDeleteError:
+                pass
+
+    def load_evidence_pin_hash(self) -> str:
+        return keyring.get_password(self.EVIDENCE_PIN_SERVICE, "supervisor") or ""
+
     # -- Phase 6: tokens used to read alerts from other servers of the same school ----
     PEER_TOKEN_SERVICE = "CampusGuard peer servers"
 

@@ -63,7 +63,8 @@ class Repository:
             source_address TEXT NOT NULL,
             ai_enabled INTEGER NOT NULL DEFAULT 1,
             created_at TEXT NOT NULL,
-            threshold_offset REAL NOT NULL DEFAULT 0
+            threshold_offset REAL NOT NULL DEFAULT 0,
+            group_name TEXT NOT NULL DEFAULT ''
         );
         CREATE TABLE IF NOT EXISTS audit_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -144,6 +145,8 @@ class Repository:
                 ).fetchall()
             }
             camera_columns = {row["name"] for row in connection.execute("PRAGMA table_info(cameras)").fetchall()}
+            if "group_name" not in camera_columns:
+                connection.execute("ALTER TABLE cameras ADD COLUMN group_name TEXT NOT NULL DEFAULT ''")
             if "threshold_offset" not in camera_columns:
                 connection.execute("ALTER TABLE cameras ADD COLUMN threshold_offset REAL NOT NULL DEFAULT 0")
             if "footage_sha256" not in columns:
@@ -180,6 +183,7 @@ class Repository:
                 ai_enabled=bool(row["ai_enabled"]),
                 created_at=row["created_at"],
                 threshold_offset=float(row["threshold_offset"] or 0.0),
+                group_name=str(row["group_name"] or ""),
             )
             for row in rows
         ]
@@ -232,6 +236,12 @@ class Repository:
                 "UPDATE cameras SET threshold_offset = ? WHERE camera_id = ?", (offset, camera_id)
             )
         self.log_audit("camera_sensitivity", camera_id, f"offset {offset:+.2f}")
+
+    def set_camera_group(self, camera_id: str, group_name: str) -> None:
+        group_name = " ".join(str(group_name).split())[:40]
+        with self._lock, self._connection() as connection:
+            connection.execute("UPDATE cameras SET group_name = ? WHERE camera_id = ?", (group_name, camera_id))
+        self.log_audit("camera_group", camera_id, group_name or "(none)")
 
     def remove_camera(self, camera_id: str) -> None:
         with self._lock, self._connection() as connection:

@@ -39,6 +39,22 @@ class AppSettings:
     alert_sound_enabled: bool = True
     start_page: str = "dashboard"
     sidebar_hover_open: bool = True
+    # Phone alerts (see campusguard/notify.py). Secrets live in the credential vault, not here.
+    alert_numbers: str = ""
+    escalation_numbers: str = ""
+    escalate_minutes: int = 3
+    alert_min_severity: str = "MEDIUM"
+    whatsapp_mode: str = "off"
+    whatsapp_phone_id: str = ""
+    whatsapp_template: str = ""
+    country_code: str = "91"
+    ntfy_topic: str = ""
+    ntfy_server: str = "https://ntfy.sh"
+    ntfy_attach_clip: bool = False
+    auto_open_whatsapp: bool = False
+    # How many consecutive "fight" readings (about 0.5 s apart) raise an incident.
+    alert_confirm_predictions: int = 2
+    gpu_video_decode: bool = False
 
     @classmethod
     def from_dict(cls, values: dict[str, Any]) -> "AppSettings":
@@ -64,6 +80,20 @@ class AppSettings:
             alert_sound_enabled=bool(candidate.alert_sound_enabled),
             start_page=candidate.start_page if candidate.start_page in START_PAGES else "dashboard",
             sidebar_hover_open=bool(candidate.sidebar_hover_open),
+            alert_numbers=str(candidate.alert_numbers)[:600],
+            escalation_numbers=str(candidate.escalation_numbers)[:600],
+            escalate_minutes=min(60, max(0, int(candidate.escalate_minutes))),
+            alert_min_severity=candidate.alert_min_severity if candidate.alert_min_severity in {"LOW", "MEDIUM", "HIGH", "CRITICAL"} else "MEDIUM",
+            whatsapp_mode=candidate.whatsapp_mode if candidate.whatsapp_mode in {"off", "link", "cloud"} else "off",
+            whatsapp_phone_id=str(candidate.whatsapp_phone_id).strip()[:40],
+            whatsapp_template=str(candidate.whatsapp_template).strip()[:80],
+            country_code="".join(ch for ch in str(candidate.country_code) if ch.isdigit())[:4],
+            ntfy_topic="".join(ch for ch in str(candidate.ntfy_topic) if ch.isalnum() or ch in "_-")[:64],
+            ntfy_server=str(candidate.ntfy_server).strip().rstrip("/")[:200] or "https://ntfy.sh",
+            ntfy_attach_clip=bool(candidate.ntfy_attach_clip),
+            auto_open_whatsapp=bool(candidate.auto_open_whatsapp),
+            alert_confirm_predictions=min(6, max(2, int(candidate.alert_confirm_predictions))),
+            gpu_video_decode=bool(candidate.gpu_video_decode),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -78,6 +108,7 @@ class CameraConfig:
     ai_enabled: bool
     created_at: str
     threshold_offset: float = 0.0
+    group_name: str = ""
 
 @dataclass(frozen=True)
 class CameraCredentials:

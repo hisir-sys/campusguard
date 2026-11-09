@@ -218,6 +218,9 @@ class RemoteServerClient:
     def remove_camera(self, camera_id: str) -> None:
         self._request(f"/api/v1/cameras/{camera_id}", "DELETE")
 
+    def set_camera_sensitivity(self, camera_id: str, offset: float) -> None:
+        self._request(f"/api/v1/cameras/{camera_id}/sensitivity", "POST", {"offset": float(offset)})
+
     def reconnect_camera(self, camera_id: str) -> None:
         self._request(f"/api/v1/cameras/{camera_id}/reconnect", "POST", {})
 

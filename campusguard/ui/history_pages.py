@@ -1036,6 +1036,7 @@ class IncidentsPage(QWidget):
     status_change_requested = Signal(str, str)
     clear_all_requested = Signal()
     clear_footage_requested = Signal()
+    whatsapp_requested = Signal(str)
 
     def __init__(
         self,
@@ -1732,7 +1733,7 @@ class IncidentsPage(QWidget):
             table.setColumnWidth(4, 150)
             table.setColumnWidth(5, 105)
             table.setColumnWidth(6, 175)
-            table.setColumnWidth(7, 262)
+            table.setColumnWidth(7, 350)
 
             _apply_table_palette(
                 table
@@ -1862,6 +1863,15 @@ class IncidentsPage(QWidget):
                 self._mark_false_alarm(public_id)
             )
             action_layout.addWidget(false_button)
+
+            share_button = _action_button("WhatsApp", "view")
+            share_button.setCursor(Qt.CursorShape.PointingHandCursor)
+            share_button.setToolTip("Open WhatsApp with this incident's camera, time and confidence ready to send.")
+            share_button.clicked.connect(
+                lambda checked=False, public_id=row["public_id"]:
+                self.whatsapp_requested.emit(public_id)
+            )
+            action_layout.addWidget(share_button)
 
         table.setCellWidget(row_index, column, actions)
 

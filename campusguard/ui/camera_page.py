@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
 
     QCheckBox,
     QComboBox,
+    QLineEdit,
     QDialog,
     QFileDialog,
     QFrame,
@@ -28,6 +29,7 @@ class CameraRow(QFrame):
     reconnect_requested = Signal(str)
     ai_changed = Signal(str, bool)
     sensitivity_changed = Signal(str, float)
+    group_changed = Signal(str, str)
 
     def __init__(self, camera: CameraConfig, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -105,6 +107,24 @@ class CameraRow(QFrame):
 
         layout.addLayout(ai_box)
 
+        # Group
+        group_box = QVBoxLayout()
+        group_box.setSpacing(3)
+        group_box.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.group_input = QLineEdit(camera.group_name)
+        self.group_input.setMinimumWidth(120)
+        self.group_input.setMaximumWidth(150)
+        self.group_input.setPlaceholderText("e.g. Block A")
+        self.group_input.editingFinished.connect(
+            lambda: self.group_changed.emit(self.camera.camera_id, self.group_input.text())
+        )
+        group_box.addWidget(self.group_input)
+        group_hint = QLabel("Group / floor")
+        group_hint.setProperty("muted", True)
+        group_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        group_box.addWidget(group_hint)
+        layout.addLayout(group_box)
+
         # Per-camera sensitivity
         sens_box = QVBoxLayout()
         sens_box.setSpacing(3)
@@ -155,6 +175,8 @@ class CameraRow(QFrame):
     def update_camera(self, camera: CameraConfig) -> None:
         self.camera = camera
         self._select_sensitivity(camera.threshold_offset)
+        if not self.group_input.hasFocus():
+            self.group_input.setText(camera.group_name)
 
         self.ai_checkbox.blockSignals(True)
         self.ai_checkbox.setChecked(camera.ai_enabled)
@@ -368,6 +390,7 @@ class CamerasPage(QWidget):
     reconnect_requested = Signal(str)
     ai_changed = Signal(str, bool)
     sensitivity_changed = Signal(str, float)
+    group_changed = Signal(str, str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -405,6 +428,19 @@ class CamerasPage(QWidget):
         header.addWidget(add_button, 0, Qt.AlignmentFlag.AlignBottom)
 
         root.addLayout(header)
+
+        filter_row = QHBoxLayout()
+        filter_row.setSpacing(10)
+        self.group_filter = QComboBox()
+        self.group_filter.setMinimumWidth(200)
+        self.group_filter.addItem("All groups", "")
+        self.group_filter.currentIndexChanged.connect(self._apply_filter)
+        self.attention_filter = QCheckBox("Needs attention only (offline or error)")
+        self.attention_filter.toggled.connect(self._apply_filter)
+        filter_row.addWidget(self.group_filter)
+        filter_row.addWidget(self.attention_filter)
+        filter_row.addStretch(1)
+        root.addLayout(filter_row)
 
         # Network overview
         self.overview = QFrame()
@@ -541,6 +577,7 @@ class CamerasPage(QWidget):
                 row.reconnect_requested.connect(self.reconnect_requested.emit)
                 row.ai_changed.connect(self.ai_changed.emit)
                 row.sensitivity_changed.connect(self.sensitivity_changed.emit)
+                row.group_changed.connect(self.group_changed.emit)
 
                 self._rows[camera.camera_id] = row
                 self.rows_layout.insertWidget(
@@ -552,7 +589,33 @@ class CamerasPage(QWidget):
 
             row.update_stats(stats.get(camera.camera_id, CameraStats()))
 
+        self._refresh_groups(cameras)
+        self._apply_filter()
         self._update_summary(cameras, stats)
+
+    def _refresh_groups(self, cameras: list[CameraConfig]) -> None:
+        groups = sorted({c.group_name for c in cameras if c.group_name})
+        current = str(self.group_filter.currentData() or "")
+        existing = [str(self.group_filter.itemData(i) or "") for i in range(1, self.group_filter.count())]
+        if existing == groups:
+            return
+        self.group_filter.blockSignals(True)
+        while self.group_filter.count() > 1:
+            self.group_filter.removeItem(1)
+        for name in groups:
+            self.group_filter.addItem(name, name)
+        index = self.group_filter.findData(current)
+        self.group_filter.setCurrentIndex(max(0, index))
+        self.group_filter.blockSignals(False)
+
+    def _apply_filter(self, *_args) -> None:
+        group = str(self.group_filter.currentData() or "")
+        attention = self.attention_filter.isChecked()
+        bad = {"OFFLINE", "ERROR", "DISCONNECTED"}
+        for camera_id, row in self._rows.items():
+            status = (self._stats.get(camera_id, CameraStats()).status or "").upper()
+            visible = (not group or row.camera.group_name == group) and (not attention or status in bad)
+            row.setVisible(visible)
 
     def _update_summary(
         self,
@@ -600,6 +663,7 @@ class CamerasPage(QWidget):
             row.update_stats(stats)
 
         self._refresh_counts()
+        self._apply_filter()
 
     def _refresh_counts(self) -> None:
         cameras = [row.camera for row in self._rows.values()]

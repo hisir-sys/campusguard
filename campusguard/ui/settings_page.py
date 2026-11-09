@@ -54,6 +54,10 @@ class SettingsPage(QWidget):
     server_token_changed = Signal(str)
     update_check_requested = Signal()
     export_report_requested = Signal()
+    whatsapp_token_changed = Signal(str)
+    trend_report_requested = Signal()
+    set_pin_requested = Signal(str, str)
+    test_alert_requested = Signal()
 
     def __init__(self, settings: AppSettings, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -226,9 +230,19 @@ class SettingsPage(QWidget):
         self.start_page_input.setCurrentIndex(max(0, self.start_page_input.findData(settings.start_page)))
         self.sidebar_hover_toggle = QCheckBox("Open the navigation panel when hovering Home")
         self.sidebar_hover_toggle.setChecked(settings.sidebar_hover_open)
+        self.confirm_input = QComboBox()
+        for label, value in (("Fast: 2 readings (about 1 second)", 2), ("Balanced: 3 readings", 3), ("Careful: 4 readings", 4), ("Very careful: 6 readings", 6)):
+            self.confirm_input.addItem(label, value)
+        self.confirm_input.setCurrentIndex(max(0, self.confirm_input.findData(settings.alert_confirm_predictions)))
+        self.confirm_input.currentIndexChanged.connect(self._emit_settings)
+        self.gpu_decode_toggle = QCheckBox("Decode camera video on the GPU (NVIDIA; falls back if unavailable)")
+        self.gpu_decode_toggle.setChecked(settings.gpu_video_decode)
+        self.gpu_decode_toggle.toggled.connect(self._emit_settings)
         self.reset_button = QPushButton("Reset all settings to defaults")
         workspace_form.addRow("Alarm sound", self.alert_sound_toggle)
         workspace_form.addRow("Open on start", self.start_page_input)
+        workspace_form.addRow("Alert confirmation", self.confirm_input)
+        workspace_form.addRow("Performance", self.gpu_decode_toggle)
         workspace_form.addRow("Navigation", self.sidebar_hover_toggle)
         workspace_form.addRow("", self.reset_button)
         workspace_section.body.addLayout(workspace_form)
@@ -237,6 +251,79 @@ class SettingsPage(QWidget):
         self.start_page_input.currentIndexChanged.connect(self._emit_settings)
         self.sidebar_hover_toggle.toggled.connect(self._emit_settings)
         self.reset_button.clicked.connect(self._reset_defaults)
+
+        # ------------------------------------------------------------------
+        # PHONE ALERTS
+        # ------------------------------------------------------------------
+        phone_section = SettingsSection(
+            "PHONE ALERTS",
+            "Send the camera, time, place and confidence of an incident to phones. WhatsApp can be free (you tap Send) or automatic (needs a Meta Business account).",
+        )
+        phone_form = QFormLayout()
+        phone_form.setHorizontalSpacing(24)
+        phone_form.setVerticalSpacing(12)
+        self.alert_numbers_input = QLineEdit(settings.alert_numbers)
+        self.alert_numbers_input.setPlaceholderText("98765 43210, 98765 00000  (up to 10 numbers)")
+        self.escalation_numbers_input = QLineEdit(settings.escalation_numbers)
+        self.escalation_numbers_input.setPlaceholderText("Backup people, alerted only if nobody responds")
+        self.escalate_input = QSpinBox()
+        self.escalate_input.setRange(0, 60)
+        self.escalate_input.setSuffix(" min  (0 = never)")
+        self.escalate_input.setValue(settings.escalate_minutes)
+        self.min_severity_input = QComboBox()
+        for label, value in (("Low and above", "LOW"), ("Alert and above", "MEDIUM"), ("Critical alert and above", "HIGH"), ("Danger only", "CRITICAL")):
+            self.min_severity_input.addItem(label, value)
+        self.min_severity_input.setCurrentIndex(max(0, self.min_severity_input.findData(settings.alert_min_severity)))
+        self.whatsapp_mode_input = QComboBox()
+        self.whatsapp_mode_input.addItem("Off", "off")
+        self.whatsapp_mode_input.addItem("Free: open WhatsApp with the message ready (tap Send)", "link")
+        self.whatsapp_mode_input.addItem("Automatic: WhatsApp Business Cloud API (Meta account needed)", "cloud")
+        self.whatsapp_mode_input.setCurrentIndex(max(0, self.whatsapp_mode_input.findData(settings.whatsapp_mode)))
+        self.auto_open_whatsapp_toggle = QCheckBox("Open WhatsApp automatically when a Critical or Danger alert is raised")
+        self.auto_open_whatsapp_toggle.setChecked(settings.auto_open_whatsapp)
+        self.country_code_input = QLineEdit(settings.country_code)
+        self.country_code_input.setMaximumWidth(80)
+        self.country_code_input.setPlaceholderText("91")
+        self.whatsapp_phone_id_input = QLineEdit(settings.whatsapp_phone_id)
+        self.whatsapp_phone_id_input.setPlaceholderText("Cloud API phone number ID")
+        self.whatsapp_template_input = QLineEdit(settings.whatsapp_template)
+        self.whatsapp_template_input.setPlaceholderText("Approved template name with 4 text parameters (optional)")
+        self.whatsapp_token_input = QLineEdit()
+        self.whatsapp_token_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.whatsapp_token_input.setPlaceholderText("Access token (stored in Windows Credential Manager)")
+        self.ntfy_topic_input = QLineEdit(settings.ntfy_topic)
+        self.ntfy_topic_input.setPlaceholderText("Free push alerts: choose a hard-to-guess topic, install the ntfy app")
+        self.ntfy_attach_toggle = QCheckBox("Attach the video clip to push alerts (leave off on public ntfy.sh)")
+        self.ntfy_attach_toggle.setChecked(settings.ntfy_attach_clip)
+        self.test_alert_button = QPushButton("Send a test alert")
+        for label, widget in (
+            ("Alert numbers", self.alert_numbers_input),
+            ("Backup numbers", self.escalation_numbers_input),
+            ("Escalate after", self.escalate_input),
+            ("Send alerts for", self.min_severity_input),
+            ("WhatsApp", self.whatsapp_mode_input),
+            ("", self.auto_open_whatsapp_toggle),
+            ("Country code", self.country_code_input),
+            ("Cloud phone ID", self.whatsapp_phone_id_input),
+            ("Cloud template", self.whatsapp_template_input),
+            ("Cloud token", self.whatsapp_token_input),
+            ("Push (ntfy)", self.ntfy_topic_input),
+            ("", self.ntfy_attach_toggle),
+            ("", self.test_alert_button),
+        ):
+            phone_form.addRow(label, widget)
+        phone_section.body.addLayout(phone_form)
+        content_layout.addWidget(phone_section)
+        for line in (self.alert_numbers_input, self.escalation_numbers_input, self.country_code_input,
+                     self.whatsapp_phone_id_input, self.whatsapp_template_input, self.ntfy_topic_input):
+            line.editingFinished.connect(self._emit_settings)
+        self.escalate_input.editingFinished.connect(self._emit_settings)
+        for combo in (self.min_severity_input, self.whatsapp_mode_input):
+            combo.currentIndexChanged.connect(self._emit_settings)
+        for box in (self.auto_open_whatsapp_toggle, self.ntfy_attach_toggle):
+            box.toggled.connect(self._emit_settings)
+        self.whatsapp_token_input.editingFinished.connect(self._token_entered)
+        self.test_alert_button.clicked.connect(self.test_alert_requested.emit)
 
         # ------------------------------------------------------------------
         # SYSTEM HEALTH & REPORTS
@@ -259,10 +346,29 @@ class SettingsPage(QWidget):
         health_form.addRow("Footage drive", self.health_disk_label)
         health_form.addRow("Saved clips", self.health_footage_label)
         health_form.addRow("GPU", self.health_gpu_label)
+        self.pin_current_input = QLineEdit()
+        self.pin_current_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.pin_current_input.setPlaceholderText("Current supervisor PIN (if one is set)")
+        self.pin_new_input = QLineEdit()
+        self.pin_new_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.pin_new_input.setPlaceholderText("New supervisor PIN (4+ characters, empty removes it)")
+        self.pin_button = QPushButton("Save supervisor PIN")
+        self.pin_button.clicked.connect(
+            lambda: self.set_pin_requested.emit(self.pin_current_input.text(), self.pin_new_input.text())
+        )
+        self.pin_status = QLabel("")
+        self.pin_status.setProperty("muted", True)
+        health_form.addRow("Evidence approval", self.pin_new_input)
+        health_form.addRow("", self.pin_current_input)
+        health_form.addRow("", self.pin_button)
+        health_form.addRow("", self.pin_status)
+        self.trend_report_button = QPushButton("Export trend report (HTML)")
         health_form.addRow("", self.export_report_button)
+        health_form.addRow("", self.trend_report_button)
         health_section.body.addLayout(health_form)
         content_layout.addWidget(health_section)
         self.export_report_button.clicked.connect(self.export_report_requested.emit)
+        self.trend_report_button.clicked.connect(self.trend_report_requested.emit)
 
         # ------------------------------------------------------------------
         # CONNECTION MODE
@@ -449,6 +555,13 @@ class SettingsPage(QWidget):
             "All systems normal." if not problems else "\n".join(message for _level, message in problems)
         )
 
+    def _token_entered(self) -> None:
+        token = self.whatsapp_token_input.text().strip()
+        if token:
+            self.whatsapp_token_changed.emit(token)
+            self.whatsapp_token_input.clear()
+            self.whatsapp_token_input.setPlaceholderText("Token saved. Type a new one to replace it.")
+
     def focus_setting(self, name: str) -> None:
         """Scroll to and focus a named control (used by whole-app search)."""
         widget = getattr(self, name, None)
@@ -497,6 +610,20 @@ class SettingsPage(QWidget):
             alert_sound_enabled=self.alert_sound_toggle.isChecked(),
             start_page=str(self.start_page_input.currentData()),
             sidebar_hover_open=self.sidebar_hover_toggle.isChecked(),
+            alert_numbers=self.alert_numbers_input.text().strip(),
+            escalation_numbers=self.escalation_numbers_input.text().strip(),
+            escalate_minutes=self.escalate_input.value(),
+            alert_min_severity=str(self.min_severity_input.currentData()),
+            whatsapp_mode=str(self.whatsapp_mode_input.currentData()),
+            whatsapp_phone_id=self.whatsapp_phone_id_input.text().strip(),
+            whatsapp_template=self.whatsapp_template_input.text().strip(),
+            country_code=self.country_code_input.text().strip(),
+            ntfy_topic=self.ntfy_topic_input.text().strip(),
+            ntfy_server=self._initial_settings.ntfy_server,
+            ntfy_attach_clip=self.ntfy_attach_toggle.isChecked(),
+            auto_open_whatsapp=self.auto_open_whatsapp_toggle.isChecked(),
+            alert_confirm_predictions=int(self.confirm_input.currentData()),
+            gpu_video_decode=self.gpu_decode_toggle.isChecked(),
         )
 
         self._refresh_status_cards()

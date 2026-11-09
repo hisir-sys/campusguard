@@ -57,6 +57,7 @@ _ROUTES: list[tuple[str, re.Pattern, str]] = [
     ("GET", re.compile(r"^/cameras/(?P<camera_id>[A-Za-z0-9_-]+)/snapshot$"), "snapshot"),
     ("DELETE", re.compile(r"^/cameras/(?P<camera_id>[A-Za-z0-9_-]+)$"), "remove_camera"),
     ("POST", re.compile(r"^/cameras/(?P<camera_id>[A-Za-z0-9_-]+)/ai$"), "set_camera_ai"),
+    ("POST", re.compile(r"^/cameras/(?P<camera_id>[A-Za-z0-9_-]+)/sensitivity$"), "set_camera_sensitivity"),
     ("POST", re.compile(r"^/cameras/(?P<camera_id>[A-Za-z0-9_-]+)/reconnect$"), "reconnect_camera"),
     ("GET", re.compile(r"^/incidents$"), "list_incidents"),
     ("GET", re.compile(r"^/alerts$"), "list_alerts"),
@@ -286,6 +287,14 @@ class _Handler(BaseHTTPRequestHandler):
             raise ApiError(HTTPStatus.BAD_REQUEST, "'enabled' must be true or false.")
         self.backend.set_camera_ai(camera_id, data["enabled"])
         self._send_json(HTTPStatus.OK, {"camera_id": camera_id, "ai_enabled": data["enabled"]})
+
+    def _route_set_camera_sensitivity(self, query, camera_id: str) -> None:
+        data = self._read_json()
+        offset = data.get("offset")
+        if isinstance(offset, bool) or not isinstance(offset, (int, float)) or not -0.25 <= float(offset) <= 0.25:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "'offset' must be a number between -0.25 and 0.25.")
+        self.backend.set_camera_sensitivity(camera_id, float(offset))
+        self._send_json(HTTPStatus.OK, {"camera_id": camera_id, "offset": float(offset)})
 
     def _route_reconnect_camera(self, query, camera_id: str) -> None:
         self.backend.reconnect_camera(camera_id)

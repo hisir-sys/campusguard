@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
 from campusguard import system_health
 from campusguard.footage import clear_footage
 from campusguard.credentials import CredentialVault
+from campusguard.notify import AlertDispatcher, AlertInfo, AlertPlan, parse_numbers, whatsapp_link, format_message
 from campusguard.settings import (
     AppSettings,
     CameraConfig,
@@ -496,6 +497,7 @@ class InAppOverlay(QFrame):
 class MainWindow(QMainWindow):
     logout_requested = Signal()
     update_check_requested = Signal()
+    rollback_requested = Signal()
     closed = Signal()
     _GUTTER = 5  # invisible resize border around the frameless window
 
@@ -524,6 +526,10 @@ class MainWindow(QMainWindow):
         self._camera_view_camera_id: str | None = None
         self.operator_name: str | None = account_email or None
         self._pending_footage_incidents: dict[str, str] = {}
+        self._alert_infos: dict[str, AlertInfo] = {}
+        self._dispatcher = AlertDispatcher(
+            log=lambda kind, msg: self.repository.add_notification(kind, msg)
+        )
         self._camera_engine_thread: threading.Thread | None = None
         self._camera_footage_viewer: FootagePlayerDialog | None = None
 
@@ -564,6 +570,8 @@ class MainWindow(QMainWindow):
         self._health_timer.start()
         QTimer.singleShot(4000, self._check_system_health)
         self.settings_page.export_report_requested.connect(self._export_report)
+        self.settings_page.trend_report_requested.connect(self._export_trend_report)
+        self.settings_page.set_pin_requested.connect(self._set_evidence_pin)
 
         # Do not start camera/model workers inside the window constructor.
         # Starting them after the event loop begins guarantees the Dashboard
@@ -1108,12 +1116,16 @@ class MainWindow(QMainWindow):
         self.camera_page.reconnect_requested.connect(self._reconnect_camera)
         self.camera_page.ai_changed.connect(self._set_camera_ai)
         self.camera_page.sensitivity_changed.connect(self._set_camera_sensitivity)
+        self.camera_page.group_changed.connect(self._set_camera_group)
         self.dashboard.clear_notifications_requested.connect(self._clear_dashboard_notifications)
         self.incidents_page.status_change_requested.connect(self._set_incident_status)
         self.incidents_page.clear_all_requested.connect(self._clear_all_history)
+        self.incidents_page.whatsapp_requested.connect(self._open_whatsapp)
         self.incidents_page.clear_footage_requested.connect(self._clear_footage_storage)
         self.alerts_page.clear_all_requested.connect(self._clear_all_history)
         self.settings_page.settings_changed.connect(self._save_settings)
+        self.settings_page.whatsapp_token_changed.connect(self._on_whatsapp_token)
+        self.settings_page.test_alert_requested.connect(self._send_test_alert)
         self.settings_page.server_connection_test_requested.connect(self._test_server_connection)
         self.settings_page.server_token_changed.connect(self._save_server_token)
         self.settings_page.update_check_requested.connect(self.update_check_requested)
@@ -1386,6 +1398,23 @@ class MainWindow(QMainWindow):
             return
         self.statusBar().showMessage(f"Exported {count} incidents and the audit log to {Path(path).parent}.", 8000)
 
+    def _export_trend_report(self) -> None:
+        from campusguard.reports import render_html
+
+        stamp = datetime.now().strftime("%Y%m%d-%H%M")
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save trend report", f"campusguard-trends-{stamp}.html", "HTML files (*.html)"
+        )
+        if not path:
+            return
+        try:
+            Path(path).write_text(render_html(self.repository.list_incidents(limit=100000)), encoding="utf-8")
+        except OSError as error:
+            self.statusBar().showMessage(f"Could not save the report: {error}", 8000)
+            return
+        self.repository.log_audit("export_trend_report", Path(path).name, "")
+        self.statusBar().showMessage(f"Trend report saved to {path}.", 8000)
+
     def _set_camera_sensitivity(self, camera_id: str, offset: float) -> None:
         camera = self.cameras.get(camera_id)
         if camera is None:
@@ -1395,6 +1424,17 @@ class MainWindow(QMainWindow):
         if self.camera_manager is not None:
             self.camera_manager.set_camera_threshold_offset(camera_id, offset)
         self.statusBar().showMessage(f"{camera.name}: alert sensitivity updated.", 4000)
+
+    def _set_camera_group(self, camera_id: str, group: str) -> None:
+        camera = self.cameras.get(camera_id)
+        if camera is None:
+            return
+        group = " ".join(group.split())[:40]
+        if group == camera.group_name:
+            return
+        self.cameras[camera_id] = replace(camera, group_name=group)
+        self.repository.set_camera_group(camera_id, group)
+        self.statusBar().showMessage(f"{camera.name}: group set to {group or 'none'}.", 4000)
 
     def _set_camera_ai(self, camera_id: str, enabled: bool) -> None:
         camera = self.cameras.get(camera_id)
@@ -1620,8 +1660,94 @@ class MainWindow(QMainWindow):
     def _apply_runtime_settings(self) -> None:
         from campusguard import alarm_sound
         alarm_sound.set_enabled(self.settings.alert_sound_enabled)
+        try:
+            from campusguard import camera_runtime
+            camera_runtime.set_gpu_decode(self.settings.gpu_video_decode)
+        except Exception:
+            pass
         self.top_bar.set_hover_open(self.settings.sidebar_hover_open)
         self.top_bar.set_commands(self._build_commands())
+        self._dispatcher.set_plan(self._build_alert_plan())
+
+    def _build_alert_plan(self, token: str | None = None) -> AlertPlan:
+        s = self.settings
+        if token is None:
+            try:
+                token = self.vault.load_whatsapp_token()
+            except Exception:
+                token = ""
+        return AlertPlan(
+            numbers=tuple(parse_numbers(s.alert_numbers, s.country_code)),
+            escalation_numbers=tuple(parse_numbers(s.escalation_numbers, s.country_code)),
+            escalate_minutes=s.escalate_minutes,
+            min_severity=s.alert_min_severity,
+            whatsapp_mode=s.whatsapp_mode,
+            phone_id=s.whatsapp_phone_id,
+            template=s.whatsapp_template,
+            token=token,
+            ntfy_topic=s.ntfy_topic,
+            ntfy_server=s.ntfy_server,
+            ntfy_attach_clip=s.ntfy_attach_clip,
+        )
+
+    def _send_phone_alert(self, camera, public_id: str, confidence: float, severity: str) -> None:
+        info = AlertInfo(public_id, camera.name, camera.camera_id, confidence, severity, datetime.now())
+        self._alert_infos[public_id] = info
+
+        def acknowledged() -> bool:
+            row = self.repository.get_incident(public_id)
+            return row is None or str(row.get("status", "NEW")) != "NEW"
+
+        self._dispatcher.dispatch(info, acknowledged)
+        s = self.settings
+        if (s.whatsapp_mode == "link" and s.auto_open_whatsapp and severity in ("HIGH", "CRITICAL")
+                and self._dispatcher.should_send(severity)):
+            self._open_whatsapp(public_id)
+
+    def _open_whatsapp(self, public_id: str) -> None:
+        """Free mode: open WhatsApp with the message ready for each number."""
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+
+        info = self._alert_infos.get(public_id)
+        if info is None:
+            row = self.repository.get_incident(public_id)
+            if row is None:
+                return
+            camera = next((c for c in self.repository.list_cameras() if c.camera_id == row.get("camera_id")), None)
+            info = AlertInfo(public_id, camera.name if camera else str(row.get("camera_id", "")),
+                             str(row.get("camera_id", "")), float(row.get("confidence", 0.0)),
+                             str(row.get("severity", "MEDIUM")), datetime.now(), row.get("footage_path"))
+        numbers = parse_numbers(self.settings.alert_numbers, self.settings.country_code)
+        if not numbers:
+            self.statusBar().showMessage("Add a phone number in Settings, Phone alerts first.", 6000)
+            return
+        message = format_message(info)
+        for number in numbers:
+            QDesktopServices.openUrl(QUrl(whatsapp_link(number, message)))
+
+    def _on_whatsapp_token(self, token: str) -> None:
+        try:
+            self.vault.save_whatsapp_token(token)
+            self._dispatcher.set_plan(self._build_alert_plan(token))
+            self.statusBar().showMessage("WhatsApp token saved securely.", 5000)
+        except Exception as error:
+            self.statusBar().showMessage(f"Could not save the token: {error}", 8000)
+
+    def _send_test_alert(self) -> None:
+        from campusguard.notify import AlertInfo as _Info
+
+        plan = self._build_alert_plan()
+        if not plan.active:
+            self.statusBar().showMessage("Add a number and choose a WhatsApp mode, or an ntfy topic, first.", 7000)
+            return
+        info = _Info("TEST-0001", "Test camera", "test", 0.91, "HIGH", datetime.now())
+        self._dispatcher.set_plan(plan)
+        self._dispatcher.dispatch(info)
+        if plan.whatsapp_mode == "link":
+            self._alert_infos["TEST-0001"] = info
+            self._open_whatsapp("TEST-0001")
+        self.statusBar().showMessage("Test alert sent.", 5000)
 
     def _build_commands(self) -> list[Command]:
         def page(title: str, key: str, *words: str) -> Command:
@@ -1654,6 +1780,8 @@ class MainWindow(QMainWindow):
             setting("Connection mode", "connection_mode_input", "local", "server"),
             Command("Toggle light / dark theme", "Action", self._toggle_theme, ("theme", "dark mode", "light mode")),
             Command("Export incident report", "Action", self._export_report, ("csv", "download", "evidence", "report")),
+            Command("Export trend report", "Action", self._export_trend_report, ("trends", "chart", "html", "report", "hourly")),
+            Command("Roll back to previous version", "Action", self.rollback_requested.emit, ("downgrade", "undo update", "previous")),
             Command("Check for updates", "Action", self.update_check_requested.emit, ("update", "version", "upgrade")),
             Command("Reset all settings", "Action", lambda: (self.navigate("settings"), self.settings_page.focus_setting("reset_button")), ("defaults", "restore")),
         ]
@@ -1753,6 +1881,7 @@ class MainWindow(QMainWindow):
         self._pending_footage_incidents["LOCAL-TEST"] = str(
             incident["public_id"]
         )
+        self._send_phone_alert(camera, str(incident["public_id"]), confidence, severity)
         self._severity_alert.show_alert(
             str(incident["public_id"]), event, camera.name, confidence
         )
@@ -1855,6 +1984,7 @@ class MainWindow(QMainWindow):
         self._pending_footage_incidents[camera_id] = str(
             incident["public_id"]
         )
+        self._send_phone_alert(camera, str(incident["public_id"]), confidence, severity)
         self._severity_alert.show_alert(
             str(incident["public_id"]), event, camera.name, confidence
         )
@@ -1897,6 +2027,12 @@ class MainWindow(QMainWindow):
         if public_id is None:
             return
         self.repository.attach_incident_footage(public_id, footage_path)
+        info = self._alert_infos.get(public_id)
+        if info is not None:
+            from dataclasses import replace as _replace
+            info = _replace(info, clip_path=footage_path)
+            self._alert_infos[public_id] = info
+            self._dispatcher.send_clip_later(info)
         self.incidents_page.refresh()
         self.alerts_page.refresh()
         self.statusBar().showMessage(
@@ -1930,7 +2066,51 @@ class MainWindow(QMainWindow):
             self._confirm_clear_footage,
         )
 
+    def _supervisor_approved(self, what: str) -> bool:
+        """Ask for the supervisor PIN when one is set. True means go ahead."""
+        from PySide6.QtWidgets import QInputDialog, QLineEdit as _Edit
+        from campusguard.evidence_pin import verify_pin
+
+        try:
+            stored = self.vault.load_evidence_pin_hash()
+        except Exception:
+            stored = ""
+        if not stored:
+            return True
+        pin, ok = QInputDialog.getText(
+            self, "Supervisor approval", f"A supervisor must approve: {what}\nEnter the supervisor PIN:",
+            _Edit.EchoMode.Password,
+        )
+        if ok and verify_pin(pin, stored):
+            self.repository.log_audit("evidence_approved", what, "supervisor PIN accepted")
+            return True
+        self.repository.log_audit("evidence_denied", what, "wrong PIN" if ok else "cancelled")
+        self.statusBar().showMessage("Not approved: nothing was deleted.", 6000)
+        return False
+
+    def _set_evidence_pin(self, current: str, new: str) -> None:
+        from campusguard.evidence_pin import hash_pin, valid_new_pin, verify_pin
+
+        try:
+            stored = self.vault.load_evidence_pin_hash()
+            if stored and not verify_pin(current, stored):
+                self.settings_page.pin_status.setText("Current PIN is wrong.")
+                return
+            if new and not valid_new_pin(new):
+                self.settings_page.pin_status.setText("Use at least 4 characters.")
+                return
+            self.vault.save_evidence_pin_hash(hash_pin(new) if new else "")
+        except Exception as error:
+            self.settings_page.pin_status.setText(f"Could not save: {error}")
+            return
+        self.repository.log_audit("evidence_pin", "supervisor", "set" if new else "removed")
+        self.settings_page.pin_new_input.clear()
+        self.settings_page.pin_current_input.clear()
+        self.settings_page.pin_status.setText("Supervisor PIN saved." if new else "Supervisor PIN removed.")
+
     def _confirm_clear_footage(self) -> None:
+        if not self._supervisor_approved("delete all saved footage"):
+            return
         removed = clear_footage(self.repository.footage_dir)
         self.repository.clear_incident_footage_paths()
         self.incidents_page.refresh()
@@ -1948,6 +2128,8 @@ class MainWindow(QMainWindow):
         )
 
     def _confirm_clear_all_history(self) -> None:
+        if not self._supervisor_approved("erase all incidents and alerts"):
+            return
         self.repository.clear_all_incidents_alerts_notifications()
         self._pending_footage_incidents.clear()
         self.incidents_page.refresh()
@@ -2013,6 +2195,7 @@ class MainWindow(QMainWindow):
         # Keep the window alive if any native worker cannot be joined. This
         # makes shutdown failure visible and gives the operator a safe retry.
         self._closing = True
+        self._dispatcher.cancel_all()
         self._stop_cloud_sync()
         for timer_name in ("_camera_engine_poll", "_refresh_timer"):
             timer = getattr(self, timer_name, None)

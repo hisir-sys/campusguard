@@ -251,6 +251,7 @@ class AppController:
             window = MainWindow(account_email=session.email)
             window.logout_requested.connect(lambda: self.logout(session.email))
             window.update_check_requested.connect(self._manual_update_check)
+            window.rollback_requested.connect(self._rollback)
             window.closed.connect(self._on_window_closed)
             return window
         except Exception as error:
@@ -320,6 +321,11 @@ class AppController:
         from campusguard import updater
         from campusguard.ui.update_dialog import UpdateDialog
 
+        failed = updater.failed_update_marker()
+        if failed and self.window is not None:
+            self.window.statusBar().showMessage(
+                "The last update did not install. You are still on the previous version; "
+                "use Roll back or Check for updates to retry.", 15000)
         marker = updater.consume_update_marker()
         if marker and self.window is not None:
             dialog = UpdateDialog(str(marker["to"]), self.window, done=True)
@@ -341,6 +347,33 @@ class AppController:
                 self.window.settings_page.set_update_status("The update check failed. Try again in a moment.")
 
         self._run(updater.check_for_update_detailed, finished, failed)
+
+    def _rollback(self) -> None:
+        from PySide6.QtWidgets import QMessageBox
+
+        from campusguard import updater
+
+        if self.window is None:
+            return
+        candidate = updater.rollback_candidate()
+        if candidate is None:
+            self.window.statusBar().showMessage(
+                "No earlier version is stored on this computer yet (one is kept after each update).", 8000)
+            return
+        answer = QMessageBox.question(
+            self.window, "Roll back",
+            f"Reinstall build {candidate[0]} and restart CampusGuard? Your cameras, incidents and settings are kept.")
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        if updater.launch_rollback() is None:
+            self.window.statusBar().showMessage("Could not start the rollback installer.", 8000)
+            return
+        window, self.window = self.window, None
+        if not self._close_window_for_flow(window):
+            self.window = window
+            return
+        window.deleteLater()
+        self.app.quit()
 
     def _offer_update(self, info) -> None:
         if not info or self.window is None or getattr(self, "_update_dialog", None) is not None:
@@ -376,6 +409,7 @@ class AppController:
                 dialog.show_failed()
             return
         version = str(getattr(self, "_pending_version", ""))
+        updater.archive_installer(installer, version)
         updater.mark_update_started(version)
         if not updater.launch_installer(installer):
             updater.consume_update_marker()

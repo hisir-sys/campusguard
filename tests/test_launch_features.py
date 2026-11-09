@@ -116,3 +116,11 @@ class SensitivityAndHealth(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_confirm_predictions_configurable():
+    from campusguard.ai_pipeline import FightDecision
+    d = FightDecision(0.5, confirm_predictions=4)
+    assert d.confirm == 4
+    d.set_confirm_predictions(3)
+    assert d.confirm == 3

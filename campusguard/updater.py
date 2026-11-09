@@ -135,6 +135,74 @@ def consume_update_marker() -> dict | None:
     return None
 
 
+def _archive_dir() -> Path:
+    from campusguard.storage import application_data_dir
+
+    return application_data_dir() / "installers"
+
+
+def archive_installer(installer: Path, version: str) -> None:
+    """Keep the last few verified installers so a bad update can be rolled back."""
+    try:
+        folder = _archive_dir()
+        folder.mkdir(parents=True, exist_ok=True)
+        number = _version_number(str(version))
+        if number < 0:
+            return
+        shutil.copy2(installer, folder / f"CampusGuard-Setup-{number}.exe")
+        kept = sorted(folder.glob("CampusGuard-Setup-*.exe"), key=lambda p: _version_number(p.stem.rsplit("-", 1)[-1]))
+        for old in kept[:-3]:
+            old.unlink(missing_ok=True)
+        _log(f"installer for build {number} archived")
+    except Exception as error:
+        _log(f"could not archive installer: {error}")
+
+
+def rollback_candidate() -> tuple[int, Path] | None:
+    """Newest archived installer that is older than the running build."""
+    try:
+        current = _version_number(BUILD_VERSION)
+        best: tuple[int, Path] | None = None
+        for path in _archive_dir().glob("CampusGuard-Setup-*.exe"):
+            number = _version_number(path.stem.rsplit("-", 1)[-1])
+            if 0 <= number < current and path.stat().st_size >= _MIN_INSTALLER_BYTES:
+                if best is None or number > best[0]:
+                    best = (number, path)
+        return best
+    except Exception:
+        return None
+
+
+def launch_rollback() -> int | None:
+    """Reinstall the previous build. The caller must quit the app when this returns a build number."""
+    candidate = rollback_candidate()
+    if candidate is None:
+        return None
+    number, path = candidate
+    _log(f"rolling back from {BUILD_VERSION} to {number}")
+    mark_update_started(str(number))
+    if not launch_installer(path):
+        consume_update_marker()
+        return None
+    return number
+
+
+def failed_update_marker() -> dict | None:
+    """If the last update never took effect, return its marker (once) so the UI can say so."""
+    try:
+        path = _marker_path()
+        if not path.is_file():
+            return None
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if _version_number(BUILD_VERSION) < _version_number(str(data.get("to"))):
+            path.unlink(missing_ok=True)
+            _log(f"update to {data.get('to')} did not take effect (still {BUILD_VERSION})")
+            return data
+    except Exception:
+        pass
+    return None
+
+
 def download_installer(url: str, checksum_url: str) -> Path | None:
     """Download and verify the installer. Returns its path, or None on any failure."""
     try:

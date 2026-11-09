@@ -246,3 +246,18 @@ API (`Authorization: Bearer <token>`, base path `/api/v1`, plus an open `GET /he
 `GET /status`, `GET|POST /cameras`, `POST /cameras/import` (CSV body: `name,type,address,username,password,ai_enabled`), `DELETE /cameras/{id}`, `POST /cameras/{id}/ai`, `POST /cameras/{id}/reconnect`, `GET /incidents?after_id=&limit=`, `GET /alerts`, `POST /incidents/{INC-id}/status`, `GET /incidents/{INC-id}/clip` (MP4, supports Range). Logs: `logs/server.log` in the app-data folder.
 
 Cameras are opened a few at a time at start-up, reconnect automatically with back-off, and `/cameras` shows per-camera health (`ok`, `stalled` if no frames for 15 s, `offline`, `connecting`).
+
+## Phone alerts, groups, reports and safety (launch features)
+
+- **Phone alerts** (Settings, Phone alerts): add one or many numbers. Each alert carries the camera (place), time, confidence percentage and, where the channel allows, the video clip.
+  - *Free WhatsApp*: opens WhatsApp with the message ready; you tap Send. No video can be attached this way.
+  - *Automatic WhatsApp*: WhatsApp Business Cloud API (needs a Meta business account; conversations may be charged). Sends text and video. Token is stored in the OS credential vault.
+  - *ntfy push*: free push notifications; keep clip attachment off on the public server.
+  - Backup numbers are alerted if nobody acknowledges within the chosen minutes.
+- **Alert confirmation**: choose 2 to 6 consecutive detections before an incident is raised.
+- **Camera groups** and a "needs attention" filter on the Cameras page.
+- **Trend report** (HTML) from Settings or Ctrl+K: incidents per day, hour and camera, false-alarm rate.
+- **Supervisor PIN**: required before deleting footage or history. This is an approval step, not encryption; use BitLocker for disk encryption.
+- **GPU decode** option and `scripts/export_models.py` (ONNX / TensorRT).
+- **Update rollback**: the last installers are kept; Ctrl+K, "Roll back to previous version".
+- Server API: `POST /api/v1/cameras/{id}/sensitivity`.
