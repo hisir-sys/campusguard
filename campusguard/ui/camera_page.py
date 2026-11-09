@@ -505,7 +505,7 @@ class CamerasPage(QWidget):
         box = QVBoxLayout()
         box.setSpacing(2)
 
-        caption = QLabel(title.upper())
+        caption = QLabel(title)
         caption.setProperty("muted", True)
         caption.setAlignment(Qt.AlignmentFlag.AlignCenter)
 

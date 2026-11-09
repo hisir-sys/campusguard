@@ -80,7 +80,7 @@ class SettingsPage(QWidget):
             1,
         )
 
-        self.status_pill = QLabel("SYSTEM CONTROLS")
+        self.status_pill = QLabel("System controls")
         self.status_pill.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.status_pill.setMinimumHeight(30)
         self.status_pill.setStyleSheet(
@@ -112,7 +112,7 @@ class SettingsPage(QWidget):
         # AI ENGINE
         # ------------------------------------------------------------------
         ai_section = SettingsSection(
-            "AI ENGINE",
+            "AI engine",
             "Control the live detection pipeline and how aggressively CampusGuard reacts to detected activity.",
         )
 
@@ -184,7 +184,7 @@ class SettingsPage(QWidget):
         # APPEARANCE
         # ------------------------------------------------------------------
         appearance_section = SettingsSection(
-            "APPEARANCE",
+            "Appearance",
             "Choose the visual theme used across the CampusGuard desktop interface.",
         )
 
@@ -216,7 +216,7 @@ class SettingsPage(QWidget):
         # ALERTS & WORKSPACE
         # ------------------------------------------------------------------
         workspace_section = SettingsSection(
-            "ALERTS & WORKSPACE",
+            "Alerts and workspace",
             "Sound, start-up page and navigation behaviour.",
         )
         workspace_form = QFormLayout()
@@ -256,7 +256,7 @@ class SettingsPage(QWidget):
         # PHONE ALERTS
         # ------------------------------------------------------------------
         phone_section = SettingsSection(
-            "PHONE ALERTS",
+            "Phone alerts",
             "Send the camera, time, place and confidence of an incident to phones. WhatsApp can be free (you tap Send) or automatic (needs a Meta Business account).",
         )
         phone_form = QFormLayout()
@@ -329,7 +329,7 @@ class SettingsPage(QWidget):
         # SYSTEM HEALTH & REPORTS
         # ------------------------------------------------------------------
         health_section = SettingsSection(
-            "SYSTEM HEALTH & REPORTS",
+            "System health and reports",
             "Storage and GPU status, and an export of incidents for review.",
         )
         health_form = QFormLayout()
@@ -374,7 +374,7 @@ class SettingsPage(QWidget):
         # CONNECTION MODE
         # ------------------------------------------------------------------
         connection_section = SettingsSection(
-            "CONNECTION MODE",
+            "Connection mode",
             "Local mode keeps using this PC. Server mode connects to a school server over HTTP or HTTPS. Prefer HTTPS or a trusted school LAN/VPN.",
         )
         connection_form = QFormLayout()
@@ -413,7 +413,7 @@ class SettingsPage(QWidget):
         # SYSTEM STATUS
         # ------------------------------------------------------------------
         status_section = SettingsSection(
-            "SYSTEM STATUS",
+            "System status",
             "Current runtime information is reported by the application and AI worker.",
         )
 
@@ -451,7 +451,7 @@ class SettingsPage(QWidget):
         from campusguard.build_info import BUILD_VERSION
 
         update_section = SettingsSection(
-            "UPDATES",
+            "Updates",
             "CampusGuard checks for a new version every time it starts and asks before installing.",
         )
         update_row = QHBoxLayout()

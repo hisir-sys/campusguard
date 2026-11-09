@@ -1,8 +1,8 @@
-"""CampusGuard logo: a lime shield with a check mark, drawn in code so it is sharp at any size.
+"""CampusGuard logo: an open "C" with a lens dot, drawn in code so it is sharp at any size.
 
-LogoMark   - the static logo.
-LogoReveal - the launch animation from the brand film: glass disc with a check, melting into
-             a glass tile while the shield draws in, then the plain lime shield stays.
+LogoMark   - the static glyph (C + lens dot) for the app chrome.
+LogoReveal - the launch animation: a glass disc melts into a glass tile while the C draws in
+             and the lens dot appears. The finished tile stays.
 Colours follow the active theme (dark / light).
 """
 from __future__ import annotations
@@ -20,8 +20,14 @@ from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from campusguard.ui.theme import get_palette
 
-LOGO_LIME_DARK = "#EEF0F3"          # silver-white mark on graphite
-LOGO_LIME_LIGHT = "#262428"          # charcoal mark on the light grey
+LOGO_LIME_DARK = "#ECEEF1"          # fog-white C on graphite
+LOGO_LIME_LIGHT = "#1B1D22"          # graphite C on the light grey
+LENS_DARK = "#9DB6E8"                # lens dot, dark theme
+LENS_LIGHT = "#4F6FA8"               # lens dot, light theme
+
+
+def lens_color() -> QColor:
+    return QColor(LENS_LIGHT if get_palette().name == "light" else LENS_DARK)
 
 
 def logo_color() -> QColor:
@@ -85,6 +91,29 @@ def shield_path(box: QRectF) -> QPainterPath:
     return path
 
 
+def c_path(box: QRectF) -> QPainterPath:
+    """The open C: a 276 degree arc centred in ``box`` (radius 27% of the side)."""
+    side = min(box.width(), box.height())
+    radius = side * 0.27
+    rect = QRectF(box.center().x() - radius, box.center().y() - radius, radius * 2, radius * 2)
+    path = QPainterPath()
+    path.arcMoveTo(rect, 42)
+    path.arcTo(rect, 42, 276)
+    return path
+
+
+def draw_lens(painter: QPainter, box: QRectF, opacity: float = 1.0) -> None:
+    side = min(box.width(), box.height())
+    painter.save()
+    painter.setOpacity(painter.opacity() * opacity)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(lens_color())
+    centre = QPointF(box.center().x() + side * 0.154, box.center().y())
+    r = side * 0.0625
+    painter.drawEllipse(centre, r, r)
+    painter.restore()
+
+
 def check_path(box: QRectF) -> QPainterPath:
     w, h = box.width() / 100.0, box.height() / 100.0
     path = QPainterPath(QPointF(box.x() + 33 * w, box.y() + 51 * h))
@@ -136,9 +165,13 @@ class LogoMark(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         box = QRectF(0, 0, self.width(), self.height())
-        width = self.width() * 0.07
-        _draw_progress(painter, shield_path(box), 1.0, (QColor(self._tint) if self._tint else ui_logo_color()), width, 0.6)
-        _draw_progress(painter, check_path(box), 1.0, (QColor(self._tint) if self._tint else ui_logo_color()), width, 0.6)
+        # glyph only: the C fills the widget (tile side = widget side / 0.80)
+        tile = QRectF(box)
+        tile.setSize(box.size() / 0.80)
+        tile.moveCenter(box.center())
+        width = tile.width() * 0.135
+        _draw_progress(painter, c_path(tile), 1.0, (QColor(self._tint) if self._tint else ui_logo_color()), width, 0.0)
+        draw_lens(painter, tile)
         painter.end()
 
 
@@ -254,9 +287,8 @@ class LogoReveal(QWidget):
         disc_in = _smooth(0.0, 0.40, t)
         morph = _smooth(0.65, 1.55, t)                       # disc -> rounded tile
         edge = _smooth(0.70, 1.15, t) * (1.0 - _smooth(1.85, 2.65, t))
-        shield_p = _smooth(0.95, 1.85, t)
-        tile_fade = 1.0 - _smooth(2.15, 2.85, t)
-        shrink = _smooth(2.15, 2.85, t)                       # tile gone: shield settles smaller
+        c_p = _smooth(0.95, 1.85, t)
+        dot_p = _smooth(1.65, 2.2, t)
 
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -267,19 +299,13 @@ class LogoReveal(QWidget):
         side = size * (0.52 + 0.26 * morph) * pop
         path = self._tile_path(centre, side, 1.0 - morph)
         rect = QRectF(centre.x() - side / 2.0, centre.y() - side / 2.0, side, side)
-        glass_strength = disc_in * tile_fade
-        if glass_strength > 0.003:
-            self._paint_glass(painter, path, rect, glass_strength)
-            self._paint_liquid_edge(painter, path, centre, rect, edge * tile_fade, t)
+        if disc_in > 0.003:
+            self._paint_glass(painter, path, rect, disc_in)   # the tile stays: it is part of the logo
+            self._paint_liquid_edge(painter, path, centre, rect, edge, t)
 
-        scale = 1.0 - 0.20 * shrink
-        box_side = size * 0.62 * scale * pop
-        box = QRectF(centre.x() - box_side / 2.0, centre.y() - box_side / 2.0, box_side, box_side)
-        check_side = size * (0.74 - 0.14 * morph) * scale * pop
-        check_box = QRectF(centre.x() - check_side / 2.0, centre.y() - check_side / 2.0, check_side, check_side)
-        width = size * (0.070 - 0.020 * _smooth(1.2, 2.3, t)) * scale
+        width = side * 0.135
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.setOpacity(disc_in)
-        _draw_progress(painter, shield_path(box), shield_p, color, width, 0.0)
-        _draw_progress(painter, check_path(check_box), 1.0, color, width, 0.0)
+        _draw_progress(painter, c_path(rect), c_p, color, width, 0.0)
+        draw_lens(painter, rect, dot_p)
         painter.end()
