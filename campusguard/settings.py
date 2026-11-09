@@ -2,6 +2,20 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, fields
 from typing import Any
 
+# Per-camera sensitivity: added to the global confidence threshold for that camera only.
+SENSITIVITY_LEVELS = (
+    ("Sensitive (more alerts)", -0.10),
+    ("Default", 0.0),
+    ("Cautious (fewer false alarms)", 0.10),
+    ("Strict (very few alerts)", 0.20),
+)
+
+
+def effective_threshold(base: float, offset: float) -> float:
+    """Global threshold plus a camera's offset, kept inside the valid 5%-99% range."""
+    return min(0.99, max(0.05, float(base) + float(offset)))
+
+
 START_PAGES = ("dashboard", "cameras", "incidents", "alerts")
 
 
@@ -63,6 +77,7 @@ class CameraConfig:
     source_address: str
     ai_enabled: bool
     created_at: str
+    threshold_offset: float = 0.0
 
 @dataclass(frozen=True)
 class CameraCredentials:

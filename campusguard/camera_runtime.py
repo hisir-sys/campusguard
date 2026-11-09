@@ -20,7 +20,9 @@ from campusguard.engine.registry import ACTIVE_CAMERAS
 from campusguard.footage import FightFootageRecorder
 from campusguard.storage import application_data_dir
 from campusguard.credentials import CredentialVault
-from campusguard.settings import AppSettings, CameraConfig, CameraCredentials
+from dataclasses import replace as _dc_replace
+
+from campusguard.settings import AppSettings, CameraConfig, CameraCredentials, effective_threshold
 
 try:
     cv2.setLogLevel(cv2.LOG_LEVEL_ERROR)
@@ -180,11 +182,18 @@ class LatestFrameMailbox:
             self._condition.notify_all()
 
 
+def _replace_threshold(settings: AppSettings, threshold: float) -> AppSettings:
+    from dataclasses import replace
+    return replace(settings, confidence_threshold=threshold)
+
+
 class RuntimeOptions:
-    def __init__(self, settings: AppSettings, ai_enabled: bool) -> None:
+    def __init__(self, settings: AppSettings, ai_enabled: bool, threshold_offset: float = 0.0) -> None:
         self._lock = threading.RLock()
         self._settings = settings
         self._ai_enabled = ai_enabled
+        self._threshold_offset = float(threshold_offset)
+        self._adjusted: tuple[AppSettings, float, AppSettings] | None = None
         self._source_fps = 30.0
         self._preview_enabled = True
         self._snapshot_enabled = False
@@ -192,7 +201,25 @@ class RuntimeOptions:
 
     def snapshot(self) -> tuple[AppSettings, bool]:
         with self._lock:
-            return self._settings, self._ai_enabled
+            return self._effective_settings(), self._ai_enabled
+
+    def _effective_settings(self) -> AppSettings:
+        """The global settings with this camera's sensitivity offset applied (cached)."""
+        if not self._threshold_offset:
+            return self._settings
+        cached = self._adjusted
+        if cached is not None and cached[0] is self._settings and cached[1] == self._threshold_offset:
+            return cached[2]
+        adjusted = _replace_threshold(
+            self._settings, effective_threshold(self._settings.confidence_threshold, self._threshold_offset)
+        )
+        self._adjusted = (self._settings, self._threshold_offset, adjusted)
+        return adjusted
+
+    def update_threshold_offset(self, offset: float) -> None:
+        with self._lock:
+            self._threshold_offset = float(offset)
+            self._adjusted = None
 
     def update_settings(self, settings: AppSettings) -> None:
         with self._lock:
@@ -817,7 +844,7 @@ class CameraManager(QObject):
             )
             return
         mailbox = LatestFrameMailbox()
-        options = RuntimeOptions(self._settings, camera.ai_enabled)
+        options = RuntimeOptions(self._settings, camera.ai_enabled, camera.threshold_offset)
         options.set_preview_enabled(self.default_preview)
         capture = CameraCaptureThread(camera, credentials, mailbox, options)
         analysis = FrameAnalysisThread(mailbox, options, self.footage_dir)
@@ -890,6 +917,11 @@ class CameraManager(QObject):
         session = self._sessions.get(camera_id)
         if session is not None:
             session.options.update_ai_enabled(enabled)
+
+    def set_camera_threshold_offset(self, camera_id: str, offset: float) -> None:
+        session = self._sessions.get(camera_id)
+        if session is not None:
+            session.options.update_threshold_offset(offset)
 
     def reconnect(self, camera_id: str, camera: CameraConfig | None = None) -> None:
         if self._shutting_down:

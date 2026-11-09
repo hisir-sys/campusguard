@@ -491,13 +491,17 @@ def _severity_widget(
     return label
 
 
+# Statuses that close an incident (it moves to "Resolved history").
+CLOSED_STATUSES = {"RESOLVED", "DISMISSED", "FALSE_ALARM"}
+
+
 def _status_widget(
     status: str,
 ) -> QLabel:
     value = str(status).upper()
 
     label = _pill(
-        value,
+        value.replace("_", " "),
         "statusPill",
     )
 
@@ -505,7 +509,7 @@ def _status_widget(
         label.setProperty("status", "new")
     elif value == "ACKNOWLEDGED":
         label.setProperty("status", "acknowledged")
-    elif value == "RESOLVED":
+    elif value in CLOSED_STATUSES:
         label.setProperty("status", "resolved")
 
     label.style().unpolish(label)
@@ -1236,6 +1240,7 @@ class IncidentsPage(QWidget):
                 "NEW",
                 "ACKNOWLEDGED",
                 "RESOLVED",
+                "FALSE_ALARM",
             ]
         )
 
@@ -1502,7 +1507,7 @@ class IncidentsPage(QWidget):
                 sum(
                     1
                     for row in all_rows
-                    if row["status"] == "RESOLVED"
+                    if row["status"] in CLOSED_STATUSES
                 )
             )
         )
@@ -1515,13 +1520,13 @@ class IncidentsPage(QWidget):
         current = [
             row
             for row in rows
-            if row["status"] != "RESOLVED"
+            if row["status"] not in CLOSED_STATUSES
         ]
 
         resolved = [
             row
             for row in rows
-            if row["status"] == "RESOLVED"
+            if row["status"] in CLOSED_STATUSES
         ]
 
         self._update_preview(
@@ -1726,8 +1731,8 @@ class IncidentsPage(QWidget):
             table.setColumnWidth(3, 95)
             table.setColumnWidth(4, 150)
             table.setColumnWidth(5, 105)
-            table.setColumnWidth(6, 150)
-            table.setColumnWidth(7, 190)
+            table.setColumnWidth(6, 175)
+            table.setColumnWidth(7, 262)
 
             _apply_table_palette(
                 table
@@ -1792,7 +1797,7 @@ class IncidentsPage(QWidget):
                     index,
                     7,
                     row,
-                    allow_resolve=(row["status"] != "RESOLVED"),
+                    allow_resolve=(row["status"] not in CLOSED_STATUSES),
                 )
 
                 table.setRowHeight(index, 68)
@@ -1849,7 +1854,20 @@ class IncidentsPage(QWidget):
             )
             action_layout.addWidget(ok_button)
 
+            false_button = _action_button("False alarm", "view")
+            false_button.setCursor(Qt.CursorShape.PointingHandCursor)
+            false_button.setToolTip("Nothing happened: close this incident and remember it as a false alarm.")
+            false_button.clicked.connect(
+                lambda checked=False, public_id=row["public_id"]:
+                self._mark_false_alarm(public_id)
+            )
+            action_layout.addWidget(false_button)
+
         table.setCellWidget(row_index, column, actions)
+
+    def _mark_false_alarm(self, public_id: str) -> None:
+        self.status_change_requested.emit(public_id, "FALSE_ALARM")
+        self._close_popup()
 
     def _resolve_incident(self, public_id: str) -> None:
         self.status_change_requested.emit(public_id, "RESOLVED")

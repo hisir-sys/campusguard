@@ -53,6 +53,7 @@ class SettingsPage(QWidget):
     server_connection_test_requested = Signal(str, str)
     server_token_changed = Signal(str)
     update_check_requested = Signal()
+    export_report_requested = Signal()
 
     def __init__(self, settings: AppSettings, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -238,6 +239,32 @@ class SettingsPage(QWidget):
         self.reset_button.clicked.connect(self._reset_defaults)
 
         # ------------------------------------------------------------------
+        # SYSTEM HEALTH & REPORTS
+        # ------------------------------------------------------------------
+        health_section = SettingsSection(
+            "SYSTEM HEALTH & REPORTS",
+            "Storage and GPU status, and an export of incidents for review.",
+        )
+        health_form = QFormLayout()
+        health_form.setHorizontalSpacing(24)
+        health_form.setVerticalSpacing(12)
+        self.health_status_label = QLabel("Checking...")
+        self.health_disk_label = QLabel("-")
+        self.health_footage_label = QLabel("-")
+        self.health_gpu_label = QLabel("-")
+        for label in (self.health_status_label, self.health_disk_label, self.health_footage_label, self.health_gpu_label):
+            label.setWordWrap(True)
+        self.export_report_button = QPushButton("Export incident report (CSV)")
+        health_form.addRow("Status", self.health_status_label)
+        health_form.addRow("Footage drive", self.health_disk_label)
+        health_form.addRow("Saved clips", self.health_footage_label)
+        health_form.addRow("GPU", self.health_gpu_label)
+        health_form.addRow("", self.export_report_button)
+        health_section.body.addLayout(health_form)
+        content_layout.addWidget(health_section)
+        self.export_report_button.clicked.connect(self.export_report_requested.emit)
+
+        # ------------------------------------------------------------------
         # CONNECTION MODE
         # ------------------------------------------------------------------
         connection_section = SettingsSection(
@@ -404,6 +431,23 @@ class SettingsPage(QWidget):
 
         frame.value_label = value_label  # type: ignore[attr-defined]
         return frame
+
+    def set_health(self, report, extra_problems=()) -> None:
+        """Show a system_health.HealthReport (plus camera problems) in the health section."""
+        gb = 1024 ** 3
+        self.health_disk_label.setText(
+            f"{report.disk_free / gb:.1f} GB free of {report.disk_total / gb:.0f} GB ({report.disk_free_percent:.0f}% free)"
+            if report.disk_total else "Unknown"
+        )
+        self.health_footage_label.setText(f"{report.footage_clips} clips, {report.footage_bytes / gb:.2f} GB")
+        self.health_gpu_label.setText(
+            f"{report.gpu_name} - {report.gpu_free_mb} of {report.gpu_total_mb} MB free"
+            if report.gpu_name else "No GPU in use (running on CPU)"
+        )
+        problems = list(report.problems) + list(extra_problems)
+        self.health_status_label.setText(
+            "All systems normal." if not problems else "\n".join(message for _level, message in problems)
+        )
 
     def focus_setting(self, name: str) -> None:
         """Scroll to and focus a named control (used by whole-app search)."""

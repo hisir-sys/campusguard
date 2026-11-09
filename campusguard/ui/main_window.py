@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 import sys
+import time
+from datetime import datetime
 from dataclasses import replace
 from pathlib import Path
 import threading
@@ -26,6 +28,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from campusguard import system_health
 from campusguard.footage import clear_footage
 from campusguard.credentials import CredentialVault
 from campusguard.settings import (
@@ -552,6 +555,15 @@ class MainWindow(QMainWindow):
         self._refresh_timer.setInterval(1500)
         self._refresh_timer.timeout.connect(self._refresh_pages)
         self._refresh_timer.start()
+
+        # System health: disk space, GPU and camera problems, checked every minute.
+        self._health_notified: dict[str, float] = {}
+        self._health_timer = QTimer(self)
+        self._health_timer.setInterval(60_000)
+        self._health_timer.timeout.connect(self._check_system_health)
+        self._health_timer.start()
+        QTimer.singleShot(4000, self._check_system_health)
+        self.settings_page.export_report_requested.connect(self._export_report)
 
         # Do not start camera/model workers inside the window constructor.
         # Starting them after the event loop begins guarantees the Dashboard
@@ -1095,6 +1107,7 @@ class MainWindow(QMainWindow):
         self.camera_page.remove_requested.connect(self._remove_camera)
         self.camera_page.reconnect_requested.connect(self._reconnect_camera)
         self.camera_page.ai_changed.connect(self._set_camera_ai)
+        self.camera_page.sensitivity_changed.connect(self._set_camera_sensitivity)
         self.dashboard.clear_notifications_requested.connect(self._clear_dashboard_notifications)
         self.incidents_page.status_change_requested.connect(self._set_incident_status)
         self.incidents_page.clear_all_requested.connect(self._clear_all_history)
@@ -1337,6 +1350,51 @@ class MainWindow(QMainWindow):
             return
         self.camera_manager.reconnect(camera_id, camera)
         self._sync_cameras()
+
+    def _check_system_health(self) -> None:
+        """Refresh the Settings health card and raise a notification for new problems."""
+        try:
+            report = system_health.collect(self.repository.footage_dir)
+            camera_issues = system_health.camera_problems(
+                {camera_id: stats.status for camera_id, stats in self.camera_stats.items()}
+            ) if self.settings.connection_mode == "local" else []
+        except Exception:
+            return
+        self.settings_page.set_health(report, camera_issues)
+        now = time.monotonic()
+        for level, message in list(report.problems) + camera_issues:
+            last = self._health_notified.get(message)
+            if last is not None and now - last < 6 * 3600:
+                continue
+            self._health_notified[message] = now
+            self.repository.add_notification("system_health", message)
+            self.statusBar().showMessage(message, 10000)
+            self.dashboard.refresh_summary()
+
+    def _export_report(self) -> None:
+        stamp = datetime.now().strftime("%Y%m%d-%H%M")
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export incident report", f"campusguard-incidents-{stamp}.csv", "CSV files (*.csv)"
+        )
+        if not path:
+            return
+        audit_path = str(Path(path).with_name(Path(path).stem + "-audit.csv"))
+        try:
+            count = self.repository.export_incidents_csv(path, audit_path)
+        except OSError as error:
+            self.statusBar().showMessage(f"Could not save the report: {error}", 8000)
+            return
+        self.statusBar().showMessage(f"Exported {count} incidents and the audit log to {Path(path).parent}.", 8000)
+
+    def _set_camera_sensitivity(self, camera_id: str, offset: float) -> None:
+        camera = self.cameras.get(camera_id)
+        if camera is None:
+            return
+        self.cameras[camera_id] = replace(camera, threshold_offset=float(offset))
+        self.repository.set_camera_threshold_offset(camera_id, offset)
+        if self.camera_manager is not None:
+            self.camera_manager.set_camera_threshold_offset(camera_id, offset)
+        self.statusBar().showMessage(f"{camera.name}: alert sensitivity updated.", 4000)
 
     def _set_camera_ai(self, camera_id: str, enabled: bool) -> None:
         camera = self.cameras.get(camera_id)
@@ -1595,6 +1653,7 @@ class MainWindow(QMainWindow):
             setting("Interface theme", "theme_input", "dark", "light", "appearance"),
             setting("Connection mode", "connection_mode_input", "local", "server"),
             Command("Toggle light / dark theme", "Action", self._toggle_theme, ("theme", "dark mode", "light mode")),
+            Command("Export incident report", "Action", self._export_report, ("csv", "download", "evidence", "report")),
             Command("Check for updates", "Action", self.update_check_requested.emit, ("update", "version", "upgrade")),
             Command("Reset all settings", "Action", lambda: (self.navigate("settings"), self.settings_page.focus_setting("reset_button")), ("defaults", "restore")),
         ]

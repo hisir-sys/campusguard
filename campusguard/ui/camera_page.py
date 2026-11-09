@@ -5,6 +5,7 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
 
     QCheckBox,
+    QComboBox,
     QDialog,
     QFileDialog,
     QFrame,
@@ -17,7 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from campusguard.settings import AppSettings, CameraConfig, CameraStats
+from campusguard.settings import SENSITIVITY_LEVELS, AppSettings, CameraConfig, CameraStats
 from campusguard.ui.common import CameraFormDialog, make_page_title, set_status_label
 from campusguard.ui.theme import get_palette, rgba
 
@@ -26,6 +27,7 @@ class CameraRow(QFrame):
     remove_requested = Signal(str)
     reconnect_requested = Signal(str)
     ai_changed = Signal(str, bool)
+    sensitivity_changed = Signal(str, float)
 
     def __init__(self, camera: CameraConfig, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -103,6 +105,27 @@ class CameraRow(QFrame):
 
         layout.addLayout(ai_box)
 
+        # Per-camera sensitivity
+        sens_box = QVBoxLayout()
+        sens_box.setSpacing(3)
+        sens_box.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.sensitivity_combo = QComboBox()
+        self.sensitivity_combo.setMinimumWidth(190)
+        for label, offset in SENSITIVITY_LEVELS:
+            self.sensitivity_combo.addItem(label, offset)
+        self._select_sensitivity(camera.threshold_offset)
+        self.sensitivity_combo.currentIndexChanged.connect(
+            lambda _index: self.sensitivity_changed.emit(
+                self.camera.camera_id, float(self.sensitivity_combo.currentData())
+            )
+        )
+        sens_box.addWidget(self.sensitivity_combo)
+        sens_hint = QLabel("Alert sensitivity")
+        sens_hint.setProperty("muted", True)
+        sens_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        sens_box.addWidget(sens_hint)
+        layout.addLayout(sens_box)
+
         # Actions
         actions = QHBoxLayout()
         actions.setSpacing(7)
@@ -120,8 +143,18 @@ class CameraRow(QFrame):
 
         layout.addLayout(actions)
 
+    def _select_sensitivity(self, offset: float) -> None:
+        index = min(
+            range(self.sensitivity_combo.count()),
+            key=lambda i: abs(float(self.sensitivity_combo.itemData(i)) - float(offset)),
+        )
+        self.sensitivity_combo.blockSignals(True)
+        self.sensitivity_combo.setCurrentIndex(index)
+        self.sensitivity_combo.blockSignals(False)
+
     def update_camera(self, camera: CameraConfig) -> None:
         self.camera = camera
+        self._select_sensitivity(camera.threshold_offset)
 
         self.ai_checkbox.blockSignals(True)
         self.ai_checkbox.setChecked(camera.ai_enabled)
@@ -334,6 +367,7 @@ class CamerasPage(QWidget):
     remove_requested = Signal(str)
     reconnect_requested = Signal(str)
     ai_changed = Signal(str, bool)
+    sensitivity_changed = Signal(str, float)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -506,6 +540,7 @@ class CamerasPage(QWidget):
                 row.remove_requested.connect(self.remove_requested.emit)
                 row.reconnect_requested.connect(self.reconnect_requested.emit)
                 row.ai_changed.connect(self.ai_changed.emit)
+                row.sensitivity_changed.connect(self.sensitivity_changed.emit)
 
                 self._rows[camera.camera_id] = row
                 self.rows_layout.insertWidget(

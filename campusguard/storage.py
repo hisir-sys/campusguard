@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import hashlib
 import json
 import sqlite3
 import threading
@@ -60,7 +62,15 @@ class Repository:
             source_type TEXT NOT NULL,
             source_address TEXT NOT NULL,
             ai_enabled INTEGER NOT NULL DEFAULT 1,
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            threshold_offset REAL NOT NULL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            at TEXT NOT NULL,
+            action TEXT NOT NULL,
+            target TEXT NOT NULL DEFAULT '',
+            detail TEXT NOT NULL DEFAULT ''
         );
         CREATE TABLE IF NOT EXISTS incidents (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -133,6 +143,11 @@ class Repository:
                     "PRAGMA table_info(incidents)"
                 ).fetchall()
             }
+            camera_columns = {row["name"] for row in connection.execute("PRAGMA table_info(cameras)").fetchall()}
+            if "threshold_offset" not in camera_columns:
+                connection.execute("ALTER TABLE cameras ADD COLUMN threshold_offset REAL NOT NULL DEFAULT 0")
+            if "footage_sha256" not in columns:
+                connection.execute("ALTER TABLE incidents ADD COLUMN footage_sha256 TEXT")
             if "footage_path" not in columns:
                 connection.execute(
                     "ALTER TABLE incidents ADD COLUMN footage_path TEXT"
@@ -164,6 +179,7 @@ class Repository:
                 source_address=row["source_address"],
                 ai_enabled=bool(row["ai_enabled"]),
                 created_at=row["created_at"],
+                threshold_offset=float(row["threshold_offset"] or 0.0),
             )
             for row in rows
         ]
@@ -208,6 +224,14 @@ class Repository:
             ai_enabled=ai_enabled,
             created_at=created_at,
         )
+
+    def set_camera_threshold_offset(self, camera_id: str, offset: float) -> None:
+        offset = max(-0.25, min(0.25, float(offset)))
+        with self._lock, self._connection() as connection:
+            connection.execute(
+                "UPDATE cameras SET threshold_offset = ? WHERE camera_id = ?", (offset, camera_id)
+            )
+        self.log_audit("camera_sensitivity", camera_id, f"offset {offset:+.2f}")
 
     def remove_camera(self, camera_id: str) -> None:
         with self._lock, self._connection() as connection:
@@ -353,12 +377,94 @@ class Repository:
                     (self._next_sync_seq(connection), str(path)),
                 )
 
+    @staticmethod
+    def file_sha256(path: str | Path) -> str | None:
+        digest = hashlib.sha256()
+        try:
+            with open(path, "rb") as handle:
+                for chunk in iter(lambda: handle.read(1 << 20), b""):
+                    digest.update(chunk)
+        except OSError:
+            return None
+        return digest.hexdigest()
+
     def attach_incident_footage(self, public_id: str, footage_path: str) -> None:
+        sha256 = self.file_sha256(footage_path)
         with self._lock, self._connection() as connection:
             connection.execute(
-                "UPDATE incidents SET footage_path = ?, sync_seq = ? WHERE public_id = ?",
-                (str(footage_path), self._next_sync_seq(connection), public_id),
+                "UPDATE incidents SET footage_path = ?, footage_sha256 = ?, sync_seq = ? WHERE public_id = ?",
+                (str(footage_path), sha256, self._next_sync_seq(connection), public_id),
             )
+
+    def footage_integrity(self, incident: dict[str, Any]) -> str:
+        """'OK' if the clip still matches the hash saved when it was recorded."""
+        path = incident.get("footage_path")
+        if not path:
+            return "NO CLIP"
+        if not Path(path).is_file():
+            return "MISSING"
+        saved = incident.get("footage_sha256")
+        if not saved:
+            return "UNVERIFIED"
+        return "OK" if self.file_sha256(path) == saved else "MODIFIED"
+
+    # ------------------------------------------------------------------
+    # Audit log: who did what to which incident or camera
+    # ------------------------------------------------------------------
+    def log_audit(self, action: str, target: str = "", detail: str = "") -> None:
+        try:
+            with self._lock, self._connection() as connection:
+                connection.execute(
+                    "INSERT INTO audit_log(at, action, target, detail) VALUES (?, ?, ?, ?)",
+                    (datetime.now(timezone.utc).isoformat(timespec="seconds"), action, target, detail),
+                )
+        except sqlite3.Error:
+            pass  # an audit write must never break the operation it records
+
+    def list_audit(self, limit: int = 1000) -> list[dict[str, Any]]:
+        with self._lock, self._connection() as connection:
+            rows = connection.execute(
+                "SELECT * FROM audit_log ORDER BY id DESC LIMIT ?", (max(1, limit),)
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def export_incidents_csv(self, incidents_path: str | Path, audit_path: str | Path | None = None) -> int:
+        """Write a review report (and optionally the audit log); returns the incident count."""
+        rows = self.list_incidents(limit=100000)
+        with open(incidents_path, "w", newline="", encoding="utf-8-sig") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["incident_id", "camera", "camera_id", "time_utc", "event", "confidence_percent",
+                             "severity", "status", "clip", "clip_sha256", "clip_integrity"])
+            for row in rows:
+                writer.writerow([
+                    row["public_id"], row["camera_name"], row["camera_id"], row["happened_at"], row["event"],
+                    f"{float(row['confidence']) * 100:.1f}", row["severity"], row["status"],
+                    Path(row["footage_path"]).name if row.get("footage_path") else "",
+                    row.get("footage_sha256") or "", self.footage_integrity(row),
+                ])
+        if audit_path is not None:
+            with open(audit_path, "w", newline="", encoding="utf-8-sig") as handle:
+                writer = csv.writer(handle)
+                writer.writerow(["time_utc", "action", "target", "detail"])
+                for row in reversed(self.list_audit(limit=100000)):
+                    writer.writerow([row["at"], row["action"], row["target"], row["detail"]])
+        self.log_audit("export_report", str(Path(incidents_path).name), f"{len(rows)} incidents")
+        return len(rows)
+
+    def review_counts(self) -> dict[str, dict[str, int]]:
+        """Per camera: how many incidents were confirmed vs marked false alarm."""
+        counts: dict[str, dict[str, int]] = {}
+        with self._lock, self._connection() as connection:
+            for row in connection.execute(
+                "SELECT camera_name, status, COUNT(*) AS n FROM incidents GROUP BY camera_name, status"
+            ).fetchall():
+                entry = counts.setdefault(row["camera_name"], {"total": 0, "false_alarm": 0, "confirmed": 0})
+                entry["total"] += row["n"]
+                if row["status"] in {"FALSE_ALARM", "DISMISSED"}:
+                    entry["false_alarm"] += row["n"]
+                elif row["status"] == "CONFIRMED":
+                    entry["confirmed"] += row["n"]
+        return counts
 
     def update_incident_assessment(
         self, public_id: str, confidence: float, severity: str
@@ -389,6 +495,7 @@ class Repository:
                 connection.execute(
                     "UPDATE alerts SET acknowledged = 1 WHERE incident_id = ?", (row["id"],)
                 )
+        self.log_audit("incident_status", public_id, status)
 
     # ------------------------------------------------------------------
     # Phase 6: alert synchronisation between servers of one school
