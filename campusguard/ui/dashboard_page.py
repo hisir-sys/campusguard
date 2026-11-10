@@ -861,7 +861,7 @@ class DashboardPage(QWidget):
         trend_card.setMinimumHeight(300)
         self._trend_total = QLabel("0")
         self._trend_total.setObjectName("insightFigure")
-        self._trend_total.setStyleSheet("font-family: 'Outfit', 'DM Sans'; font-size: 26pt; font-weight: 600;")
+        self._trend_total.setStyleSheet("font-family: 'Outfit', 'Inter'; font-size: 26pt; font-weight: 600;")
         self._trend_delta = QLabel("last %d days" % self.TREND_DAYS)
         self._trend_delta.setProperty("muted", True)
         figure = QHBoxLayout()
@@ -1259,7 +1259,7 @@ class DashboardPage(QWidget):
         palette = get_palette()
         dark = palette.name == "dark"
         fill = rgba("#FFFFFF", 8 if dark else 150)
-        edge = rgba("#FFFFFF", 34 if dark else 40) if dark else rgba("#0B0D12", 26)
+        edge = rgba("#FFFFFF", 34 if dark else 40) if dark else rgba("#000000", 20)
         tile.setStyleSheet(
             f"QFrame#offlineCameraTile {{ background: {fill}; "
             f"border: 1px solid {edge}; border-top: 1px solid {rgba('#FFFFFF', 64 if dark else 255)}; "
@@ -1269,7 +1269,7 @@ class DashboardPage(QWidget):
     def _style_camera_preview(self, tile: CameraPreview) -> None:
         palette = get_palette()
         dark = palette.name == "dark"
-        border = rgba("#FFFFFF", 34) if dark else rgba("#0B0D12", 26)
+        border = rgba("#FFFFFF", 34) if dark else rgba("#000000", 20)
         fill = rgba("#FFFFFF", 8 if dark else 150)
         overlay = rgba("#111215", 218 if dark else 206)
         tile.setMinimumHeight(280)
