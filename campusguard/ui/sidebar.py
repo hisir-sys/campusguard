@@ -34,18 +34,26 @@ COMPACT_WIDTH = RAIL_WIDTH
 EXPANDED_WIDTH = RAIL_WIDTH + GAP + PANEL_WIDTH
 BOTTOM_CAPSULE_HEIGHT = 236
 
-# Pages that live "inside Home".
-HOME_PAGES = ("dashboard", "cameras", "incidents", "alerts", "server-viewer")
+# The Monitor flyout mirrors the reference's four primary destinations.
+# Secondary documentation stays in the flyout so it remains reachable without
+# occupying the compact rail; operational system pages stay on the rail.
+HOME_PAGES = ("dashboard", "cameras", "incidents", "alerts")
 HOME_GROUPS = (
-    ("Overview", (("Dashboard", "dashboard", "layout-dashboard"), ("Cameras", "cameras", "video"))),
-    ("Activity", (("Incidents", "incidents", "file-warning"), ("Alerts", "alerts", "bell"))),
-    ("Network", (("School server", "server-viewer", "server"),)),
+    ("Monitor", (
+        ("Dashboard", "dashboard", "layout-dashboard"),
+        ("Cameras", "cameras", "video"),
+        ("Incidents", "incidents", "file-warning"),
+        ("Alerts", "alerts", "bell"),
+    )),
+    ("Learn", (
+        ("About", "about", "info"),
+        ("How it works", "how-it-works", "route"),
+    )),
 )
 LEARN = (
     ("Services", "services", "layers"),
-    ("About", "about", "info"),
     ("Tools", "tools", "wrench"),
-    ("How it works", "how-it-works", "route"),
+    ("School server", "server-viewer", "server"),
 )
 # Kept for code that still imports the old structure.
 SECTIONS = (("HOME", tuple(i for _t, items in HOME_GROUPS for i in items)), ("LEARN", LEARN))
