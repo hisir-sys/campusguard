@@ -369,6 +369,7 @@ class Sidebar(QWidget):
     login_requested = Signal()
     search_submitted = Signal(str)
     camera_selected = Signal(str)
+    incident_filter_requested = Signal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -467,6 +468,22 @@ class Sidebar(QWidget):
                 item.clicked.connect(lambda _c=False, target=key: self.page_requested.emit(target))
                 self._register(key, item)
                 panel.addWidget(item)
+
+        # The HTML reference exposes status shortcuts directly in the flyout.
+        # Map those labels onto the application's real incident statuses.
+        panel.addWidget(_Divider("Status"))
+        for text, status, icon in (
+            ("New", "NEW", "circle-dot"),
+            ("Confirmed", "ACKNOWLEDGED", "check"),
+            ("False alarms", "FALSE_ALARM", "x-circle"),
+        ):
+            item = _PanelItem(text, icon)
+            item.clicked.connect(
+                lambda _c=False, value=status: self.incident_filter_requested.emit(value)
+            )
+            self._register(f"status-{status.lower()}", item)
+            panel.addWidget(item)
+
         panel.addStretch(1)
 
         panel.addWidget(_Divider("Search"))
