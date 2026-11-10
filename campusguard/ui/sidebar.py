@@ -37,9 +37,9 @@ BOTTOM_CAPSULE_HEIGHT = 236
 # Pages that live "inside Home".
 HOME_PAGES = ("dashboard", "cameras", "incidents", "alerts", "server-viewer")
 HOME_GROUPS = (
-    ("OVERVIEW", (("Dashboard", "dashboard", "layout-dashboard"), ("Cameras", "cameras", "video"))),
-    ("ACTIVITY", (("Incidents", "incidents", "file-warning"), ("Alerts", "alerts", "bell"))),
-    ("NETWORK", (("School server", "server-viewer", "server"),)),
+    ("Overview", (("Dashboard", "dashboard", "layout-dashboard"), ("Cameras", "cameras", "video"))),
+    ("Activity", (("Incidents", "incidents", "file-warning"), ("Alerts", "alerts", "bell"))),
+    ("Network", (("School server", "server-viewer", "server"),)),
 )
 LEARN = (
     ("Services", "services", "layers"),
@@ -125,15 +125,9 @@ class _Capsule(QFrame):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
 
     def paintEvent(self, event) -> None:
-        t = _tones()
-        span = None
-        if self.pill is not None:
-            g = self.pill.geometry()
-            if g.top() > self.height() / 2:  # pill at the bottom: caption above it
-                span = (14.0, g.top() - 10.0)
-            else:  # pill at the top: caption below it
-                span = (g.bottom() + 14.0, self.height() - 16.0)
-        _paint_capsule(self, 31, t["outer_top"], t["outer_bottom"], t["outer_edge"], self._caption, span)
+        # The outer capsule stays transparent: only the inner pill is drawn,
+        # so the rail reads as one quiet object instead of a box in a box.
+        return
 
 
 class _Pill(QFrame):
@@ -398,7 +392,7 @@ class Sidebar(QWidget):
         rail_col.setContentsMargins(0, 0, 0, 0)
         rail_col.setSpacing(GAP)
 
-        self.rail = _Capsule("CAMPUSGUARD NAV")
+        self.rail = _Capsule("")
         self.rail.setFixedWidth(RAIL_WIDTH)
         rail_layout = QVBoxLayout(self.rail)
         rail_layout.setContentsMargins(7, 7, 7, 14)

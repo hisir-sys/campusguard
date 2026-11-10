@@ -163,8 +163,8 @@ class LoginDialog(QDialog):
             + f"""
             QDialog {{ background: {pal.bg1}; border: 1px solid {rgba(pal.ink, 40)}; border-radius: 18px; }}
             QLabel {{ background: transparent; }}
-            QLabel#loginEyebrow {{ color: {pal.ink}; font-size: 8pt; font-weight: 700; letter-spacing: 2px; }}
-            QLabel#loginTitle {{ font-family: 'Manrope', 'DM Sans', 'Segoe UI'; font-size: 24pt; font-weight: 800; }}
+            QLabel#loginEyebrow {{ color: {pal.ink}; font-size: 8pt; font-weight: 600; letter-spacing: 0px; }}
+            QLabel#loginTitle {{ font-family: 'Manrope', 'DM Sans', 'Segoe UI'; font-size: 24pt; font-weight: 600; }}
             QLabel#loginIntro {{ color: {pal.text_dim}; font-size: 10pt; }}
             QLabel#loginMessage {{ border: 1px solid {rgba(pal.line, 30)}; border-radius: 10px; padding: 10px 12px; }}
             QLabel#loginMessage[kind="error"] {{ color: {pal.bad}; border-color: {rgba(pal.bad, 110)}; background: {rgba(pal.bad, 26)}; }}

@@ -658,7 +658,7 @@ class SearchControl(QWidget):
         self.esc_badge.setStyleSheet(
             f"QLabel {{ background: transparent; color: {pal.muted}; "
             f"border: 1px solid {rgba(pal.line, pal.line_alpha + 20)}; border-radius: 5px; "
-            "padding: 1px 5px; font-size: 7pt; font-weight: 700; }"
+            "padding: 1px 5px; font-size: 7pt; font-weight: 600; }"
         )
         self.update()
 
@@ -725,7 +725,7 @@ class _Logo(QWidget):
         row.setSpacing(10)
         self.icon = IconLabel("shield-check", 24, "accent")
         self.label = QLabel("CampusGuard")
-        self.label.setStyleSheet("font-size: 12.5pt; font-weight: 750;")
+        self.label.setStyleSheet("font-size: 12.5pt; font-weight: 600;")
         row.addWidget(self.icon)
         row.addWidget(self.label, 1)
         self.setCursor(Qt.CursorShape.PointingHandCursor)

@@ -290,13 +290,13 @@ class GlassPopup(QFrame):
             QPushButton[modelChoice="true"]:checked {{
                 background: {rgba(palette.edge, 35 if palette.name == "dark" else 32)};
                 border-color: {rgba(palette.edge, 150)};
-                font-weight: 700;
+                font-weight: 600;
             }}
 
             QLabel#popupSectionTitle {{
                 color: {palette.text_dim};
                 font-size: 9pt;
-                font-weight: 700;
+                font-weight: 600;
                 background: transparent;
                 border: none;
             }}
@@ -319,7 +319,7 @@ class GlassPopup(QFrame):
             QLabel#popupMetricValue {{
                 color: {palette.text};
                 font-size: 20pt;
-                font-weight: 750;
+                font-weight: 600;
                 background: transparent;
                 border: none;
             }}
@@ -558,17 +558,14 @@ class DashboardPage(QWidget):
         title_stack = QVBoxLayout()
         title_stack.setContentsMargins(0, 0, 0, 0)
         title_stack.setSpacing(5)
-        eyebrow = QLabel("CAMPUSGUARD  /  SECURITY OPERATIONS")
-        eyebrow.setObjectName("overviewEyebrow")
         self._welcome_title = QLabel("Campus overview")
         self._welcome_title.setObjectName("overviewTitle")
         self._welcome_subtitle = QLabel("A live view of cameras, incidents and campus activity")
         self._welcome_subtitle.setObjectName("overviewSubtitle")
-        title_stack.addWidget(eyebrow)
         title_stack.addWidget(self._welcome_title)
         title_stack.addWidget(self._welcome_subtitle)
         header_row.addLayout(title_stack, 1)
-        self._overview_badge = QLabel("●  MONITORING CONSOLE")
+        self._overview_badge = QLabel("●  Monitoring")
         self._overview_badge.setObjectName("overviewBadge")
         self._overview_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
         header_row.addWidget(self._overview_badge, 0, Qt.AlignmentFlag.AlignVCenter)
@@ -760,7 +757,7 @@ class DashboardPage(QWidget):
         active_model = QLabel("Spontim 1.0")
         active_model.setProperty("kvvalue", True)
         active_model.setStyleSheet(
-            "font-size: 13pt; font-weight: 700; letter-spacing: -0.2px;"
+            "font-size: 13pt; font-weight: 600; letter-spacing: -0.2px;"
         )
         layout.addWidget(active_model)
         self.engine_values["violence_model"] = active_model
@@ -859,13 +856,13 @@ class DashboardPage(QWidget):
         frame.setObjectName("dashboardGlassCard")
         self._install_hover_effect(frame)
 
-        view_all = QPushButton("See All")
+        view_all = QPushButton("See all")
         view_all.setProperty("link", True)
         view_all.setCursor(Qt.CursorShape.PointingHandCursor)
         view_all.clicked.connect(lambda _checked=False: self._open_popup("notifications"))
 
         view_alerts = QPushButton(
-            "View Alerts"
+            "View alerts"
         )
 
         view_alerts.setProperty(
@@ -883,7 +880,7 @@ class DashboardPage(QWidget):
         )
 
         clear_notifications = QPushButton(
-            "Clear All"
+            "Clear all"
         )
         clear_notifications.setProperty(
             "link",
@@ -1055,12 +1052,12 @@ class DashboardPage(QWidget):
             }}
             QLabel#overviewEyebrow {{
                 color: {muted}; background: transparent;
-                font-size: 8pt; font-weight: 800; letter-spacing: 1.7px;
+                font-size: 8pt; font-weight: 600; letter-spacing: 0px;
             }}
             QLabel#overviewTitle {{
                 color: {text}; background: transparent;
-                font-family: "Manrope", "DM Sans", sans-serif;
-                font-size: 27pt; font-weight: 800;
+                font-family: "DM Sans", "Segoe UI", sans-serif;
+                font-size: 27pt; font-weight: 600;
                 letter-spacing: -0.5px;
             }}
             QLabel#overviewSubtitle {{
@@ -1070,17 +1067,17 @@ class DashboardPage(QWidget):
                 color: {text}; background: {glass_top};
                 border: 1px solid {border}; border-top: 1px solid {highlight};
                 border-radius: 16px; padding: 10px 15px;
-                font-size: 8pt; font-weight: 750; letter-spacing: .55px;
+                font-size: 8pt; font-weight: 600; letter-spacing: 0px;
             }}
             QFrame#dashboardGlassCard {{
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                     stop:0 {glass_top}, stop:.12 {glass_top}, stop:1 {glass_bottom});
                 border: 1px solid {border};
                 border-top: 1px solid {highlight};
-                border-radius: 25px;
+                border-radius: 16px;
             }}
             QFrame#dashboardGlassCard QLabel[cardtitle="true"] {{
-                color: {text}; font-size: 10.5pt; font-weight: 750;
+                color: {text}; font-size: 10.5pt; font-weight: 600;
             }}
             QFrame#dashboardStatTile {{
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
@@ -1125,7 +1122,7 @@ class DashboardPage(QWidget):
         self._overview_badge.setStyleSheet(
             f"color: {text}; background: {glass_top}; border: 1px solid {border}; "
             f"border-top: 1px solid {highlight}; border-radius: 16px; padding: 10px 15px; "
-            "font-size: 8pt; font-weight: 750; letter-spacing: .55px;"
+            "font-size: 8pt; font-weight: 600; letter-spacing: 0px;"
         )
 
     def retint(self) -> None:
@@ -1205,12 +1202,12 @@ class DashboardPage(QWidget):
             label.setStyleSheet(
                 f"background: {overlay}; color: #FFFFFF; "
                 f"border: 1px solid {rgba('#FFFFFF', 76 if dark else 108)}; "
-                "border-radius: 11px; padding: 6px 10px; font-weight: 750;"
+                "border-radius: 11px; padding: 6px 10px; font-weight: 600;"
             )
         tile.analysis_overlay.setStyleSheet(
             f"background: {overlay}; color: #FFFFFF; "
             f"border: 1px solid {rgba('#FFFFFF', 100)}; "
-            "border-radius: 11px; padding: 5px 9px; font-size: 8pt; font-weight: 800;"
+            "border-radius: 11px; padding: 5px 9px; font-size: 8pt; font-weight: 600;"
         )
 
     # ==================================================================
@@ -1373,14 +1370,14 @@ class DashboardPage(QWidget):
         ml.setContentsMargins(18, 16, 18, 16)
         ml.setSpacing(10)
 
-        title = QLabel("ACTIVE MODEL")
+        title = QLabel("Active model")
         title.setObjectName("popupSectionTitle")
         ml.addWidget(title)
 
         current_key = "fdsc_mc3"
         model_names = {"fdsc_mc3": "Spontim 1.0"}
         name_label = QLabel("Spontim 1.0")
-        name_label.setStyleSheet("font-size: 15pt; font-weight: 800;")
+        name_label.setStyleSheet("font-size: 15pt; font-weight: 600;")
         ml.addWidget(name_label)
         for label_text, value_text in (
             ("Architecture", "MC3-18 temporal classifier"),
@@ -1401,7 +1398,7 @@ class DashboardPage(QWidget):
         pl.setContentsMargins(18, 16, 18, 16)
         pl.setSpacing(8)
 
-        ptitle = QLabel("PIPELINE")
+        ptitle = QLabel("Pipeline")
         ptitle.setObjectName("popupSectionTitle")
         pl.addWidget(ptitle)
 
@@ -1422,7 +1419,7 @@ class DashboardPage(QWidget):
         rl.setContentsMargins(18, 14, 18, 14)
         rl.setSpacing(6)
 
-        rtitle = QLabel("RUNTIME")
+        rtitle = QLabel("Runtime")
         rtitle.setObjectName("popupSectionTitle")
         rl.addWidget(rtitle)
 
@@ -1582,7 +1579,7 @@ class DashboardPage(QWidget):
         details_layout.setContentsMargins(18, 15, 18, 15)
         details_layout.setSpacing(10)
 
-        details_title = QLabel("OPERATIONAL DETAILS")
+        details_title = QLabel("Operational details")
         details_title.setObjectName("popupSectionTitle")
         details_layout.addWidget(details_title)
 
@@ -1939,28 +1936,28 @@ class DashboardPage(QWidget):
         tile = QFrame()
         tile.setProperty("card", True)
         tile.setObjectName("offlineCameraTile")
-        tile.setMinimumHeight(270)
+        tile.setMinimumHeight(240)
         self._style_offline_preview(tile)
         self._offline_tiles.append(tile)
 
-        surface = QLabel("OFFLINE")
+        surface = QLabel("No signal")
         surface.setAlignment(Qt.AlignmentFlag.AlignCenter)
         surface.setProperty("videoSurface", True)
         surface.setStyleSheet(
-            "border-radius: 14px; font-size: 10pt; font-weight: 700;"
+            "border-radius: 12px; font-size: 10pt; font-weight: 500;"
         )
 
         name = QLabel(f"Camera {slot}", tile)
         name.setStyleSheet(
-            "background: rgba(8, 13, 19, 205); color: white; "
-            "border: 1px solid rgba(255,255,255,65); "
-            "border-radius: 11px; padding: 6px 10px; font-weight: 750;"
+            "background: rgba(8, 13, 19, 205); color: #E9E9EB; "
+            "border: none; "
+            "border-radius: 8px; padding: 6px 10px; font-weight: 500;"
         )
-        status = QLabel("OFFLINE", tile)
+        status = QLabel("●  Offline", tile)
         status.setStyleSheet(
             "background: rgba(8, 13, 19, 205); color: white; "
-            "border: 1px solid rgba(255,255,255,70); "
-            "border-radius: 11px; padding: 5px 9px; font-size: 8pt; font-weight: 750;"
+            "border: none; "
+            "border-radius: 8px; padding: 5px 9px; font-size: 8pt; font-weight: 500;"
         )
 
         outer = QVBoxLayout(tile)

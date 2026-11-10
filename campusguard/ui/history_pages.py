@@ -423,8 +423,8 @@ def _metric_card(
         """
         QLabel {
             font-size: 9px;
-            font-weight: 800;
-            letter-spacing: 0.8px;
+            font-weight: 600;
+            letter-spacing: 0px;
         }
         """
     )
@@ -435,7 +435,7 @@ def _metric_card(
         """
         QLabel {
             font-size: 21px;
-            font-weight: 800;
+            font-weight: 600;
         }
         """
     )
@@ -482,7 +482,7 @@ def _severity_widget(
     color = severity_color(value)
     label.setStyleSheet(
         f"color: {color}; border: none; border-radius: 11px; "
-        f"padding: 3px 12px; font-size: 8pt; font-weight: 700; letter-spacing: 0.4px; background: {rgba(color, 34)};"
+        f"padding: 3px 12px; font-size: 8pt; font-weight: 600; letter-spacing: 0px; background: {rgba(color, 34)};"
     )
 
     label.style().unpolish(label)
@@ -534,8 +534,8 @@ def _section_header(
         """
         QLabel {
             font-size: 12px;
-            font-weight: 800;
-            letter-spacing: 0.4px;
+            font-weight: 600;
+            letter-spacing: 0px;
         }
         """
     )
@@ -601,7 +601,7 @@ def _empty_state(
         """
         QLabel {
             font-size: 13px;
-            font-weight: 750;
+            font-weight: 600;
         }
         """
     )
@@ -723,7 +723,7 @@ def _apply_table_palette(table: QTableWidget) -> None:
             border-bottom: 1px solid {border};
             padding: 10px 8px;
             font-size: 9pt;
-            font-weight: 700;
+            font-weight: 600;
         }}
         QTableCornerButton::section {{
             background: {header};
@@ -846,7 +846,7 @@ class _HistoryPopup(QWidget):
             """
             QLabel {
                 font-size: 17pt;
-                font-weight: 700;
+                font-weight: 600;
             }
             """
         )
@@ -1116,7 +1116,7 @@ class IncidentsPage(QWidget):
         )
 
         self.total_badge = QLabel(
-            "0 INCIDENTS"
+            "0 incidents"
         )
 
         self.total_badge.setProperty(
@@ -1165,22 +1165,22 @@ class IncidentsPage(QWidget):
         metrics.setSpacing(9)
 
         self.total_card = _metric_card(
-            "TOTAL",
+            "Total",
             "0",
         )
 
         self.new_card = _metric_card(
-            "NEW",
+            "New",
             "0",
         )
 
         self.ack_card = _metric_card(
-            "ACKNOWLEDGED",
+            "Acknowledged",
             "0",
         )
 
         self.resolved_card = _metric_card(
-            "RESOLVED",
+            "Resolved",
             "0",
         )
 
@@ -1307,14 +1307,14 @@ class IncidentsPage(QWidget):
 
         # Left: live/new incidents
         self.live_card = self._create_incident_preview(
-            "CURRENT INCIDENTS",
+            "Open incidents",
             "Open incidents awaiting operator confirmation",
             "Open incident list",
         )
 
         # Right: history
         self.history_card = self._create_incident_preview(
-            "RESOLVED HISTORY",
+            "Resolved history",
             "Incidents completed with the OK action",
             "Open incident history",
         )
@@ -1514,8 +1514,8 @@ class IncidentsPage(QWidget):
         )
 
         self.total_badge.setText(
-            f"{len(rows)} INCIDENT"
-            f"{'S' if len(rows) != 1 else ''}"
+            f"{len(rows)} incident"
+            f"{'s' if len(rows) != 1 else ''}"
         )
 
         current = [
@@ -1601,7 +1601,7 @@ class IncidentsPage(QWidget):
                 f'<table width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 6px 0;">'
                 f'<tr><td style="padding:8px 10px;background:{rgba(palette.text, 14)};">'
                 f'<span style="color:{palette.text};font-weight:600;">{event}</span>'
-                f'<span style="color:{tint};font-weight:700;"> &nbsp; {severity_label}</span><br/>'
+                f'<span style="color:{tint};font-weight:600;"> &nbsp; {severity_label}</span><br/>'
                 f'<span style="color:{palette.text_dim};font-size:9pt;">{camera} &nbsp; · &nbsp; {confidence:.0f}% confidence</span>'
                 f'</td></tr></table>'
             )
@@ -1672,13 +1672,13 @@ class IncidentsPage(QWidget):
             table.setHorizontalHeaderLabels(
                 [
                     "ID",
-                    "CAMERA",
-                    "EVENT",
-                    "CONFIDENCE",
-                    "SEVERITY",
-                    "STATUS",
-                    "TIME",
-                    "ACTIONS",
+                    "Camera",
+                    "Event",
+                    "Confidence",
+                    "Severity",
+                    "Status",
+                    "Time",
+                    "Actions",
                 ]
             )
 
@@ -2269,7 +2269,7 @@ class AlertsPage(QWidget):
                 f'<table width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 6px 0;">'
                 f'<tr><td style="padding:8px 10px;background:{rgba(palette.text, 14)};">'
                 f'<span style="color:{palette.text};font-weight:600;">{event}</span>'
-                f'<span style="color:{tint};font-weight:700;"> &nbsp; {severity_title(severity)}</span><br/>'
+                f'<span style="color:{tint};font-weight:600;"> &nbsp; {severity_title(severity)}</span><br/>'
                 f'<span style="color:{palette.text_dim};font-size:9pt;">{camera} &nbsp; · &nbsp; {confidence:.0f}% confidence</span>'
                 f'</td></tr></table>'
             )
@@ -2338,13 +2338,13 @@ class AlertsPage(QWidget):
 
         else:
             columns = [
-                "CAMERA",
-                "EVENT",
-                "CONFIDENCE",
-                "SEVERITY",
-                "TIME",
-                "INCIDENT",
-                "FOOTAGE",
+                "Camera",
+                "Event",
+                "Confidence",
+                "Severity",
+                "Time",
+                "Incident",
+                "Footage",
             ]
 
             table_columns = 7
@@ -2356,13 +2356,13 @@ class AlertsPage(QWidget):
 
             table.setHorizontalHeaderLabels(
                 [
-                    "CAMERA",
-                    "EVENT",
-                    "CONFIDENCE",
-                    "SEVERITY",
-                    "TIME",
-                    "INCIDENT",
-                    "FOOTAGE",
+                    "Camera",
+                    "Event",
+                    "Confidence",
+                    "Severity",
+                    "Time",
+                    "Incident",
+                    "Footage",
                 ]
             )
 

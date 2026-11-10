@@ -10,6 +10,7 @@ from PySide6.QtCore import QPointF, QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QFont, QPainter
 from PySide6.QtWidgets import QAbstractButton, QHBoxLayout, QLabel, QWidget
 
+from campusguard.ui.brand_logo import LogoMark
 from campusguard.ui.icons import IconLabel, icon_pixmap
 from campusguard.ui.theme import get_palette, qcolor
 
@@ -61,7 +62,7 @@ class _CaptionButton(QAbstractButton):
 
 
 class TitleBar(QWidget):
-    def __init__(self, window: QWidget, title: str = "CampusGuard", subtitle: str = "Security Operations") -> None:
+    def __init__(self, window: QWidget, title: str = "CampusGuard", subtitle: str = "") -> None:
         super().__init__(window)
         self._window = window
         self.setObjectName("titleBar")
@@ -71,15 +72,16 @@ class TitleBar(QWidget):
         row = QHBoxLayout(self)
         row.setContentsMargins(14, 0, 8, 0)
         row.setSpacing(10)
-        self.logo = IconLabel("shield-check", 20, "accent")
+        self.logo = LogoMark(size=18)
         row.addWidget(self.logo)
         self.title = QLabel(title)
-        self.title.setStyleSheet("font-weight: 700; font-size: 10pt; background: transparent;")
+        self.title.setStyleSheet("font-weight: 600; font-size: 10pt; background: transparent;")
         row.addWidget(self.title)
         self.subtitle = QLabel(subtitle)
         self.subtitle.setProperty("muted", True)
         self.subtitle.setStyleSheet("font-size: 9pt; background: transparent;")
         row.addWidget(self.subtitle)
+        self.subtitle.setVisible(bool(subtitle))
         row.addStretch(1)
 
         self.minimize_button = _CaptionButton("minus")

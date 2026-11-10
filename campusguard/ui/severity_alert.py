@@ -164,24 +164,24 @@ class SeverityAlertToast(QFrame):
             QLabel#severityAlertBadge {{
                 background: {rgba(accent, 46)}; color: {accent};
                 border: 1px solid {rgba(accent, 140)}; border-radius: 23px;
-                font-size: 15pt; font-weight: 900;
+                font-size: 15pt; font-weight: 600;
             }}
-            QLabel#severityAlertTitle {{ color: {accent}; font-size: 9pt; font-weight: 900; letter-spacing: 1.6px; }}
-            QLabel#severityAlertMessage {{ color: {palette.text}; font-size: 13pt; font-weight: 800; }}
+            QLabel#severityAlertTitle {{ color: {accent}; font-size: 9pt; font-weight: 600; letter-spacing: 0px; }}
+            QLabel#severityAlertMessage {{ color: {palette.text}; font-size: 13pt; font-weight: 600; }}
             QLabel#severityAlertDetail {{ color: {palette.muted}; font-size: 9pt; }}
-            QLabel#severityAlertValue {{ color: {accent}; font-size: 11pt; font-weight: 900; }}
+            QLabel#severityAlertValue {{ color: {accent}; font-size: 11pt; font-weight: 600; }}
             QPushButton#severityAlertClose {{
                 background: transparent; color: {palette.muted}; border: none; border-radius: 13px; font-size: 10pt;
             }}
             QPushButton#severityAlertClose:hover {{ background: {rgba(palette.text, 24)}; color: {palette.text}; }}
             QPushButton#severityAlertView {{
                 background: {accent}; color: {on_accent}; border: none; border-radius: 10px;
-                padding: 0 16px; font-weight: 800;
+                padding: 0 16px; font-weight: 600;
             }}
             QPushButton#severityAlertView:hover {{ background: {rgba(accent, 225)}; }}
             QPushButton#severityAlertDismiss {{
                 background: {rgba(palette.text, 16)}; color: {palette.text}; border: 1px solid {rgba(palette.text, 40)};
-                border-radius: 10px; padding: 0 16px; font-weight: 700;
+                border-radius: 10px; padding: 0 16px; font-weight: 600;
             }}
             QPushButton#severityAlertDismiss:hover {{ background: {rgba(palette.text, 30)}; }}
             QProgressBar#severityAlertBar {{

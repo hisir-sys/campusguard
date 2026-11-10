@@ -65,7 +65,7 @@ class _LiveFeedDialog(QDialog):
         layout = QVBoxLayout(self)
         header = QHBoxLayout()
         title = QLabel(f"{camera.get('name', 'Camera')}  ·  {camera.get('camera_id', '')}")
-        title.setStyleSheet("font-size: 16px; font-weight: 750;")
+        title.setStyleSheet("font-size: 16px; font-weight: 600;")
         self.status = QLabel("Starting live feed…")
         self.status.setProperty("muted", True)
         header.addWidget(title, 1)
@@ -162,7 +162,7 @@ class _CameraCard(QFrame):
         details = QVBoxLayout()
         details.setSpacing(5)
         self.name = QLabel()
-        self.name.setStyleSheet("font-size: 14px; font-weight: 700;")
+        self.name.setStyleSheet("font-size: 14px; font-weight: 600;")
         self.health = QLabel("CONNECTING")
         self.health.setProperty("muted", True)
         self.metrics = QLabel("")
@@ -269,7 +269,7 @@ class ServerViewerPage(QWidget):
         self.remote_alert_banner = QLabel("")
         self.remote_alert_banner.setWordWrap(True)
         self.remote_alert_banner.setVisible(False)
-        self.remote_alert_banner.setStyleSheet("padding: 10px 14px; border: 1px solid #C79A7E; border-radius: 10px; font-weight: 700;")
+        self.remote_alert_banner.setStyleSheet("padding: 10px 14px; border: 1px solid #C79A7E; border-radius: 10px; font-weight: 600;")
         root.addWidget(self.remote_alert_banner)
         self._remote_alert_timer = QTimer(self)
         self._remote_alert_timer.setSingleShot(True)
@@ -317,7 +317,7 @@ class ServerViewerPage(QWidget):
         school_root.setSpacing(8)
         self.school_summary = QLabel("School-wide totals appear here once this server is connected.")
         self.school_summary.setWordWrap(True)
-        self.school_summary.setStyleSheet("font-size: 14px; font-weight: 700;")
+        self.school_summary.setStyleSheet("font-size: 14px; font-weight: 600;")
         self.school_detail = QLabel("")
         self.school_detail.setWordWrap(True)
         self.school_detail.setProperty("muted", True)
@@ -497,7 +497,7 @@ class ServerViewerPage(QWidget):
                 accent = "#C58790" if score >= 95 else "#C79A7E" if score >= 85 else "#C4B085"
                 self.remote_alert_banner.setStyleSheet(
                     f"padding: 10px 14px; border: 1px solid {accent}; border-left: 4px solid {accent}; "
-                    "border-radius: 10px; font-weight: 700;"
+                    "border-radius: 10px; font-weight: 600;"
                 )
                 self.remote_alert_banner.show()
                 self._remote_alert_timer.start(15000 if score >= 95 else 7000 if score >= 85 else 5000)

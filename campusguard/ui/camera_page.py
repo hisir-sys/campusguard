@@ -50,12 +50,12 @@ class CameraRow(QFrame):
         title_row.setSpacing(8)
 
         name = QLabel(camera.name)
-        name.setStyleSheet("font-size: 15px; font-weight: 700;")
+        name.setStyleSheet("font-size: 15px; font-weight: 600;")
         title_row.addWidget(name)
 
         self.source_badge = QLabel(camera.source_type.upper())
         self.source_badge.setStyleSheet(
-            "font-size: 10px; font-weight: 700; padding: 3px 7px; "
+            "font-size: 10px; font-weight: 600; padding: 3px 7px; "
             "border-radius: 5px; background: rgba(255,255,255,0.08);"
         )
         title_row.addWidget(self.source_badge)
@@ -227,7 +227,7 @@ class LocalVideoTestDialog(QFrame):
         header = QHBoxLayout()
         title = QLabel("Local File Test")
         title.setObjectName("localVideoTestTitle")
-        title.setStyleSheet("font-size: 17px; font-weight: 750;")
+        title.setStyleSheet("font-size: 17px; font-weight: 600;")
         header.addWidget(title, 1)
         self.close_button = QPushButton("×")
         self.close_button.setFixedSize(36, 36)
@@ -464,7 +464,7 @@ class CamerasPage(QWidget):
         # Section header
         list_header = QHBoxLayout()
         list_title = QLabel("Connected sources")
-        list_title.setStyleSheet("font-size: 14px; font-weight: 700;")
+        list_title.setStyleSheet("font-size: 14px; font-weight: 600;")
         list_header.addWidget(list_title)
 
         self.summary_label = QLabel("No cameras configured.")
@@ -497,7 +497,7 @@ class CamerasPage(QWidget):
     def _metric_value(value: str) -> QLabel:
         label = QLabel(value)
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        label.setStyleSheet("font-size: 18px; font-weight: 750;")
+        label.setStyleSheet("font-size: 18px; font-weight: 600;")
         return label
 
     @staticmethod
@@ -533,7 +533,7 @@ class CamerasPage(QWidget):
 
         title = QLabel("No camera sources configured")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet("font-size: 15px; font-weight: 700;")
+        title.setStyleSheet("font-size: 15px; font-weight: 600;")
         layout.addWidget(title)
 
         description = QLabel(

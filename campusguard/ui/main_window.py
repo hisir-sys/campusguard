@@ -80,7 +80,7 @@ class InAppOverlay(QFrame):
             }}
             QLabel#overlayTitle {{
                 font-size: 16pt;
-                font-weight: 800;
+                font-weight: 600;
                 background: transparent;
             }}
             QLabel#overlayBody {{
@@ -208,7 +208,7 @@ class InAppOverlay(QFrame):
             }}
             QLabel#overlayTitle {{
                 font-size: 16pt;
-                font-weight: 800;
+                font-weight: 600;
                 background: transparent;
             }}
             QLabel#overlayBody {{
@@ -791,7 +791,7 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 8)
         layout.setSpacing(8)
         title_label = QLabel(title)
-        title_label.setStyleSheet("font-size: 21pt; font-weight: 700; letter-spacing: -0.15px;")
+        title_label.setStyleSheet("font-size: 21pt; font-weight: 600; letter-spacing: -0.15px;")
         description_label = QLabel(description)
         description_label.setWordWrap(True)
         description_label.setStyleSheet("font-size: 10pt; color: palette(mid);")
@@ -846,7 +846,7 @@ class MainWindow(QMainWindow):
         step = QLabel(number)
         step.setAlignment(Qt.AlignmentFlag.AlignCenter)
         step.setStyleSheet(
-            f"font-size: 8pt; font-weight: 800; color: {'#0E0F11' if get_palette().name == 'dark' else '#F4F4F5'}; "
+            f"font-size: 8pt; font-weight: 600; color: {'#0E0F11' if get_palette().name == 'dark' else '#F4F4F5'}; "
             "background: transparent; border: none;"
         )
         badge_layout.addWidget(step)
@@ -856,7 +856,7 @@ class MainWindow(QMainWindow):
         text_column.setSpacing(4)
 
         heading = QLabel(title)
-        heading.setStyleSheet("font-size: 11pt; font-weight: 700; border: none;")
+        heading.setStyleSheet("font-size: 11pt; font-weight: 600; border: none;")
         text = QLabel(detail)
         text.setWordWrap(True)
         text.setStyleSheet(
@@ -1085,7 +1085,7 @@ class MainWindow(QMainWindow):
             "INCIDENT  →  ALERT  →  OPERATOR"
         )
         flow.setWordWrap(True)
-        flow.setStyleSheet("font-size: 10pt; font-weight: 700; padding: 6px 0;")
+        flow.setStyleSheet("font-size: 10pt; font-weight: 600; padding: 6px 0;")
         body.addWidget(flow)
         layout.addWidget(card)
 

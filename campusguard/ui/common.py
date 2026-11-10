@@ -70,7 +70,7 @@ def make_page_title(title: str, subtitle: str) -> QWidget:
     layout.setContentsMargins(0, 0, 0, 8)
     layout.setSpacing(8)
     heading = QLabel(title)
-    heading.setStyleSheet("font-family: 'Manrope', 'DM Sans', 'Segoe UI', sans-serif; font-size: 21pt; font-weight: 800; letter-spacing: -0.5px;")
+    heading.setStyleSheet("font-family: 'DM Sans', 'Segoe UI', sans-serif; font-size: 21pt; font-weight: 600; letter-spacing: -0.5px;")
     description = QLabel(subtitle)
     description.setProperty("muted", True)
     layout.addWidget(heading)
@@ -125,13 +125,13 @@ def set_status_label(label: QLabel, status: str) -> None:
     color = colors.get(status, palette.muted)
     label.setProperty("statusPill", True)
     label.setProperty("tone", status.lower())
-    label.setText(f"●  {status}")
+    label.setText(f"●  {status.capitalize()}")
     label.setStyleSheet(
         f"color: {color}; "
         f"background: {rgba(color, 40)}; "
         f"border: 1px solid {rgba(color, 100)}; "
-        "padding: 4px 9px; border-radius: 9px; "
-        "font-size: 8pt; font-weight: 700; letter-spacing: 0.35px;"
+        "padding: 4px 10px; border-radius: 8px; "
+        "font-size: 8pt; font-weight: 600; letter-spacing: 0px;"
     )
 
 
@@ -158,14 +158,14 @@ class CameraPreview(QFrame):
         self.name_overlay = QLabel(camera.name, self)
         self.name_overlay.setStyleSheet(
             "background: rgba(5, 9, 12, 190); color: white; "
-            "border-radius: 9px; padding: 5px 9px; font-weight: 700;"
+            "border-radius: 9px; padding: 5px 9px; font-weight: 600;"
         )
         self.name_overlay.raise_()
 
         self.status_overlay = QLabel("CONNECTING", self)
         self.status_overlay.setStyleSheet(
             "background: rgba(5, 9, 12, 190); color: white; "
-            "border-radius: 9px; padding: 5px 9px; font-size: 8pt; font-weight: 700;"
+            "border-radius: 9px; padding: 5px 9px; font-size: 8pt; font-weight: 600;"
         )
         self.status_overlay.raise_()
 
@@ -175,7 +175,7 @@ class CameraPreview(QFrame):
         self.analysis_overlay.setStyleSheet(
             "background: rgba(5, 9, 12, 210); color: #B8C0CC; "
             "border: 1px solid rgba(184, 192, 204, 100); "
-            "border-radius: 9px; padding: 5px 9px; font-size: 8pt; font-weight: 800;"
+            "border-radius: 9px; padding: 5px 9px; font-size: 8pt; font-weight: 600;"
         )
         self.analysis_overlay.raise_()
 
@@ -207,7 +207,7 @@ class CameraPreview(QFrame):
             self.analysis_overlay.setStyleSheet(
                 "background: rgba(5, 9, 12, 210); color: #B8C0CC; "
                 "border: 1px solid rgba(184, 192, 204, 100); "
-                "border-radius: 9px; padding: 5px 9px; font-size: 8pt; font-weight: 800;"
+                "border-radius: 9px; padding: 5px 9px; font-size: 8pt; font-weight: 600;"
             )
         elif self._source_pixmap is None:
             self.video_label.setText("Waiting for camera frames")
@@ -240,7 +240,7 @@ class CameraPreview(QFrame):
         self.analysis_overlay.setStyleSheet(
             f"background: rgba(5, 9, 12, 220); color: {color}; "
             f"border: 1px solid {border}; "
-            "border-radius: 9px; padding: 5px 9px; font-size: 8pt; font-weight: 800;"
+            "border-radius: 9px; padding: 5px 9px; font-size: 8pt; font-weight: 600;"
         )
         self._scale_pixmap()
         self._position_overlays()

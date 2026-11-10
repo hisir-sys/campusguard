@@ -34,7 +34,7 @@ class SettingsSection(QFrame):
         layout.setSpacing(16)
 
         heading = QLabel(title)
-        heading.setStyleSheet("font-size: 13px; font-weight: 800; letter-spacing: 0.5px;")
+        heading.setStyleSheet("font-size: 13px; font-weight: 600; letter-spacing: 0px;")
         layout.addWidget(heading)
 
         if subtitle:
@@ -90,8 +90,8 @@ class SettingsPage(QWidget):
                 border-radius: 15px;
                 padding: 0 12px;
                 font-size: 10px;
-                font-weight: 800;
-                letter-spacing: 0.8px;
+                font-weight: 600;
+                letter-spacing: 0px;
             }
             """
         )
@@ -493,7 +493,7 @@ class SettingsPage(QWidget):
         layout.setSpacing(8)
 
         title_label = QLabel(title)
-        title_label.setStyleSheet("font-size: 10px; font-weight: 800; letter-spacing: 0.7px;")
+        title_label.setStyleSheet("font-size: 10px; font-weight: 600; letter-spacing: 0px;")
         layout.addWidget(title_label)
 
         description_label = QLabel(description)
@@ -527,10 +527,10 @@ class SettingsPage(QWidget):
 
         title_label = QLabel(title)
         title_label.setProperty("muted", True)
-        title_label.setStyleSheet("font-size: 9px; font-weight: 800; letter-spacing: 0.7px;")
+        title_label.setStyleSheet("font-size: 9px; font-weight: 600; letter-spacing: 0px;")
 
         value_label = QLabel(value)
-        value_label.setStyleSheet("font-size: 12px; font-weight: 800;")
+        value_label.setStyleSheet("font-size: 12px; font-weight: 600;")
 
         layout.addWidget(title_label)
         layout.addWidget(value_label)

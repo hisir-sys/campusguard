@@ -37,7 +37,8 @@ class Palette:
     edge: str
     sheen_alpha: int
     popup: str
-    ink: str  # accent for text/icons/lines drawn on surfaces (deep green in light mode)
+    ink: str  # accent for text/icons/lines drawn on surfaces
+    lens: str = "#8FA6C8"  # the blue lens dot: selection, focus, live status
 
 
 # Graphite / steel palette: no neon. Dark = near-black graphite with silver
@@ -58,6 +59,7 @@ DARK = Palette(
     8,
     "#17181B",
     "#E4E6EA",
+    "#8FA6C8",
 )
 
 LIGHT = Palette(
@@ -76,6 +78,7 @@ LIGHT = Palette(
     14,
     "#B4B4B4",
     "#252326",
+    "#3F5F94",
 )
 
 _current: Palette = DARK
@@ -153,7 +156,7 @@ QToolTip {
 QFrame[card="true"] {
   background: @card@;
   border: 1px solid @card_line@;
-  border-radius: 18px;
+  border-radius: 14px;
 }
 QFrame[tile="true"] {
   background: @veil@;
@@ -162,13 +165,13 @@ QFrame[tile="true"] {
 }
 QFrame#dashboardModelTile {
   background: @veil@;
-  border: 1px solid @line_soft@;
-  border-radius: 11px;
+  border: none;
+  border-radius: 10px;
 }
 QFrame#dashboardStatTile {
   background: @veil@;
-  border: 1px solid @line_soft@;
-  border-radius: 11px;
+  border: none;
+  border-radius: 10px;
 }
 QFrame#notificationRow {
   background: transparent;
@@ -191,20 +194,19 @@ QFrame#cameraPreview:hover QLabel[videoSurface="true"] {
 }
 QFrame#dashboardStatTile:hover,
 QFrame#dashboardModelTile:hover {
-  border-color: @line_soft@;
   background: @veil_hover@;
 }
 
 QLabel { background: transparent; }
 QLabel[muted="true"] { color: @muted@; }
 QLabel[eyebrow="true"] {
-  color: @muted@; font-size: 8pt; font-weight: 600;
+  color: @muted@; font-size: 8.5pt; font-weight: 500;
 }
 QLabel[cardtitle="true"] {
   color: @text@; font-size: 10.5pt; font-weight: 600;
 }
 QLabel[kvlabel="true"] { color: @muted@; font-size: 9pt; font-weight: 500; }
-QLabel[kvvalue="true"] { color: @text@; font-size: 10pt; font-weight: 700; }
+QLabel[kvvalue="true"] { color: @text@; font-size: 10pt; font-weight: 600; }
 QLabel[pill="true"] {
   background: @veil@; border: 1px solid @line_soft@;
   border-radius: 9px; padding: 3px 9px;
@@ -229,7 +231,7 @@ QPushButton:focus {
 }
 QPushButton:disabled { color: @muted@; }
 QPushButton[primary="true"] {
-  background: @accent@; border-color: @accent@; color: @on_accent@; font-weight: 700;
+  background: @accent@; border-color: @accent@; color: @on_accent@; font-weight: 600;
 }
 QPushButton[primary="true"]:hover {
   background: @accent_hover@; border-color: @accent_hover@;
@@ -251,7 +253,7 @@ QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover {
   border-color: @line_strong@;
 }
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {
-  border: 1px solid @line_strong@; padding: 8px 9px;
+  border: 1px solid @lens@; padding: 8px 9px;
 }
 QComboBox::drop-down { border: none; width: 28px; background: transparent; }
 QComboBox::down-arrow { image: url(@chev_down@); width: 12px; height: 12px; }
@@ -277,7 +279,7 @@ QCheckBox::indicator {
   width: 16px; height: 16px; border-radius: 5px;
 }
 QCheckBox::indicator:checked {
-  background: @ink@; border: 1px solid @ink@; image: url(@check_icon@);
+  background: @lens@; border: 1px solid @lens@; image: url(@check_icon@);
 }
 QCheckBox::indicator:unchecked {
   background: @field@; border: 1px solid @line_strong@;
@@ -287,7 +289,7 @@ QSlider::groove:horizontal {
   height: 4px; background: @line_strong@; border-radius: 2px;
 }
 QSlider::handle:horizontal {
-  background: @accent@; width: 14px; margin: -5px 0; border-radius: 7px;
+  background: @lens@; width: 14px; margin: -5px 0; border-radius: 7px;
 }
 
 QTableWidget {
@@ -315,7 +317,7 @@ QTabBar::tab {
 }
 QTabBar::tab:hover { color: @text@; border-color: @line_strong@; }
 QTabBar::tab:selected {
-  background: @veil_hover@; color: @text@; border-color: @accent_line@;
+  background: @veil_hover@; color: @text@; border-color: @lens@;
 }
 QGroupBox {
   background: transparent; border: 1px solid @line@; border-radius: 12px;
@@ -335,7 +337,7 @@ QMenu {
 QMenu::item { padding: 7px 18px; border-radius: 6px; }
 QMenu::item:selected { background: @veil_hover@; }
 QProgressBar { background: @veil@; border: none; border-radius: 4px; text-align: center; color: @text@; }
-QProgressBar::chunk { background: @ink@; border-radius: 4px; }
+QProgressBar::chunk { background: @lens@; border-radius: 4px; }
 
 QScrollBar:vertical { background: transparent; width: 7px; margin: 4px 0; }
 QScrollBar::handle:vertical {
@@ -428,6 +430,7 @@ def build_qss(theme: str) -> str:
         "bad_line": rgba(p.bad, 100),
         "accent_line": rgba(p.ink, 190)
         , "ink": p.ink,
+        "lens": p.lens,
         "video": "#111215" if p.name == "dark" else "#232124",
         "on_accent": "#0E0F11" if p.name == "dark" else "#F4F4F5",
         "base_pt": str(_base_pt),
