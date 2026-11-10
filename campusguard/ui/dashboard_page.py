@@ -473,6 +473,7 @@ class GlassPopup(QFrame):
 class DashboardPage(QWidget):
     camera_selected = Signal(str)
     view_alerts_requested = Signal()
+    view_incidents_requested = Signal()
     clear_notifications_requested = Signal()
 
     def __init__(
@@ -580,10 +581,11 @@ class DashboardPage(QWidget):
         self._stats_card = self._build_stats_card()
         self._notifications_card = self._build_notifications_card()
         self._network_card = self._build_network_card()
+        self._recent_incidents_card = self._build_recent_incidents_card()
 
-        # Reference composition: a compact KPI row, an analytics/engine row,
-        # then the live camera wall. Every value remains backed by the local DB
-        # and live camera workers; this is not the HTML prototype's mock data.
+        # Reference composition: KPI row, analytics + engine, then live cameras
+        # beside a real recent-incidents list. Every value is sourced from the
+        # local repository and live camera workers, never prototype mock data.
         for card in (self._weekly_card, self._stats_card, self._notifications_card):
             card.setMinimumHeight(184)
             card.setMaximumHeight(184)
@@ -601,8 +603,14 @@ class DashboardPage(QWidget):
         analysis_row.addWidget(self._engine_card, 2)
         root.addLayout(analysis_row, 0)
 
+        bottom_row = QHBoxLayout()
+        bottom_row.setContentsMargins(0, 0, 0, 0)
+        bottom_row.setSpacing(16)
         self._network_card.setMinimumHeight(440)
-        root.addWidget(self._network_card, 1)
+        self._recent_incidents_card.setMinimumHeight(440)
+        bottom_row.addWidget(self._network_card, 2)
+        bottom_row.addWidget(self._recent_incidents_card, 1)
+        root.addLayout(bottom_row, 1)
 
         # Keep a dedicated bottom breathing space in the scrollable content.
         # This reserves clear canvas above the floating dock at the end of the
@@ -1066,6 +1074,74 @@ class DashboardPage(QWidget):
         )
 
         return frame
+
+    # ==================================================================
+    # RECENT INCIDENTS
+    # ==================================================================
+
+    def _build_recent_incidents_card(self) -> QFrame:
+        frame, layout = make_card("Recent incidents", icon="file-warning")
+        frame.setObjectName("dashboardGlassCard")
+        self._install_hover_effect(frame)
+        see_all = QPushButton("See all")
+        see_all.setProperty("link", True)
+        see_all.setCursor(Qt.CursorShape.PointingHandCursor)
+        see_all.clicked.connect(
+            lambda _checked=False: self.view_incidents_requested.emit()
+        )
+        frame.header_layout.addWidget(see_all)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.viewport().setAutoFillBackground(False)
+        content = QWidget()
+        self._recent_incidents_layout = QVBoxLayout(content)
+        self._recent_incidents_layout.setContentsMargins(0, 2, 4, 4)
+        self._recent_incidents_layout.setSpacing(8)
+        self._recent_incidents_layout.addStretch(1)
+        scroll.setWidget(content)
+        layout.addWidget(scroll, 1)
+        return frame
+
+    def _show_recent_incidents(self, rows: list[dict]) -> None:
+        layout = self._recent_incidents_layout
+        while layout.count() > 1:
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+        if not rows:
+            empty = QLabel("No incidents recorded yet.")
+            empty.setProperty("muted", True)
+            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            layout.insertWidget(0, empty)
+            return
+
+        for index, row in enumerate(rows[:6]):
+            item = QFrame()
+            item.setObjectName("notificationRow")
+            line = QVBoxLayout(item)
+            line.setContentsMargins(0, 8, 0, 8)
+            line.setSpacing(3)
+            title = QLabel(str(row.get("event") or "Security event"))
+            title.setStyleSheet("font-size: 9.5pt; font-weight: 600;")
+            detail = QLabel(
+                f"{row.get('camera_name', 'Unknown camera')}  ·  "
+                f"{str(row.get('happened_at', '')).replace('T', ' ')[:16]}"
+            )
+            detail.setProperty("muted", True)
+            confidence = float(row.get("confidence") or 0.0)
+            status = str(row.get("status") or "NEW").replace("_", " ").title()
+            meta = QLabel(f"{confidence:.0%} confidence  ·  {status}")
+            meta.setProperty("muted", True)
+            meta.setStyleSheet("font-size: 8pt;")
+            line.addWidget(title)
+            line.addWidget(detail)
+            line.addWidget(meta)
+            layout.insertWidget(index, item)
 
     # ==================================================================
     # LIVE NETWORK
@@ -2313,6 +2389,10 @@ class DashboardPage(QWidget):
                 8
             )
         )
+        try:
+            self._show_recent_incidents(self.repository.list_incidents(limit=6))
+        except Exception:
+            self._show_recent_incidents([])
         self._refresh_insights()
 
         # Keep the currently-open stats popup current.
