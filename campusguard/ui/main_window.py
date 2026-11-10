@@ -1107,6 +1107,7 @@ class MainWindow(QMainWindow):
         self.top_bar.login_requested.connect(self._toggle_operator)
         self.top_bar.search_submitted.connect(self._run_global_search)
         self.top_bar.camera_selected.connect(self.open_camera)
+        self.top_bar.incident_filter_requested.connect(self._filter_incidents_from_sidebar)
 
         self.dashboard.camera_selected.connect(self.open_camera)
         self.dashboard.view_alerts_requested.connect(lambda: self.navigate("alerts"))
@@ -1190,6 +1191,14 @@ class MainWindow(QMainWindow):
             self.alerts_page.refresh()
         elif page == "cameras":
             self._sync_cameras()
+
+    def _filter_incidents_from_sidebar(self, status: str) -> None:
+        """Open incident history with one of the flyout's status shortcuts."""
+        self.navigate("incidents")
+        self.incidents_page.search_input.clear()
+        index = self.incidents_page.status_filter.findText(status)
+        if index >= 0:
+            self.incidents_page.status_filter.setCurrentIndex(index)
 
     def _on_overlay_closed(self) -> None:
         # Keep MainWindow camera-view state synchronized with the overlay.
