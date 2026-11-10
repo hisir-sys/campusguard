@@ -1119,6 +1119,7 @@ class MainWindow(QMainWindow):
 
         self.dashboard.camera_selected.connect(self.open_camera)
         self.dashboard.view_alerts_requested.connect(lambda: self.navigate("alerts"))
+        self.dashboard.view_incidents_requested.connect(lambda: self.navigate("incidents"))
         self.camera_page.add_requested.connect(self._add_camera)
         self.camera_page.local_test_requested.connect(self._open_local_file_test)
         self.camera_page.remove_requested.connect(self._remove_camera)
