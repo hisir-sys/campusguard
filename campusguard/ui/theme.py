@@ -43,44 +43,44 @@ class Palette:
 
 # Midnight + aqua. Dark = the logo's #0B0D12 with soft aqua light behind frosted glass;
 # light = the logo's paper (#F4F4F2) with white glass. One accent (aqua), used sparingly.
+# Midnight graphite + warm signal: mapped from the supplied CampusGuard HTML reference.
 DARK = Palette(
     "dark",
-    "#0B0D12", "#07090D",
-    "#38BDF8", 46, "#2DD4BF", 28,
-    "#F4F6FA", "#C7CCD8", "#8F97A9",
-    "#5CD6F5", "#86E2F9",
-    "#5FD7A0", "#F5B45A", "#FF7A7A",
-    "#131722", 235,
-    "#FFFFFF", 22,
+    "#0A0A0B", "#0A0A0B",
+    "#FFFFFF", 10, "#FFFFFF", 7,
+    "#F5F5F7", "#C7C7CE", "#9A9AA2",
+    "#E58B76", "#F09B88",
+    "#83C9A5", "#E7BD79", "#E58B76",
+    "#1E1E21", 210,
+    "#FFFFFF", 24,
     "#FFFFFF", 10,
-    "#151925", 205,
-    "#05070B", 150,
+    "#1E1E21", 158,
+    "#18181B", 185,
     "#FFFFFF",
     14,
-    "#141824",
-    "#E6F4FB",
-    "#5CD6F5",
+    "#1E1E21",
+    "#E58B76",
+    "#E58B76",
 )
 
 LIGHT = Palette(
     "light",
-    "#F4F4F2", "#ECEDF0",
-    "#7DD3FC", 110, "#99F6E4", 80,
-    "#0B0D12", "#3A3F4C", "#5B6070",
-    "#0A7EA4", "#0C6E91",
-    "#1E8E5E", "#A8680F", "#C23B3B",
-    "#FFFFFF", 235,
-    "#0B0D12", 24,
-    "#0B0D12", 8,
+    "#E4E4E7", "#E4E4E7",
+    "#000000", 8, "#000000", 5,
+    "#0B0B0D", "#3E3E46", "#6B6B73",
+    "#B4412F", "#9F382A",
+    "#2E8B62", "#9C6C22", "#B4412F",
     "#FFFFFF", 225,
-    "#FFFFFF", 200,
+    "#000000", 20,
+    "#000000", 8,
+    "#FFFFFF", 168,
+    "#FFFFFF", 205,
     "#FFFFFF",
-    0,
+    190,
     "#FFFFFF",
-    "#0B0D12",
-    "#0A7EA4",
+    "#B4412F",
+    "#B4412F",
 )
-
 _current: Palette = DARK
 
 
@@ -117,7 +117,7 @@ def rgba(hex_color: str, alpha: int) -> str:
 _QSS = """
 QWidget {
   color: @text@;
-  font-family: "DM Sans", "Segoe UI", sans-serif;
+  font-family: "Inter", "Segoe UI", sans-serif;
   font-size: @base_pt@pt;
 }
 QMainWindow { background: @bg1@; }\nQWidget#centralContent { background: transparent; }
@@ -157,7 +157,7 @@ QFrame[card="true"] {
   background: @card@;
   border: 1px solid @card_line@;
   border-top: 1px solid @card_top@;
-  border-radius: 18px;
+  border-radius: 20px;
 }
 QFrame[tile="true"] {
   background: @veil@;
@@ -414,12 +414,12 @@ def build_qss(theme: str) -> str:
         "bg1": p.bg1, "popup": rgba(p.glass, 188 if p.name == "dark" else 196),
         "glass": rgba(p.glass, p.glass_alpha),
         "card": (
-            "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(255, 255, 255, 24), stop:1 rgba(255, 255, 255, 8))"
+            "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(52, 52, 56, 174), stop:1 rgba(24, 24, 27, 153))"
             if p.name == "dark"
-            else "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(255, 255, 255, 215), stop:1 rgba(255, 255, 255, 140))"
+            else "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(255, 255, 255, 209), stop:1 rgba(255, 255, 255, 128))"
         ),
-        "card_line": "rgba(255, 255, 255, 30)" if p.name == "dark" else "rgba(11, 13, 18, 24)",
-        "card_top": "rgba(255, 255, 255, 58)" if p.name == "dark" else "rgba(255, 255, 255, 255)",
+        "card_line": "rgba(255, 255, 255, 26)" if p.name == "dark" else "rgba(0, 0, 0, 20)",
+        "card_top": "rgba(255, 255, 255, 42)" if p.name == "dark" else "rgba(255, 255, 255, 255)",
         "glass_line": rgba(p.line, 14 * k // 10),
         "line": rgba(p.line, 18 * k // 10),
         "line_soft": rgba(p.line, 11 * k // 10),
@@ -437,7 +437,7 @@ def build_qss(theme: str) -> str:
         "accent_line": rgba(p.ink, 190)
         , "ink": p.ink,
         "lens": p.lens,
-        "video": "#080A0E" if p.name == "dark" else "#1B1E26",
+        "video": "#0A0A0B" if p.name == "dark" else "#D1D1D6",
         "on_accent": "#06222B" if p.name == "dark" else "#FFFFFF",
         "base_pt": str(_base_pt),
         **_ui_assets(p),
