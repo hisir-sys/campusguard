@@ -1,14 +1,14 @@
-"""CampusGuard navigation: single icon rail + hover-opened Home panel.
+"""CampusGuard navigation: compact operations rail + hover-opened Monitor panel.
 
-Layout (copied from the "rail + panel" reference):
+Layout mapped from the supplied reference:
 
-* Left rail, top capsule: logo, one **Home** icon, then the four Learn icons.
-* Left rail, bottom capsule: theme toggle, account, settings.
-* Hovering **Home** floats a second panel out beside the rail with Dashboard,
-  Cameras, Incidents, Alerts and School server, plus a camera search box at
-  the bottom. The panel overlays the page, so nothing reflows.
+* Left rail: logo, Home, Services, Tools and School server.
+* Bottom rail: theme, account and Settings.
+* Hovering Home opens the 300px flyout with Dashboard, Cameras, Incidents,
+  Alerts, real incident-status shortcuts, About / How it works, and grouped
+  camera search. The panel overlays the workspace instead of reflowing it.
 
-All page / theme / login actions keep going through the same signals.
+All page, theme and login actions continue through the existing signals.
 """
 from __future__ import annotations
 
