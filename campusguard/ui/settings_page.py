@@ -468,6 +468,35 @@ class SettingsPage(QWidget):
 
         content_layout.addStretch(1)
         scroll.setWidget(content)
+
+        # Compact section switcher mirrors the reference's tabbed settings
+        # screen while keeping every production setting on one scrollable page.
+        # Selecting a tab simply brings its real section into view.
+        section_nav = QHBoxLayout()
+        section_nav.setContentsMargins(0, 0, 0, 0)
+        section_nav.setSpacing(7)
+        section_targets = (
+            ("Detection", ai_section),
+            ("Appearance", appearance_section),
+            ("Workspace", workspace_section),
+            ("Notifications", phone_section),
+            ("Health", health_section),
+            ("Server", connection_section),
+            ("Security", status_section),
+            ("Updates", update_section),
+        )
+        for label, target in section_targets:
+            button = QPushButton(label)
+            button.setProperty("link", True)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.setMinimumHeight(32)
+            button.clicked.connect(
+                lambda _checked=False, section=target:
+                scroll.ensureWidgetVisible(section, 0, 18)
+            )
+            section_nav.addWidget(button)
+        section_nav.addStretch(1)
+        root.addLayout(section_nav, 0)
         root.addWidget(scroll, 1)
 
         # ------------------------------------------------------------------
