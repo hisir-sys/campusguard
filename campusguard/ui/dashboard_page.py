@@ -861,7 +861,7 @@ class DashboardPage(QWidget):
         trend_card.setMinimumHeight(300)
         self._trend_total = QLabel("0")
         self._trend_total.setObjectName("insightFigure")
-        self._trend_total.setStyleSheet("font-family: 'Outfit', 'Inter'; font-size: 26pt; font-weight: 600;")
+        self._trend_total.setStyleSheet("font-family: 'Outfit', 'DM Sans'; font-size: 26pt; font-weight: 600;")
         self._trend_delta = QLabel("last %d days" % self.TREND_DAYS)
         self._trend_delta.setProperty("muted", True)
         figure = QHBoxLayout()
@@ -1137,7 +1137,7 @@ class DashboardPage(QWidget):
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
                     stop:0 {canvas_top}, stop:0.52 {canvas_bottom}, stop:1 {canvas_top});
                 color: {text};
-                font-family: "Inter", "Segoe UI", sans-serif;
+                font-family: "DM Sans", "Segoe UI", sans-serif;
             }}
             QLabel#overviewEyebrow {{
                 color: {muted}; background: transparent;
@@ -1145,7 +1145,7 @@ class DashboardPage(QWidget):
             }}
             QLabel#overviewTitle {{
                 color: {text}; background: transparent;
-                font-family: "Outfit", "Inter", "Segoe UI", sans-serif;
+                font-family: "Outfit", "DM Sans", "Segoe UI", sans-serif;
                 font-size: 27pt; font-weight: 600;
                 letter-spacing: -0.5px;
             }}
