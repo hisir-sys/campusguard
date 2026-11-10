@@ -972,10 +972,17 @@ class MainWindow(QMainWindow):
             ("09", "Operator UI", "Glass workspace",
              "Presents live cameras, incidents, alerts, system status, AI status, and in-app evidence viewing."),
         )
+        service_grid = QGridLayout()
+        service_grid.setContentsMargins(0, 0, 0, 0)
+        service_grid.setHorizontalSpacing(14)
+        service_grid.setVerticalSpacing(14)
         for i, (number, title, subtitle, detail) in enumerate(services):
-            layout.addWidget(self._flow_node(number, title, f"{subtitle} — {detail}"))
-            if i != len(services) - 1:
-                layout.addWidget(self._flow_arrow())
+            node = self._flow_node(number, title, f"{subtitle} — {detail}")
+            node.setMinimumHeight(126)
+            service_grid.addWidget(node, i // 3, i % 3)
+        for column in range(3):
+            service_grid.setColumnStretch(column, 1)
+        layout.addLayout(service_grid)
 
         card, body = make_card("Service contract", icon="server")
         body.addWidget(QLabel(
