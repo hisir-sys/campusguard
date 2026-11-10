@@ -27,8 +27,8 @@ from campusguard.ui.glass_nav import AccountButton
 from campusguard.ui.icons import icon_pixmap
 from campusguard.ui.theme import get_palette, qcolor
 
-RAIL_WIDTH = 68
-PANEL_WIDTH = 262
+RAIL_WIDTH = 72
+PANEL_WIDTH = 300
 GAP = 8
 COMPACT_WIDTH = RAIL_WIDTH
 EXPANDED_WIDTH = RAIL_WIDTH + GAP + PANEL_WIDTH
@@ -52,38 +52,37 @@ SECTIONS = (("HOME", tuple(i for _t, items in HOME_GROUPS for i in items)), ("LE
 
 
 def _tones() -> dict[str, QColor]:
-    """Colour set for the nav surfaces (light copies the reference greys)."""
+    """Navigation tones translated from the HTML rail and floating glass panel."""
     pal = get_palette()
     if pal.name == "dark":
         return {
             "outer_top": QColor(255, 255, 255, 0), "outer_bottom": QColor(255, 255, 255, 0),
             "outer_edge": QColor(255, 255, 255, 0),
-            "pill_top": QColor(255, 255, 255, 34), "pill_bottom": QColor(255, 255, 255, 10),
-            "pill_edge": QColor(255, 255, 255, 46),
-            "icon": QColor("#9AA3B5"), "icon_hot": QColor("#FFFFFF"),
-            "tile": QColor(92, 214, 245, 44), "tile_edge": QColor(92, 214, 245, 96),
-            "panel_top": QColor(255, 255, 255, 30), "panel_bottom": QColor(255, 255, 255, 9),
-            "panel_edge": QColor(255, 255, 255, 42),
-            "active_top": QColor(92, 214, 245, 52), "active_bottom": QColor(92, 214, 245, 20),
-            "active_edge": QColor(92, 214, 245, 96),
-            "caption": QColor(255, 255, 255, 56),
+            "pill_top": QColor("#1B1B1E"), "pill_bottom": QColor("#1B1B1E"),
+            "pill_edge": QColor(255, 255, 255, 22),
+            "icon": QColor("#A2A2AB"), "icon_hot": QColor("#FFFFFF"),
+            "tile": QColor(255, 255, 255, 30), "tile_edge": QColor(255, 255, 255, 34),
+            "panel_top": QColor(52, 52, 56, 174), "panel_bottom": QColor(24, 24, 27, 153),
+            "panel_edge": QColor(255, 255, 255, 32),
+            "active_top": QColor(255, 255, 255, 32), "active_bottom": QColor(255, 255, 255, 14),
+            "active_edge": QColor(255, 255, 255, 48),
+            "caption": QColor("#7C7C85"),
             "badge": QColor(255, 255, 255, 24),
         }
     return {
         "outer_top": QColor(255, 255, 255, 0), "outer_bottom": QColor(255, 255, 255, 0),
         "outer_edge": QColor(255, 255, 255, 0),
-        "pill_top": QColor(255, 255, 255, 235), "pill_bottom": QColor(255, 255, 255, 170),
-        "pill_edge": QColor(11, 13, 18, 30),
-        "icon": QColor("#5B6070"), "icon_hot": QColor("#0B0D12"),
-        "tile": QColor(10, 126, 164, 34), "tile_edge": QColor(10, 126, 164, 90),
-        "panel_top": QColor(255, 255, 255, 230), "panel_bottom": QColor(255, 255, 255, 170),
-        "panel_edge": QColor(11, 13, 18, 28),
-        "active_top": QColor(10, 126, 164, 40), "active_bottom": QColor(10, 126, 164, 18),
-        "active_edge": QColor(10, 126, 164, 90),
-        "caption": QColor(0, 0, 0, 70),
-        "badge": QColor("#D7DBDA"),
+        "pill_top": QColor("#1B1B1E"), "pill_bottom": QColor("#1B1B1E"),
+        "pill_edge": QColor(255, 255, 255, 22),
+        "icon": QColor("#A2A2AB"), "icon_hot": QColor("#FFFFFF"),
+        "tile": QColor(255, 255, 255, 26), "tile_edge": QColor(255, 255, 255, 34),
+        "panel_top": QColor(255, 255, 255, 209), "panel_bottom": QColor(255, 255, 255, 128),
+        "panel_edge": QColor(255, 255, 255, 190),
+        "active_top": QColor(0, 0, 0, 12), "active_bottom": QColor(0, 0, 0, 5),
+        "active_edge": QColor(0, 0, 0, 28),
+        "caption": QColor("#6B6B73"),
+        "badge": QColor("#D7D7DC"),
     }
-
 
 def _paint_capsule(widget: QWidget, radius: float, top: QColor, bottom: QColor, edge: QColor,
                    caption: str = "", span: tuple[float, float] | None = None) -> None:
@@ -173,7 +172,7 @@ class _RailButton(QAbstractButton):
         self._active = False
         self._hover = False
         self._badge = 0
-        self.setFixedSize(RAIL_WIDTH - 24, 42)
+        self.setFixedSize(RAIL_WIDTH - 24, 44)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
         self.setToolTip(label)
@@ -453,7 +452,7 @@ class Sidebar(QWidget):
         self.panel = _Panel()
         self.panel.setFixedWidth(PANEL_WIDTH)
         panel = QVBoxLayout(self.panel)
-        panel.setContentsMargins(14, 16, 14, 14)
+        panel.setContentsMargins(16, 16, 16, 16)
         panel.setSpacing(2)
 
         self.account_button = AccountButton()
