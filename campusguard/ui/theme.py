@@ -117,7 +117,7 @@ def rgba(hex_color: str, alpha: int) -> str:
 _QSS = """
 QWidget {
   color: @text@;
-  font-family: "Inter", "Segoe UI", sans-serif;
+  font-family: "DM Sans", "Segoe UI", sans-serif;
   font-size: @base_pt@pt;
 }
 QMainWindow { background: @bg1@; }\nQWidget#centralContent { background: transparent; }
