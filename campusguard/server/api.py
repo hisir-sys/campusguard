@@ -437,6 +437,8 @@ class ApiServer(ThreadingHTTPServer):
         self.snapshot_limiter = _SnapshotRateLimiter()
         self.stream_limiter = _StreamLimiter()
         self._thread: threading.Thread | None = None
+        self._serving = threading.Event()
+        self._stop_lock = threading.Lock()
         if tls_cert_file and tls_key_file:
             context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
             context.load_cert_chain(tls_cert_file, tls_key_file)
@@ -446,13 +448,41 @@ class ApiServer(ThreadingHTTPServer):
     def port(self) -> int:
         return int(self.server_address[1])
 
+    def service_actions(self) -> None:
+        # BaseServer calls this from inside serve_forever's polling loop. The
+        # event makes start() return only after shutdown() is safe to call.
+        self._serving.set()
+        super().service_actions()
+
     def start(self) -> None:
-        self._thread = threading.Thread(target=self.serve_forever, name="campusguard-api", daemon=True)
-        self._thread.start()
+        with self._stop_lock:
+            if self._thread is not None and self._thread.is_alive():
+                return
+            self._serving.clear()
+            self._thread = threading.Thread(
+                target=self.serve_forever,
+                name="campusguard-api",
+                daemon=True,
+            )
+            self._thread.start()
+        if not self._serving.wait(timeout=5.0):
+            thread = self._thread
+            if thread is not None:
+                thread.join(timeout=1.0)
+            raise TimeoutError("CampusGuard API server did not enter its serving loop")
 
     def stop(self) -> None:
-        if self._thread is not None:
-            self.shutdown()
-            self._thread.join(timeout=5)
+        with self._stop_lock:
+            thread = self._thread
+            if thread is not None and thread.is_alive():
+                # shutdown() deadlocks if called before serve_forever enters
+                # its loop. start() synchronizes that boundary via _serving.
+                if not self._serving.is_set():
+                    raise RuntimeError("CampusGuard API server has not finished starting")
+                self.shutdown()
+                thread.join(timeout=5.0)
+                if thread.is_alive():
+                    raise TimeoutError("CampusGuard API server did not stop cleanly")
             self._thread = None
-        self.server_close()
+            self._serving.clear()
+            self.server_close()
