@@ -575,20 +575,31 @@ class DashboardPage(QWidget):
         main_row.setContentsMargins(0, 0, 0, 0)
         main_row.setSpacing(16)
 
+        self._weekly_card = self._build_weekly_card()
         self._engine_card = self._build_engine_card()
         self._stats_card = self._build_stats_card()
         self._notifications_card = self._build_notifications_card()
         self._network_card = self._build_network_card()
 
-        for card in (self._engine_card, self._stats_card, self._notifications_card):
+        # Reference composition: a compact KPI row, an analytics/engine row,
+        # then the live camera wall. Every value remains backed by the local DB
+        # and live camera workers; this is not the HTML prototype's mock data.
+        for card in (self._weekly_card, self._stats_card, self._notifications_card):
             card.setMinimumHeight(184)
             card.setMaximumHeight(184)
-        main_row.addWidget(self._engine_card, 10)
+        main_row.addWidget(self._weekly_card, 10)
         main_row.addWidget(self._stats_card, 11)
         main_row.addWidget(self._notifications_card, 15)
         root.addLayout(main_row, 0)
 
-        root.addLayout(self._build_insights_row(), 0)
+        analysis_row = QHBoxLayout()
+        analysis_row.setContentsMargins(0, 0, 0, 0)
+        analysis_row.setSpacing(16)
+        analysis_row.addLayout(self._build_insights_row(), 3)
+        self._engine_card.setMinimumHeight(300)
+        self._engine_card.setMaximumHeight(300)
+        analysis_row.addWidget(self._engine_card, 2)
+        root.addLayout(analysis_row, 0)
 
         self._network_card.setMinimumHeight(440)
         root.addWidget(self._network_card, 1)
@@ -738,6 +749,28 @@ class DashboardPage(QWidget):
             width,
             height,
         )
+
+    # ==================================================================
+    # WEEKLY INCIDENT HERO
+    # ==================================================================
+
+    def _build_weekly_card(self) -> QFrame:
+        frame, layout = make_card("Incidents this week", icon="activity")
+        frame.setObjectName("dashboardGlassCard")
+        self._install_hover_effect(frame)
+        self.weekly_value = QLabel("0")
+        self.weekly_value.setObjectName("weeklyIncidentValue")
+        self.weekly_value.setStyleSheet(
+            "font-family: 'Outfit', 'DM Sans'; font-size: 34pt; "
+            "font-weight: 600; letter-spacing: -1.4px;"
+        )
+        self.weekly_delta = QLabel("Based on the last 7 days")
+        self.weekly_delta.setProperty("muted", True)
+        self.weekly_delta.setStyleSheet("font-size: 8.5pt;")
+        layout.addWidget(self.weekly_value)
+        layout.addWidget(self.weekly_delta)
+        layout.addStretch(1)
+        return frame
 
     # ==================================================================
     # AI ENGINE CARD
@@ -939,7 +972,7 @@ class DashboardPage(QWidget):
         self,
     ) -> QFrame:
         frame, layout = make_card(
-            "Notifications",
+            "Recent activity",
             icon="bell",
         )
         frame.setObjectName("dashboardGlassCard")
@@ -2224,6 +2257,28 @@ class DashboardPage(QWidget):
     def refresh_summary(
         self,
     ) -> None:
+
+        # Weekly hero is calculated from the real local incident history.
+        try:
+            from datetime import datetime, timedelta, timezone
+            cutoff = datetime.now().astimezone() - timedelta(days=7)
+            recent = self.repository.list_incidents(5000)
+            weekly = 0
+            for row in recent:
+                try:
+                    stamp = datetime.fromisoformat(
+                        str(row.get("happened_at", "")).replace("Z", "+00:00")
+                    )
+                    if stamp.tzinfo is None:
+                        stamp = stamp.replace(tzinfo=timezone.utc)
+                    weekly += stamp.astimezone().timestamp() >= cutoff.timestamp()
+                except (TypeError, ValueError, OverflowError):
+                    continue
+            self.weekly_value.setText(str(weekly))
+            self.weekly_delta.setText("Events recorded in the last 7 days")
+        except Exception:
+            self.weekly_value.setText("—")
+            self.weekly_delta.setText("Weekly history is unavailable")
 
         online = sum(
             self._stats.get(
