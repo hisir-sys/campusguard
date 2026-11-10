@@ -588,6 +588,8 @@ class DashboardPage(QWidget):
         main_row.addWidget(self._notifications_card, 15)
         root.addLayout(main_row, 0)
 
+        root.addLayout(self._build_insights_row(), 0)
+
         self._network_card.setMinimumHeight(440)
         root.addWidget(self._network_card, 1)
 
@@ -843,6 +845,93 @@ class DashboardPage(QWidget):
         return frame
 
     # ==================================================================
+    # INSIGHTS (statistics charts)
+    # ==================================================================
+
+    TREND_DAYS = 14
+
+    def _build_insights_row(self) -> QHBoxLayout:
+        from campusguard.ui.charts import RankBars, SeverityBar, TrendChart
+
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(20)
+
+        trend_card, trend_layout = make_card("Incidents over time", icon="activity")
+        trend_card.setMinimumHeight(300)
+        self._trend_total = QLabel("0")
+        self._trend_total.setObjectName("insightFigure")
+        self._trend_total.setStyleSheet("font-family: 'Outfit', 'DM Sans'; font-size: 26pt; font-weight: 600;")
+        self._trend_delta = QLabel("last %d days" % self.TREND_DAYS)
+        self._trend_delta.setProperty("muted", True)
+        figure = QHBoxLayout()
+        figure.setSpacing(10)
+        figure.addWidget(self._trend_total, 0, Qt.AlignmentFlag.AlignBottom)
+        figure.addWidget(self._trend_delta, 0, Qt.AlignmentFlag.AlignBottom)
+        figure.addStretch(1)
+        trend_layout.addLayout(figure)
+        self._trend_chart = TrendChart()
+        trend_layout.addWidget(self._trend_chart, 1)
+
+        split_card, split_layout = make_card("Where and how severe", icon="chart-column")
+        split_card.setMinimumHeight(300)
+        cam_title = QLabel("Busiest cameras")
+        cam_title.setProperty("kvlabel", True)
+        split_layout.addWidget(cam_title)
+        self._rank_bars = RankBars()
+        split_layout.addWidget(self._rank_bars)
+        split_layout.addStretch(1)
+        sev_title = QLabel("Severity mix")
+        sev_title.setProperty("kvlabel", True)
+        split_layout.addWidget(sev_title)
+        self._severity_bar = SeverityBar()
+        split_layout.addWidget(self._severity_bar)
+
+        row.addWidget(trend_card, 3)
+        row.addWidget(split_card, 2)
+        self._insight_cards = (trend_card, split_card)
+        self._insight_key: tuple | None = None
+        return row
+
+    def _refresh_insights(self) -> None:
+        """Redraw the charts from the incident log (only when the log has changed)."""
+        from collections import Counter
+        from datetime import date, datetime, timedelta
+
+        from campusguard.reports import summarize
+
+        try:
+            key = (self.repository.incident_count(), self.repository.open_incident_count())
+            if key == self._insight_key:
+                return
+            rows = self.repository.list_incidents(2000)
+        except Exception:
+            return
+        self._insight_key = key
+        info = summarize(rows)
+        today = date.today()
+        days = [today - timedelta(days=i) for i in range(self.TREND_DAYS - 1, -1, -1)]
+        per_day: Counter[str] = Counter()
+        for r in rows:
+            try:
+                when = datetime.fromisoformat(str(r.get("happened_at")).replace("Z", "+00:00")).astimezone().date()
+            except (TypeError, ValueError):
+                continue
+            per_day[when.isoformat()] += 1
+        values = [per_day.get(d.isoformat(), 0) for d in days]
+        previous = sum(per_day.get((d - timedelta(days=self.TREND_DAYS)).isoformat(), 0) for d in days)
+        total = sum(values)
+        self._trend_chart.set_data([d.strftime("%b %d").replace(" 0", " ") for d in days], values)
+        self._trend_total.setText(str(total))
+        if previous:
+            change = round((total - previous) * 100 / previous)
+            self._trend_delta.setText(f"{change:+d}% vs previous {self.TREND_DAYS} days")
+        else:
+            self._trend_delta.setText(f"in the last {self.TREND_DAYS} days")
+        self._rank_bars.set_items(info["per_camera"])
+        self._severity_bar.set_counts(info["severity"])
+
+    # ==================================================================
     # NOTIFICATIONS
     # ==================================================================
 
@@ -1023,25 +1112,25 @@ class DashboardPage(QWidget):
         palette = get_palette()
         dark = palette.name == "dark"
         if dark:
-            canvas_top, canvas_bottom = "#0C0D10", "#17191D"
+            canvas_top, canvas_bottom = "#0B0D12", "#10131A"
             glass_top, glass_bottom = rgba("#FFFFFF", 24), rgba("#FFFFFF", 8)
             tile_top, tile_bottom = rgba("#FFFFFF", 22), rgba("#FFFFFF", 7)
-            border = rgba("#FFFFFF", 46)
-            highlight = rgba("#FFFFFF", 86)
-            text, muted = "#F5F6F8", "#AEB3BC"
+            border = rgba("#FFFFFF", 30)
+            highlight = rgba("#FFFFFF", 62)
+            text, muted = "#F4F6FA", "#9AA3B5"
             accent = palette.accent
             divider = rgba("#FFFFFF", 24)
             shadow_alpha = 125
         else:
-            canvas_top, canvas_bottom = "#A5A5A5", "#C0C0C0"
-            glass_top, glass_bottom = rgba("#FFFFFF", 184), rgba("#FFFFFF", 118)
-            tile_top, tile_bottom = rgba("#FFFFFF", 190), rgba("#F5F5F5", 112)
-            border = rgba("#FFFFFF", 190)
-            highlight = rgba("#FFFFFF", 245)
-            text, muted = "#151518", "#505156"
-            accent = palette.ink
-            divider = rgba("#252326", 30)
-            shadow_alpha = 58
+            canvas_top, canvas_bottom = "#F4F4F2", "#ECEDF0"
+            glass_top, glass_bottom = rgba("#FFFFFF", 222), rgba("#FFFFFF", 150)
+            tile_top, tile_bottom = rgba("#FFFFFF", 230), rgba("#FFFFFF", 160)
+            border = rgba("#0B0D12", 24)
+            highlight = rgba("#FFFFFF", 255)
+            text, muted = "#0B0D12", "#5B6070"
+            accent = palette.accent
+            divider = rgba("#0B0D12", 18)
+            shadow_alpha = 36
 
         self._dashboard_content.setStyleSheet(f"""
             QWidget#dashboardContent {{
@@ -1056,7 +1145,7 @@ class DashboardPage(QWidget):
             }}
             QLabel#overviewTitle {{
                 color: {text}; background: transparent;
-                font-family: "DM Sans", "Segoe UI", sans-serif;
+                font-family: "Outfit", "DM Sans", "Segoe UI", sans-serif;
                 font-size: 27pt; font-weight: 600;
                 letter-spacing: -0.5px;
             }}
@@ -1074,7 +1163,7 @@ class DashboardPage(QWidget):
                     stop:0 {glass_top}, stop:.12 {glass_top}, stop:1 {glass_bottom});
                 border: 1px solid {border};
                 border-top: 1px solid {highlight};
-                border-radius: 16px;
+                border-radius: 18px;
             }}
             QFrame#dashboardGlassCard QLabel[cardtitle="true"] {{
                 color: {text}; font-size: 10.5pt; font-weight: 600;
@@ -1169,33 +1258,33 @@ class DashboardPage(QWidget):
     def _style_offline_preview(self, tile: QFrame) -> None:
         palette = get_palette()
         dark = palette.name == "dark"
-        fill = rgba("#FFFFFF", 14 if dark else 142)
-        edge = rgba("#FFFFFF", 58 if dark else 210)
+        fill = rgba("#FFFFFF", 8 if dark else 150)
+        edge = rgba("#FFFFFF", 34 if dark else 40) if dark else rgba("#0B0D12", 26)
         tile.setStyleSheet(
             f"QFrame#offlineCameraTile {{ background: {fill}; "
-            f"border: 1px solid {edge}; border-top: 1px solid {rgba('#FFFFFF', 92 if dark else 245)}; "
-            "border-radius: 22px; }"
+            f"border: 1px solid {edge}; border-top: 1px solid {rgba('#FFFFFF', 64 if dark else 255)}; "
+            "border-radius: 18px; }"
         )
 
     def _style_camera_preview(self, tile: CameraPreview) -> None:
         palette = get_palette()
         dark = palette.name == "dark"
-        border = rgba("#FFFFFF", 58 if dark else 205)
-        fill = rgba("#FFFFFF", 12 if dark else 145)
+        border = rgba("#FFFFFF", 34) if dark else rgba("#0B0D12", 26)
+        fill = rgba("#FFFFFF", 8 if dark else 150)
         overlay = rgba("#111215", 218 if dark else 206)
         tile.setMinimumHeight(280)
         tile.setStyleSheet(f"""
             QFrame#cameraPreview {{
                 background: {fill}; border: 1px solid {border};
-                border-top: 1px solid {rgba('#FFFFFF', 100 if dark else 245)};
-                border-radius: 22px;
+                border-top: 1px solid {rgba('#FFFFFF', 70 if dark else 255)};
+                border-radius: 18px;
             }}
             QFrame#cameraPreview:hover {{
                 border: 1px solid {palette.accent};
             }}
             QFrame#cameraPreview QLabel[videoSurface="true"] {{
-                background: {rgba('#0C0D0F', 248)};
-                border: 1px solid {border}; border-radius: 19px;
+                background: {rgba('#06080C', 252)};
+                border: 1px solid {border}; border-radius: 15px;
             }}
         """)
         for label in (tile.name_overlay, tile.status_overlay, tile.analysis_overlay):
@@ -2169,6 +2258,7 @@ class DashboardPage(QWidget):
                 8
             )
         )
+        self._refresh_insights()
 
         # Keep the currently-open stats popup current.
         if (

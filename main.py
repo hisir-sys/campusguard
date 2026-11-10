@@ -36,91 +36,53 @@ def _load_brand_fonts() -> None:
 
 
 class StartupWindow(QWidget):
-    """Launch screen: the CampusGuard logo draws itself in, then hands over to the glass
-    thinking orb while the app loads. Colours follow the saved dark/light theme."""
+    """Launch screen: the CampusGuard mark slides in, the dot pops and ripples, the wordmark
+    rises and a bar fills while the app loads. Colours follow the saved dark/light theme."""
 
-    LOGO_SECONDS = 3.2
+    LOGO_SECONDS = 3.4
 
     def __init__(self) -> None:
         super().__init__()
-        from campusguard.ui.brand_logo import LogoReveal, saved_theme
-        from campusguard.ui.theme import get_palette, rgba, set_current
+        from campusguard.ui.brand_logo import SPLASH, LogoReveal, saved_theme
+        from campusguard.ui.theme import set_current
 
         self.setWindowTitle("CampusGuard")
         self.setWindowIcon(QApplication.windowIcon())
-        self.setFixedSize(380, 420)
+        self.setFixedSize(480, 420)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
 
-        set_current(saved_theme())
-        palette = get_palette()
-        light = palette.name == "light"
+        theme = saved_theme()
+        set_current(theme)
+        colors = SPLASH[theme]
         panel = QFrame(self)
         panel.setObjectName("startupPanel")
-        panel.setGeometry(0, 0, 380, 420)
+        panel.setGeometry(0, 0, 480, 420)
         panel.setStyleSheet(
             f"""
             QFrame#startupPanel {{
-                background: {rgba(palette.glass, 244 if light else 238)};
-                border: 1px solid {rgba(palette.line, 68 if light else 42)};
-                border-top: 1px solid {rgba("#FFFFFF", 210 if light else 92)};
-                border-radius: 30px;
+                background: {colors["bg"]};
+                border: 1px solid {colors["line"]};
+                border-radius: 28px;
             }}
             QLabel {{ background: transparent; border: none; }}
             """
         )
 
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(24, 36, 24, 30)
+        layout.setContentsMargins(24, 28, 24, 24)
         layout.setSpacing(0)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # The logo and the orb share one slot; the orb takes over when the logo has formed.
-        self._stage = QWidget()
-        self._stage.setFixedSize(210, 210)
-        self.logo = LogoReveal(self._stage, size=210)
-        self.logo.setAccessibleName("CampusGuard logo")
-        self.orb = ThinkingOrb(self._stage, size=210)
-        self.orb.setAccessibleName("CampusGuard start-up animation")
-        self.orb.hide()
-        self.orb.stop()
-        self._orb_fade = QGraphicsOpacityEffect(self.orb)
-        self._orb_fade.setOpacity(0.0)
-        self.orb.setGraphicsEffect(self._orb_fade)
-        self._logo_fade = QGraphicsOpacityEffect(self.logo)
-        self._logo_fade.setOpacity(1.0)
-        self.logo.setGraphicsEffect(self._logo_fade)
-        layout.addWidget(self._stage, 0, Qt.AlignmentFlag.AlignCenter)
-        layout.addSpacing(12)
+        self.logo = LogoReveal(panel, size=104)
+        self.logo.setAccessibleName("CampusGuard start-up animation")
+        layout.addWidget(self.logo, 0, Qt.AlignmentFlag.AlignCenter)
+        layout.addSpacing(4)
 
-        self.brand_title = QLabel("CampusGuard")
-        self.brand_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.brand_title.setStyleSheet(
-            f"color: {palette.text}; font-family: Manrope, 'DM Sans', sans-serif; "
-            "font-size: 20pt; font-weight: 800; letter-spacing: -0.4px;"
-        )
-        layout.addWidget(self.brand_title)
-
-        self.brand_subtitle = QLabel("SECURITY OPERATIONS")
-        self.brand_subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.brand_subtitle.setStyleSheet(
-            f"color: {palette.muted}; font-size: 8pt; font-weight: 750; "
-            "letter-spacing: 2.0px;"
-        )
-        layout.addWidget(self.brand_subtitle)
-        layout.addSpacing(22)
-
-        self.status = QLabel("Starting…")
+        self.status = QLabel("Starting")
         self.status.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.status.setStyleSheet(f"color: {palette.muted}; font-size: 10pt; letter-spacing: 1px;")
+        self.status.setStyleSheet(f"color: {colors['mute']}; font-size: 10pt;")
         layout.addWidget(self.status)
-
-        self._handover = QTimer(self)
-        self._handover.setSingleShot(True)
-        self._handover.timeout.connect(self._show_orb)
-        self._handover_anim = QVariantAnimation(self)
-        self._handover_anim.setDuration(450)
-        self._handover_anim.valueChanged.connect(self._on_handover)
 
         screen = QGuiApplication.primaryScreen()
         if screen is not None:
@@ -128,37 +90,17 @@ class StartupWindow(QWidget):
             self.move(avail.x() + (avail.width() - self.width()) // 2, avail.y() + (avail.height() - self.height()) // 2)
 
     def set_status(self, text: str) -> None:
-        self.status.setText(text)
-
-    def _show_orb(self) -> None:
-        self.orb.show()
-        self.orb.start()
-        self._handover_anim.setStartValue(0.0)
-        self._handover_anim.setEndValue(1.0)
-        self._handover_anim.start()
-
-    def _on_handover(self, value) -> None:
-        value = float(value)
-        self._orb_fade.setOpacity(value)
-        self._logo_fade.setOpacity(1.0 - value)
-        if value >= 1.0:
-            self.logo.stop()
-            self.logo.hide()
+        self.status.setText(text.rstrip("…. "))
 
     def showEvent(self, event) -> None:
         self.logo.start()
-        # Let the finished logo hold for a beat, then crossfade to the thinking orb.
-        self._handover.start(int((self.LOGO_SECONDS + 0.6) * 1000))
         super().showEvent(event)
 
     def hideEvent(self, event) -> None:
-        self.orb.stop()
         self.logo.stop()
         super().hideEvent(event)
 
     def closeEvent(self, event) -> None:
-        self._handover.stop()
-        self.orb.stop()
         self.logo.stop()
         super().closeEvent(event)
 

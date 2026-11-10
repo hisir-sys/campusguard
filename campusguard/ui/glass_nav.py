@@ -113,8 +113,8 @@ class BackdropWidget(QWidget):
         painter.fillRect(QRectF(0, 0, w, h), QBrush(base))
 
         reach = float(max(w, h))
-        self._glow(painter, w, h, QPointF(w * 0.10, -h * 0.05), reach * 0.55, pal.glow1, pal.glow1_alpha)
-        self._glow(painter, w, h, QPointF(w * 0.92, h * 1.0), reach * 0.60, pal.glow2, pal.glow2_alpha)
+        self._glow(painter, w, h, QPointF(w * 0.12, -h * 0.02), reach * 0.62, pal.glow1, pal.glow1_alpha)
+        self._glow(painter, w, h, QPointF(w * 0.95, h * 1.02), reach * 0.66, pal.glow2, pal.glow2_alpha)
         self._glow(painter, w, h, QPointF(w * 0.60, h * 0.30), reach * 0.30, pal.glow2, int(pal.glow2_alpha * 0.5))
 
         painter.end()

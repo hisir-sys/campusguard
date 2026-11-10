@@ -41,44 +41,44 @@ class Palette:
     lens: str = "#8FA6C8"  # the blue lens dot: selection, focus, live status
 
 
-# Graphite / steel palette: no neon. Dark = near-black graphite with silver
-# accents; light = the neutral grey reference (charcoal accent, black text).
+# Midnight + aqua. Dark = the logo's #0B0D12 with soft aqua light behind frosted glass;
+# light = the logo's paper (#F4F4F2) with white glass. One accent (aqua), used sparingly.
 DARK = Palette(
     "dark",
-    "#0F1012", "#0F1012",
-    "#FFFFFF", 5, "#8A8F98", 4,
-    "#F2F2F3", "#C3C5CA", "#8A8D95",
-    "#DADCE0", "#F0F1F3",
-    "#8DB4A0", "#C4B085", "#C58790",
-    "#17181B", 232,
+    "#0B0D12", "#07090D",
+    "#38BDF8", 46, "#2DD4BF", 28,
+    "#F4F6FA", "#C7CCD8", "#8F97A9",
+    "#5CD6F5", "#86E2F9",
+    "#5FD7A0", "#F5B45A", "#FF7A7A",
+    "#131722", 235,
     "#FFFFFF", 22,
     "#FFFFFF", 10,
-    "#17181B", 232,
-    "#0C0D0F", 245,
-    "#DADCE0",
-    8,
-    "#17181B",
-    "#E4E6EA",
-    "#8FA6C8",
+    "#151925", 205,
+    "#05070B", 150,
+    "#FFFFFF",
+    14,
+    "#141824",
+    "#E6F4FB",
+    "#5CD6F5",
 )
 
 LIGHT = Palette(
     "light",
-    "#ECEDEF", "#ECEDEF",
-    "#FFFFFF", 0, "#000000", 0,
-    "#16171A", "#34363B", "#5A5D65",
-    "#202124", "#3A3C41",
-    "#2F6B52", "#7A5F22", "#9A3B45",
-    "#FFFFFF", 245,
-    "#16171A", 22,
-    "#16171A", 8,
-    "#FFFFFF", 245,
-    "#F6F7F8", 255,
-    "#C9CBD1",
+    "#F4F4F2", "#ECEDF0",
+    "#7DD3FC", 110, "#99F6E4", 80,
+    "#0B0D12", "#3A3F4C", "#5B6070",
+    "#0A7EA4", "#0C6E91",
+    "#1E8E5E", "#A8680F", "#C23B3B",
+    "#FFFFFF", 235,
+    "#0B0D12", 24,
+    "#0B0D12", 8,
+    "#FFFFFF", 225,
+    "#FFFFFF", 200,
+    "#FFFFFF",
     0,
     "#FFFFFF",
-    "#202124",
-    "#3F5F94",
+    "#0B0D12",
+    "#0A7EA4",
 )
 
 _current: Palette = DARK
@@ -156,7 +156,8 @@ QToolTip {
 QFrame[card="true"] {
   background: @card@;
   border: 1px solid @card_line@;
-  border-radius: 14px;
+  border-top: 1px solid @card_top@;
+  border-radius: 18px;
 }
 QFrame[tile="true"] {
   background: @veil@;
@@ -412,8 +413,13 @@ def build_qss(theme: str) -> str:
         "good": p.good, "warn": p.warn, "bad": p.bad,
         "bg1": p.bg1, "popup": rgba(p.glass, 188 if p.name == "dark" else 196),
         "glass": rgba(p.glass, p.glass_alpha),
-        "card": p.surface,
-        "card_line": rgba(p.line, 17 if p.name == "dark" else 44),
+        "card": (
+            "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(255, 255, 255, 24), stop:1 rgba(255, 255, 255, 8))"
+            if p.name == "dark"
+            else "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(255, 255, 255, 215), stop:1 rgba(255, 255, 255, 140))"
+        ),
+        "card_line": "rgba(255, 255, 255, 30)" if p.name == "dark" else "rgba(11, 13, 18, 24)",
+        "card_top": "rgba(255, 255, 255, 58)" if p.name == "dark" else "rgba(255, 255, 255, 255)",
         "glass_line": rgba(p.line, 14 * k // 10),
         "line": rgba(p.line, 18 * k // 10),
         "line_soft": rgba(p.line, 11 * k // 10),
@@ -431,8 +437,8 @@ def build_qss(theme: str) -> str:
         "accent_line": rgba(p.ink, 190)
         , "ink": p.ink,
         "lens": p.lens,
-        "video": "#111215" if p.name == "dark" else "#232124",
-        "on_accent": "#0E0F11" if p.name == "dark" else "#F4F4F5",
+        "video": "#080A0E" if p.name == "dark" else "#1B1E26",
+        "on_accent": "#06222B" if p.name == "dark" else "#FFFFFF",
         "base_pt": str(_base_pt),
         **_ui_assets(p),
     }

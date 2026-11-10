@@ -52,16 +52,15 @@ def test_saved_theme_reads_the_users_choice(monkeypatch, tmp_path):
     assert brand_logo.saved_theme() == "light"
 
 
-def test_logo_reveal_finishes_and_startup_window_hands_over(monkeypatch):
+def test_startup_window_plays_the_logo_animation(monkeypatch):
     _app()
     monkeypatch.setattr(brand_logo, "saved_theme", lambda: "light")
     import main as app_main
 
     window = app_main.StartupWindow()
     window.show()
-    assert window.logo.isVisible() and not window.orb.isVisible()
-    window._show_orb()
-    window._on_handover(1.0)
-    assert window.orb.isVisible() and not window.logo.isVisible()
+    assert window.logo.isVisible()
+    window.set_status("Loading models…")
+    assert window.status.text() == "Loading models"
     window.close()
     set_current("dark")
