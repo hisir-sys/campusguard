@@ -470,7 +470,7 @@ class Sidebar(QWidget):
         panel.addSpacing(4)
 
         for index, (title, items) in enumerate(HOME_GROUPS):
-            panel.addWidget(_Divider(title if index == 0 else ""))
+            panel.addWidget(_Divider(title))
             for text, key, icon in items:
                 item = _PanelItem(text, icon)
                 item.clicked.connect(lambda _c=False, target=key: self.page_requested.emit(target))
