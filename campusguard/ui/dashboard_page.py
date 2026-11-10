@@ -548,8 +548,8 @@ class DashboardPage(QWidget):
             self._dashboard_content
         )
 
-        root.setContentsMargins(28, 22, 28, 30)
-        root.setSpacing(18)
+        root.setContentsMargins(24, 20, 24, 28)
+        root.setSpacing(16)
 
         # Clear, editorial header with a quiet security-operations eyebrow.
         header_row = QHBoxLayout()
@@ -573,7 +573,7 @@ class DashboardPage(QWidget):
 
         main_row = QHBoxLayout()
         main_row.setContentsMargins(0, 0, 0, 0)
-        main_row.setSpacing(20)
+        main_row.setSpacing(16)
 
         self._engine_card = self._build_engine_card()
         self._stats_card = self._build_stats_card()
@@ -855,7 +855,7 @@ class DashboardPage(QWidget):
 
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(20)
+        row.setSpacing(16)
 
         trend_card, trend_layout = make_card("Incidents over time", icon="activity")
         trend_card.setMinimumHeight(300)
@@ -1112,24 +1112,24 @@ class DashboardPage(QWidget):
         palette = get_palette()
         dark = palette.name == "dark"
         if dark:
-            canvas_top, canvas_bottom = "#0B0D12", "#10131A"
-            glass_top, glass_bottom = rgba("#FFFFFF", 24), rgba("#FFFFFF", 8)
-            tile_top, tile_bottom = rgba("#FFFFFF", 22), rgba("#FFFFFF", 7)
-            border = rgba("#FFFFFF", 30)
-            highlight = rgba("#FFFFFF", 62)
-            text, muted = "#F4F6FA", "#9AA3B5"
+            canvas_top, canvas_bottom = "#0A0A0B", "#111113"
+            glass_top, glass_bottom = rgba("#343438", 174), rgba("#18181B", 153)
+            tile_top, tile_bottom = rgba("#343438", 112), rgba("#18181B", 100)
+            border = rgba("#FFFFFF", 26)
+            highlight = rgba("#FFFFFF", 42)
+            text, muted = "#F5F5F7", "#9A9AA2"
             accent = palette.accent
-            divider = rgba("#FFFFFF", 24)
-            shadow_alpha = 125
+            divider = rgba("#FFFFFF", 20)
+            shadow_alpha = 90
         else:
-            canvas_top, canvas_bottom = "#F4F4F2", "#ECEDF0"
-            glass_top, glass_bottom = rgba("#FFFFFF", 222), rgba("#FFFFFF", 150)
-            tile_top, tile_bottom = rgba("#FFFFFF", 230), rgba("#FFFFFF", 160)
-            border = rgba("#0B0D12", 24)
+            canvas_top, canvas_bottom = "#E4E4E7", "#DCDCE1"
+            glass_top, glass_bottom = rgba("#FFFFFF", 209), rgba("#FFFFFF", 128)
+            tile_top, tile_bottom = rgba("#FFFFFF", 225), rgba("#FFFFFF", 155)
+            border = rgba("#000000", 20)
             highlight = rgba("#FFFFFF", 255)
-            text, muted = "#0B0D12", "#5B6070"
+            text, muted = "#0B0B0D", "#6B6B73"
             accent = palette.accent
-            divider = rgba("#0B0D12", 18)
+            divider = rgba("#000000", 16)
             shadow_alpha = 36
 
         self._dashboard_content.setStyleSheet(f"""
@@ -1137,7 +1137,7 @@ class DashboardPage(QWidget):
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
                     stop:0 {canvas_top}, stop:0.52 {canvas_bottom}, stop:1 {canvas_top});
                 color: {text};
-                font-family: "DM Sans", "Segoe UI", sans-serif;
+                font-family: "Inter", "Segoe UI", sans-serif;
             }}
             QLabel#overviewEyebrow {{
                 color: {muted}; background: transparent;
@@ -1145,7 +1145,7 @@ class DashboardPage(QWidget):
             }}
             QLabel#overviewTitle {{
                 color: {text}; background: transparent;
-                font-family: "Outfit", "DM Sans", "Segoe UI", sans-serif;
+                font-family: "Outfit", "Inter", "Segoe UI", sans-serif;
                 font-size: 27pt; font-weight: 600;
                 letter-spacing: -0.5px;
             }}
@@ -1163,7 +1163,7 @@ class DashboardPage(QWidget):
                     stop:0 {glass_top}, stop:.12 {glass_top}, stop:1 {glass_bottom});
                 border: 1px solid {border};
                 border-top: 1px solid {highlight};
-                border-radius: 18px;
+                border-radius: 20px;
             }}
             QFrame#dashboardGlassCard QLabel[cardtitle="true"] {{
                 color: {text}; font-size: 10.5pt; font-weight: 600;
@@ -1172,7 +1172,7 @@ class DashboardPage(QWidget):
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                     stop:0 {tile_top}, stop:1 {tile_bottom});
                 border: 1px solid {border}; border-top: 1px solid {highlight};
-                border-radius: 18px;
+                border-radius: 20px;
             }}
             QFrame#dashboardStatTile:hover {{
                 border: 1px solid {accent};
@@ -1205,8 +1205,8 @@ class DashboardPage(QWidget):
         for frame in (self._engine_card, self._stats_card, self._notifications_card, self._network_card):
             effect = frame.graphicsEffect()
             if isinstance(effect, QGraphicsDropShadowEffect):
-                effect.setBlurRadius(38 if dark else 32)
-                effect.setOffset(0, 14 if dark else 10)
+                effect.setBlurRadius(32 if dark else 26)
+                effect.setOffset(0, 10 if dark else 8)
                 effect.setColor(QColor(0, 0, 0, shadow_alpha))
         self._overview_badge.setStyleSheet(
             f"color: {text}; background: {glass_top}; border: 1px solid {border}; "
@@ -1263,7 +1263,7 @@ class DashboardPage(QWidget):
         tile.setStyleSheet(
             f"QFrame#offlineCameraTile {{ background: {fill}; "
             f"border: 1px solid {edge}; border-top: 1px solid {rgba('#FFFFFF', 64 if dark else 255)}; "
-            "border-radius: 18px; }"
+            "border-radius: 20px; }"
         )
 
     def _style_camera_preview(self, tile: CameraPreview) -> None:
@@ -1277,7 +1277,7 @@ class DashboardPage(QWidget):
             QFrame#cameraPreview {{
                 background: {fill}; border: 1px solid {border};
                 border-top: 1px solid {rgba('#FFFFFF', 70 if dark else 255)};
-                border-radius: 18px;
+                border-radius: 20px;
             }}
             QFrame#cameraPreview:hover {{
                 border: 1px solid {palette.accent};
