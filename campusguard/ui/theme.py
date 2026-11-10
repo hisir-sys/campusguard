@@ -41,15 +41,14 @@ class Palette:
     lens: str = "#8FA6C8"  # the blue lens dot: selection, focus, live status
 
 
-# Midnight + aqua. Dark = the logo's #0B0D12 with soft aqua light behind frosted glass;
-# light = the logo's paper (#F4F4F2) with white glass. One accent (aqua), used sparingly.
-# Midnight graphite + warm signal: mapped from the supplied CampusGuard HTML reference.
+# Graphite and porcelain surfaces with monochrome controls; coral is reserved for signal states.
+# Values are mapped from the supplied CampusGuard HTML reference.
 DARK = Palette(
     "dark",
     "#0A0A0B", "#0A0A0B",
     "#FFFFFF", 10, "#FFFFFF", 7,
     "#F5F5F7", "#C7C7CE", "#9A9AA2",
-    "#E58B76", "#F09B88",
+    "#F5F5F7", "#FFFFFF",
     "#83C9A5", "#E7BD79", "#E58B76",
     "#1E1E21", 210,
     "#FFFFFF", 24,
@@ -59,7 +58,7 @@ DARK = Palette(
     "#FFFFFF",
     14,
     "#1E1E21",
-    "#E58B76",
+    "#F5F5F7",
     "#E58B76",
 )
 
@@ -68,7 +67,7 @@ LIGHT = Palette(
     "#E4E4E7", "#E4E4E7",
     "#000000", 8, "#000000", 5,
     "#0B0B0D", "#3E3E46", "#6B6B73",
-    "#B4412F", "#9F382A",
+    "#0B0B0D", "#000000",
     "#2E8B62", "#9C6C22", "#B4412F",
     "#FFFFFF", 225,
     "#000000", 20,
@@ -78,7 +77,7 @@ LIGHT = Palette(
     "#FFFFFF",
     190,
     "#FFFFFF",
-    "#B4412F",
+    "#0B0B0D",
     "#B4412F",
 )
 _current: Palette = DARK
@@ -438,7 +437,7 @@ def build_qss(theme: str) -> str:
         , "ink": p.ink,
         "lens": p.lens,
         "video": "#0A0A0B" if p.name == "dark" else "#D1D1D6",
-        "on_accent": "#06222B" if p.name == "dark" else "#FFFFFF",
+        "on_accent": "#0A0A0B" if p.name == "dark" else "#FFFFFF",
         "base_pt": str(_base_pt),
         **_ui_assets(p),
     }
