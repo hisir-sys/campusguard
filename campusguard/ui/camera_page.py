@@ -394,8 +394,8 @@ class CamerasPage(QWidget):
         header.setSpacing(16)
 
         title = make_page_title(
-            "Camera network",
-            "Manage external USB, RTSP, HTTP/MJPEG and IP camera sources.",
+            "Cameras",
+            "Add, edit and monitor every configured camera source.",
         )
         header.addWidget(title, 1)
 
