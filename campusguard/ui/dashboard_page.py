@@ -473,6 +473,7 @@ class GlassPopup(QFrame):
 class DashboardPage(QWidget):
     camera_selected = Signal(str)
     view_alerts_requested = Signal()
+    view_incidents_requested = Signal()
     clear_notifications_requested = Signal()
 
     def __init__(
@@ -548,8 +549,8 @@ class DashboardPage(QWidget):
             self._dashboard_content
         )
 
-        root.setContentsMargins(28, 22, 28, 30)
-        root.setSpacing(18)
+        root.setContentsMargins(24, 20, 24, 28)
+        root.setSpacing(16)
 
         # Clear, editorial header with a quiet security-operations eyebrow.
         header_row = QHBoxLayout()
@@ -558,9 +559,9 @@ class DashboardPage(QWidget):
         title_stack = QVBoxLayout()
         title_stack.setContentsMargins(0, 0, 0, 0)
         title_stack.setSpacing(5)
-        self._welcome_title = QLabel("Campus overview")
+        self._welcome_title = QLabel("Dashboard")
         self._welcome_title.setObjectName("overviewTitle")
-        self._welcome_subtitle = QLabel("A live view of cameras, incidents and campus activity")
+        self._welcome_subtitle = QLabel("Live overview of cameras, incidents and the detection engine")
         self._welcome_subtitle.setObjectName("overviewSubtitle")
         title_stack.addWidget(self._welcome_title)
         title_stack.addWidget(self._welcome_subtitle)
@@ -573,25 +574,43 @@ class DashboardPage(QWidget):
 
         main_row = QHBoxLayout()
         main_row.setContentsMargins(0, 0, 0, 0)
-        main_row.setSpacing(20)
+        main_row.setSpacing(16)
 
+        self._weekly_card = self._build_weekly_card()
         self._engine_card = self._build_engine_card()
         self._stats_card = self._build_stats_card()
         self._notifications_card = self._build_notifications_card()
         self._network_card = self._build_network_card()
+        self._recent_incidents_card = self._build_recent_incidents_card()
 
-        for card in (self._engine_card, self._stats_card, self._notifications_card):
+        # Reference composition: KPI row, analytics + engine, then live cameras
+        # beside a real recent-incidents list. Every value is sourced from the
+        # local repository and live camera workers, never prototype mock data.
+        for card in (self._weekly_card, self._stats_card, self._notifications_card):
             card.setMinimumHeight(184)
             card.setMaximumHeight(184)
-        main_row.addWidget(self._engine_card, 10)
+        main_row.addWidget(self._weekly_card, 10)
         main_row.addWidget(self._stats_card, 11)
         main_row.addWidget(self._notifications_card, 15)
         root.addLayout(main_row, 0)
 
-        root.addLayout(self._build_insights_row(), 0)
+        analysis_row = QHBoxLayout()
+        analysis_row.setContentsMargins(0, 0, 0, 0)
+        analysis_row.setSpacing(16)
+        analysis_row.addLayout(self._build_insights_row(), 3)
+        self._engine_card.setMinimumHeight(300)
+        self._engine_card.setMaximumHeight(300)
+        analysis_row.addWidget(self._engine_card, 2)
+        root.addLayout(analysis_row, 0)
 
+        bottom_row = QHBoxLayout()
+        bottom_row.setContentsMargins(0, 0, 0, 0)
+        bottom_row.setSpacing(16)
         self._network_card.setMinimumHeight(440)
-        root.addWidget(self._network_card, 1)
+        self._recent_incidents_card.setMinimumHeight(440)
+        bottom_row.addWidget(self._network_card, 2)
+        bottom_row.addWidget(self._recent_incidents_card, 1)
+        root.addLayout(bottom_row, 1)
 
         # Keep a dedicated bottom breathing space in the scrollable content.
         # This reserves clear canvas above the floating dock at the end of the
@@ -740,6 +759,28 @@ class DashboardPage(QWidget):
         )
 
     # ==================================================================
+    # WEEKLY INCIDENT HERO
+    # ==================================================================
+
+    def _build_weekly_card(self) -> QFrame:
+        frame, layout = make_card("Incidents this week", icon="activity")
+        frame.setObjectName("dashboardGlassCard")
+        self._install_hover_effect(frame)
+        self.weekly_value = QLabel("0")
+        self.weekly_value.setObjectName("weeklyIncidentValue")
+        self.weekly_value.setStyleSheet(
+            "font-family: 'Outfit', 'DM Sans'; font-size: 34pt; "
+            "font-weight: 600; letter-spacing: -1.4px;"
+        )
+        self.weekly_delta = QLabel("Based on the last 7 days")
+        self.weekly_delta.setProperty("muted", True)
+        self.weekly_delta.setStyleSheet("font-size: 8.5pt;")
+        layout.addWidget(self.weekly_value)
+        layout.addWidget(self.weekly_delta)
+        layout.addStretch(1)
+        return frame
+
+    # ==================================================================
     # AI ENGINE CARD
     # ==================================================================
 
@@ -855,7 +896,7 @@ class DashboardPage(QWidget):
 
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(20)
+        row.setSpacing(16)
 
         trend_card, trend_layout = make_card("Incidents over time", icon="activity")
         trend_card.setMinimumHeight(300)
@@ -939,7 +980,7 @@ class DashboardPage(QWidget):
         self,
     ) -> QFrame:
         frame, layout = make_card(
-            "Notifications",
+            "Recent activity",
             icon="bell",
         )
         frame.setObjectName("dashboardGlassCard")
@@ -1035,6 +1076,74 @@ class DashboardPage(QWidget):
         return frame
 
     # ==================================================================
+    # RECENT INCIDENTS
+    # ==================================================================
+
+    def _build_recent_incidents_card(self) -> QFrame:
+        frame, layout = make_card("Recent incidents", icon="file-warning")
+        frame.setObjectName("dashboardGlassCard")
+        self._install_hover_effect(frame)
+        see_all = QPushButton("See all")
+        see_all.setProperty("link", True)
+        see_all.setCursor(Qt.CursorShape.PointingHandCursor)
+        see_all.clicked.connect(
+            lambda _checked=False: self.view_incidents_requested.emit()
+        )
+        frame.header_layout.addWidget(see_all)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.viewport().setAutoFillBackground(False)
+        content = QWidget()
+        self._recent_incidents_layout = QVBoxLayout(content)
+        self._recent_incidents_layout.setContentsMargins(0, 2, 4, 4)
+        self._recent_incidents_layout.setSpacing(8)
+        self._recent_incidents_layout.addStretch(1)
+        scroll.setWidget(content)
+        layout.addWidget(scroll, 1)
+        return frame
+
+    def _show_recent_incidents(self, rows: list[dict]) -> None:
+        layout = self._recent_incidents_layout
+        while layout.count() > 1:
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+        if not rows:
+            empty = QLabel("No incidents recorded yet.")
+            empty.setProperty("muted", True)
+            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            layout.insertWidget(0, empty)
+            return
+
+        for index, row in enumerate(rows[:6]):
+            item = QFrame()
+            item.setObjectName("notificationRow")
+            line = QVBoxLayout(item)
+            line.setContentsMargins(0, 8, 0, 8)
+            line.setSpacing(3)
+            title = QLabel(str(row.get("event") or "Security event"))
+            title.setStyleSheet("font-size: 9.5pt; font-weight: 600;")
+            detail = QLabel(
+                f"{row.get('camera_name', 'Unknown camera')}  ·  "
+                f"{str(row.get('happened_at', '')).replace('T', ' ')[:16]}"
+            )
+            detail.setProperty("muted", True)
+            confidence = float(row.get("confidence") or 0.0)
+            status = str(row.get("status") or "NEW").replace("_", " ").title()
+            meta = QLabel(f"{confidence:.0%} confidence  ·  {status}")
+            meta.setProperty("muted", True)
+            meta.setStyleSheet("font-size: 8pt;")
+            line.addWidget(title)
+            line.addWidget(detail)
+            line.addWidget(meta)
+            layout.insertWidget(index, item)
+
+    # ==================================================================
     # LIVE NETWORK
     # ==================================================================
 
@@ -1112,24 +1221,24 @@ class DashboardPage(QWidget):
         palette = get_palette()
         dark = palette.name == "dark"
         if dark:
-            canvas_top, canvas_bottom = "#0B0D12", "#10131A"
-            glass_top, glass_bottom = rgba("#FFFFFF", 24), rgba("#FFFFFF", 8)
-            tile_top, tile_bottom = rgba("#FFFFFF", 22), rgba("#FFFFFF", 7)
-            border = rgba("#FFFFFF", 30)
-            highlight = rgba("#FFFFFF", 62)
-            text, muted = "#F4F6FA", "#9AA3B5"
+            canvas_top, canvas_bottom = "#0A0A0B", "#111113"
+            glass_top, glass_bottom = rgba("#343438", 174), rgba("#18181B", 153)
+            tile_top, tile_bottom = rgba("#343438", 112), rgba("#18181B", 100)
+            border = rgba("#FFFFFF", 26)
+            highlight = rgba("#FFFFFF", 42)
+            text, muted = "#F5F5F7", "#9A9AA2"
             accent = palette.accent
-            divider = rgba("#FFFFFF", 24)
-            shadow_alpha = 125
+            divider = rgba("#FFFFFF", 20)
+            shadow_alpha = 90
         else:
-            canvas_top, canvas_bottom = "#F4F4F2", "#ECEDF0"
-            glass_top, glass_bottom = rgba("#FFFFFF", 222), rgba("#FFFFFF", 150)
-            tile_top, tile_bottom = rgba("#FFFFFF", 230), rgba("#FFFFFF", 160)
-            border = rgba("#0B0D12", 24)
+            canvas_top, canvas_bottom = "#E4E4E7", "#DCDCE1"
+            glass_top, glass_bottom = rgba("#FFFFFF", 209), rgba("#FFFFFF", 128)
+            tile_top, tile_bottom = rgba("#FFFFFF", 225), rgba("#FFFFFF", 155)
+            border = rgba("#000000", 20)
             highlight = rgba("#FFFFFF", 255)
-            text, muted = "#0B0D12", "#5B6070"
+            text, muted = "#0B0B0D", "#6B6B73"
             accent = palette.accent
-            divider = rgba("#0B0D12", 18)
+            divider = rgba("#000000", 16)
             shadow_alpha = 36
 
         self._dashboard_content.setStyleSheet(f"""
@@ -1163,7 +1272,7 @@ class DashboardPage(QWidget):
                     stop:0 {glass_top}, stop:.12 {glass_top}, stop:1 {glass_bottom});
                 border: 1px solid {border};
                 border-top: 1px solid {highlight};
-                border-radius: 18px;
+                border-radius: 20px;
             }}
             QFrame#dashboardGlassCard QLabel[cardtitle="true"] {{
                 color: {text}; font-size: 10.5pt; font-weight: 600;
@@ -1172,7 +1281,7 @@ class DashboardPage(QWidget):
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                     stop:0 {tile_top}, stop:1 {tile_bottom});
                 border: 1px solid {border}; border-top: 1px solid {highlight};
-                border-radius: 18px;
+                border-radius: 20px;
             }}
             QFrame#dashboardStatTile:hover {{
                 border: 1px solid {accent};
@@ -1205,8 +1314,8 @@ class DashboardPage(QWidget):
         for frame in (self._engine_card, self._stats_card, self._notifications_card, self._network_card):
             effect = frame.graphicsEffect()
             if isinstance(effect, QGraphicsDropShadowEffect):
-                effect.setBlurRadius(38 if dark else 32)
-                effect.setOffset(0, 14 if dark else 10)
+                effect.setBlurRadius(32 if dark else 26)
+                effect.setOffset(0, 10 if dark else 8)
                 effect.setColor(QColor(0, 0, 0, shadow_alpha))
         self._overview_badge.setStyleSheet(
             f"color: {text}; background: {glass_top}; border: 1px solid {border}; "
@@ -1259,17 +1368,17 @@ class DashboardPage(QWidget):
         palette = get_palette()
         dark = palette.name == "dark"
         fill = rgba("#FFFFFF", 8 if dark else 150)
-        edge = rgba("#FFFFFF", 34 if dark else 40) if dark else rgba("#0B0D12", 26)
+        edge = rgba("#FFFFFF", 34 if dark else 40) if dark else rgba("#000000", 20)
         tile.setStyleSheet(
             f"QFrame#offlineCameraTile {{ background: {fill}; "
             f"border: 1px solid {edge}; border-top: 1px solid {rgba('#FFFFFF', 64 if dark else 255)}; "
-            "border-radius: 18px; }"
+            "border-radius: 20px; }"
         )
 
     def _style_camera_preview(self, tile: CameraPreview) -> None:
         palette = get_palette()
         dark = palette.name == "dark"
-        border = rgba("#FFFFFF", 34) if dark else rgba("#0B0D12", 26)
+        border = rgba("#FFFFFF", 34) if dark else rgba("#000000", 20)
         fill = rgba("#FFFFFF", 8 if dark else 150)
         overlay = rgba("#111215", 218 if dark else 206)
         tile.setMinimumHeight(280)
@@ -1277,7 +1386,7 @@ class DashboardPage(QWidget):
             QFrame#cameraPreview {{
                 background: {fill}; border: 1px solid {border};
                 border-top: 1px solid {rgba('#FFFFFF', 70 if dark else 255)};
-                border-radius: 18px;
+                border-radius: 20px;
             }}
             QFrame#cameraPreview:hover {{
                 border: 1px solid {palette.accent};
@@ -2225,6 +2334,28 @@ class DashboardPage(QWidget):
         self,
     ) -> None:
 
+        # Weekly hero is calculated from the real local incident history.
+        try:
+            from datetime import datetime, timedelta, timezone
+            cutoff = datetime.now().astimezone() - timedelta(days=7)
+            recent = self.repository.list_incidents(5000)
+            weekly = 0
+            for row in recent:
+                try:
+                    stamp = datetime.fromisoformat(
+                        str(row.get("happened_at", "")).replace("Z", "+00:00")
+                    )
+                    if stamp.tzinfo is None:
+                        stamp = stamp.replace(tzinfo=timezone.utc)
+                    weekly += stamp.astimezone().timestamp() >= cutoff.timestamp()
+                except (TypeError, ValueError, OverflowError):
+                    continue
+            self.weekly_value.setText(str(weekly))
+            self.weekly_delta.setText("Events recorded in the last 7 days")
+        except Exception:
+            self.weekly_value.setText("—")
+            self.weekly_delta.setText("Weekly history is unavailable")
+
         online = sum(
             self._stats.get(
                 camera_id,
@@ -2258,6 +2389,10 @@ class DashboardPage(QWidget):
                 8
             )
         )
+        try:
+            self._show_recent_incidents(self.repository.list_incidents(limit=6))
+        except Exception:
+            self._show_recent_incidents([])
         self._refresh_insights()
 
         # Keep the currently-open stats popup current.

@@ -69,6 +69,13 @@ jobs:
           Copy-Item yolo11n.pt models/yolo11n.pt -Force
           Copy-Item yolo11n-pose.pt models/yolo11n-pose.pt -Force
 
+      - name: Bake CI build version into the packaged app
+        shell: pwsh
+        run: |
+          $version = "0.$env:GITHUB_RUN_NUMBER"
+          Set-Content -Path "campusguard/_build_version.py" -Value "VERSION = `"$version`"" -Encoding utf8
+          Write-Host "Packaging CampusGuard version $version"
+
       - name: Install Windows packaging tools
         shell: pwsh
         run: |

@@ -1109,8 +1109,8 @@ class IncidentsPage(QWidget):
 
         header.addWidget(
             make_page_title(
-                "Incident history",
-                "Review security events detected across the CampusGuard network.",
+                "Incidents",
+                "Review clips, then confirm or mark a false alarm.",
             ),
             1,
         )

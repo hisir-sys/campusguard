@@ -21,6 +21,9 @@ from campusguard.ui import theme
 # Each value is the inside of a 24x24 SVG that is drawn with stroke only.
 _ICONS: dict[str, str] = {
     "search": '<circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/>',
+    "circle-dot": '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/>',
+    "check": '<path d="m5 12 4 4L19 6"/>',
+    "x-circle": '<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/>',
     "sun": (
         '<circle cx="12" cy="12" r="4"/>'
         '<path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41'

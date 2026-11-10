@@ -1,14 +1,14 @@
-"""CampusGuard navigation: single icon rail + hover-opened Home panel.
+"""CampusGuard navigation: compact operations rail + hover-opened Monitor panel.
 
-Layout (copied from the "rail + panel" reference):
+Layout mapped from the supplied reference:
 
-* Left rail, top capsule: logo, one **Home** icon, then the four Learn icons.
-* Left rail, bottom capsule: theme toggle, account, settings.
-* Hovering **Home** floats a second panel out beside the rail with Dashboard,
-  Cameras, Incidents, Alerts and School server, plus a camera search box at
-  the bottom. The panel overlays the page, so nothing reflows.
+* Left rail: logo, Home, Services, Tools and School server.
+* Bottom rail: theme, account and Settings.
+* Hovering Home opens the 300px flyout with Dashboard, Cameras, Incidents,
+  Alerts, real incident-status shortcuts, About / How it works, and grouped
+  camera search. The panel overlays the workspace instead of reflowing it.
 
-All page / theme / login actions keep going through the same signals.
+All page, theme and login actions continue through the existing signals.
 """
 from __future__ import annotations
 
@@ -27,63 +27,70 @@ from campusguard.ui.glass_nav import AccountButton
 from campusguard.ui.icons import icon_pixmap
 from campusguard.ui.theme import get_palette, qcolor
 
-RAIL_WIDTH = 68
-PANEL_WIDTH = 262
+RAIL_WIDTH = 72
+PANEL_WIDTH = 300
 GAP = 8
 COMPACT_WIDTH = RAIL_WIDTH
 EXPANDED_WIDTH = RAIL_WIDTH + GAP + PANEL_WIDTH
 BOTTOM_CAPSULE_HEIGHT = 236
 
-# Pages that live "inside Home".
-HOME_PAGES = ("dashboard", "cameras", "incidents", "alerts", "server-viewer")
+# The Monitor flyout mirrors the reference's four primary destinations.
+# Secondary documentation stays in the flyout so it remains reachable without
+# occupying the compact rail; operational system pages stay on the rail.
+HOME_PAGES = ("dashboard", "cameras", "incidents", "alerts")
 HOME_GROUPS = (
-    ("Overview", (("Dashboard", "dashboard", "layout-dashboard"), ("Cameras", "cameras", "video"))),
-    ("Activity", (("Incidents", "incidents", "file-warning"), ("Alerts", "alerts", "bell"))),
-    ("Network", (("School server", "server-viewer", "server"),)),
+    ("Monitor", (
+        ("Dashboard", "dashboard", "layout-dashboard"),
+        ("Cameras", "cameras", "video"),
+        ("Incidents", "incidents", "file-warning"),
+        ("Alerts", "alerts", "bell"),
+    )),
+    ("Learn", (
+        ("About", "about", "info"),
+        ("How it works", "how-it-works", "route"),
+    )),
 )
 LEARN = (
     ("Services", "services", "layers"),
-    ("About", "about", "info"),
     ("Tools", "tools", "wrench"),
-    ("How it works", "how-it-works", "route"),
+    ("School server", "server-viewer", "server"),
 )
 # Kept for code that still imports the old structure.
 SECTIONS = (("HOME", tuple(i for _t, items in HOME_GROUPS for i in items)), ("LEARN", LEARN))
 
 
 def _tones() -> dict[str, QColor]:
-    """Colour set for the nav surfaces (light copies the reference greys)."""
+    """Navigation tones translated from the HTML rail and floating glass panel."""
     pal = get_palette()
     if pal.name == "dark":
         return {
             "outer_top": QColor(255, 255, 255, 0), "outer_bottom": QColor(255, 255, 255, 0),
             "outer_edge": QColor(255, 255, 255, 0),
-            "pill_top": QColor(255, 255, 255, 34), "pill_bottom": QColor(255, 255, 255, 10),
-            "pill_edge": QColor(255, 255, 255, 46),
-            "icon": QColor("#9AA3B5"), "icon_hot": QColor("#FFFFFF"),
-            "tile": QColor(92, 214, 245, 44), "tile_edge": QColor(92, 214, 245, 96),
-            "panel_top": QColor(255, 255, 255, 30), "panel_bottom": QColor(255, 255, 255, 9),
-            "panel_edge": QColor(255, 255, 255, 42),
-            "active_top": QColor(92, 214, 245, 52), "active_bottom": QColor(92, 214, 245, 20),
-            "active_edge": QColor(92, 214, 245, 96),
-            "caption": QColor(255, 255, 255, 56),
+            "pill_top": QColor("#1B1B1E"), "pill_bottom": QColor("#1B1B1E"),
+            "pill_edge": QColor(255, 255, 255, 22),
+            "icon": QColor("#A2A2AB"), "icon_hot": QColor("#FFFFFF"),
+            "tile": QColor(255, 255, 255, 30), "tile_edge": QColor(255, 255, 255, 34),
+            "panel_top": QColor(52, 52, 56, 174), "panel_bottom": QColor(24, 24, 27, 153),
+            "panel_edge": QColor(255, 255, 255, 32),
+            "active_top": QColor(255, 255, 255, 32), "active_bottom": QColor(255, 255, 255, 14),
+            "active_edge": QColor(255, 255, 255, 48),
+            "caption": QColor("#7C7C85"),
             "badge": QColor(255, 255, 255, 24),
         }
     return {
         "outer_top": QColor(255, 255, 255, 0), "outer_bottom": QColor(255, 255, 255, 0),
         "outer_edge": QColor(255, 255, 255, 0),
-        "pill_top": QColor(255, 255, 255, 235), "pill_bottom": QColor(255, 255, 255, 170),
-        "pill_edge": QColor(11, 13, 18, 30),
-        "icon": QColor("#5B6070"), "icon_hot": QColor("#0B0D12"),
-        "tile": QColor(10, 126, 164, 34), "tile_edge": QColor(10, 126, 164, 90),
-        "panel_top": QColor(255, 255, 255, 230), "panel_bottom": QColor(255, 255, 255, 170),
-        "panel_edge": QColor(11, 13, 18, 28),
-        "active_top": QColor(10, 126, 164, 40), "active_bottom": QColor(10, 126, 164, 18),
-        "active_edge": QColor(10, 126, 164, 90),
-        "caption": QColor(0, 0, 0, 70),
-        "badge": QColor("#D7DBDA"),
+        "pill_top": QColor("#1B1B1E"), "pill_bottom": QColor("#1B1B1E"),
+        "pill_edge": QColor(255, 255, 255, 22),
+        "icon": QColor("#A2A2AB"), "icon_hot": QColor("#FFFFFF"),
+        "tile": QColor(255, 255, 255, 26), "tile_edge": QColor(255, 255, 255, 34),
+        "panel_top": QColor(255, 255, 255, 209), "panel_bottom": QColor(255, 255, 255, 128),
+        "panel_edge": QColor(255, 255, 255, 190),
+        "active_top": QColor(0, 0, 0, 12), "active_bottom": QColor(0, 0, 0, 5),
+        "active_edge": QColor(0, 0, 0, 28),
+        "caption": QColor("#6B6B73"),
+        "badge": QColor("#D7D7DC"),
     }
-
 
 def _paint_capsule(widget: QWidget, radius: float, top: QColor, bottom: QColor, edge: QColor,
                    caption: str = "", span: tuple[float, float] | None = None) -> None:
@@ -173,7 +180,7 @@ class _RailButton(QAbstractButton):
         self._active = False
         self._hover = False
         self._badge = 0
-        self.setFixedSize(RAIL_WIDTH - 24, 42)
+        self.setFixedSize(RAIL_WIDTH - 24, 44)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
         self.setToolTip(label)
@@ -370,6 +377,7 @@ class Sidebar(QWidget):
     login_requested = Signal()
     search_submitted = Signal(str)
     camera_selected = Signal(str)
+    incident_filter_requested = Signal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -453,7 +461,7 @@ class Sidebar(QWidget):
         self.panel = _Panel()
         self.panel.setFixedWidth(PANEL_WIDTH)
         panel = QVBoxLayout(self.panel)
-        panel.setContentsMargins(14, 16, 14, 14)
+        panel.setContentsMargins(16, 16, 16, 16)
         panel.setSpacing(2)
 
         self.account_button = AccountButton()
@@ -462,12 +470,28 @@ class Sidebar(QWidget):
         panel.addSpacing(4)
 
         for index, (title, items) in enumerate(HOME_GROUPS):
-            panel.addWidget(_Divider(title if index == 0 else ""))
+            panel.addWidget(_Divider(title))
             for text, key, icon in items:
                 item = _PanelItem(text, icon)
                 item.clicked.connect(lambda _c=False, target=key: self.page_requested.emit(target))
                 self._register(key, item)
                 panel.addWidget(item)
+
+        # The HTML reference exposes status shortcuts directly in the flyout.
+        # Map those labels onto the application's real incident statuses.
+        panel.addWidget(_Divider("Status"))
+        for text, status, icon in (
+            ("New", "NEW", "circle-dot"),
+            ("Confirmed", "ACKNOWLEDGED", "check"),
+            ("False alarms", "FALSE_ALARM", "x-circle"),
+        ):
+            item = _PanelItem(text, icon)
+            item.clicked.connect(
+                lambda _c=False, value=status: self.incident_filter_requested.emit(value)
+            )
+            self._register(f"status-{status.lower()}", item)
+            panel.addWidget(item)
+
         panel.addStretch(1)
 
         panel.addWidget(_Divider("Search"))
@@ -538,12 +562,20 @@ class Sidebar(QWidget):
     def _filter_cameras(self, query: str) -> None:
         needle = query.casefold().strip()
         self.camera_results.clear()
+        grouped: dict[str, list] = {}
         for camera in self._cameras:
-            haystack = f"{camera.name} {camera.camera_id} {camera.source_address}".casefold()
+            group = (getattr(camera, "group_name", "") or "Ungrouped").strip()
+            haystack = f"{camera.name} {camera.camera_id} {camera.source_address} {group}".casefold()
             if not needle or needle in haystack:
+                grouped.setdefault(group, []).append(camera)
+        for group, cameras in sorted(grouped.items(), key=lambda pair: pair[0].casefold()):
+            heading = QListWidgetItem(f"{group}  ·  {len(cameras)}")
+            heading.setFlags(Qt.ItemFlag.NoItemFlags)
+            self.camera_results.addItem(heading)
+            for camera in cameras:
                 item = QListWidgetItem(camera.name)
                 item.setData(Qt.ItemDataRole.UserRole, ("camera", str(camera.camera_id)))
-                item.setToolTip(f"{camera.name} · {camera.camera_id}")
+                item.setToolTip(f"{camera.name} · {camera.camera_id} · {group}")
                 self.camera_results.addItem(item)
         for index, command in enumerate(search_commands(self._commands, needle)):
             item = QListWidgetItem(f"{command.title}  ·  {command.group}")

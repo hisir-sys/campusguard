@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QFrame,
     QGraphicsBlurEffect,
+    QGridLayout,
     QHBoxLayout,
     QFileDialog,
     QLabel,
@@ -972,10 +973,17 @@ class MainWindow(QMainWindow):
             ("09", "Operator UI", "Glass workspace",
              "Presents live cameras, incidents, alerts, system status, AI status, and in-app evidence viewing."),
         )
+        service_grid = QGridLayout()
+        service_grid.setContentsMargins(0, 0, 0, 0)
+        service_grid.setHorizontalSpacing(14)
+        service_grid.setVerticalSpacing(14)
         for i, (number, title, subtitle, detail) in enumerate(services):
-            layout.addWidget(self._flow_node(number, title, f"{subtitle} — {detail}"))
-            if i != len(services) - 1:
-                layout.addWidget(self._flow_arrow())
+            node = self._flow_node(number, title, f"{subtitle} — {detail}")
+            node.setMinimumHeight(126)
+            service_grid.addWidget(node, i // 3, i % 3)
+        for column in range(3):
+            service_grid.setColumnStretch(column, 1)
+        layout.addLayout(service_grid)
 
         card, body = make_card("Service contract", icon="server")
         body.addWidget(QLabel(
@@ -1107,9 +1115,11 @@ class MainWindow(QMainWindow):
         self.top_bar.login_requested.connect(self._toggle_operator)
         self.top_bar.search_submitted.connect(self._run_global_search)
         self.top_bar.camera_selected.connect(self.open_camera)
+        self.top_bar.incident_filter_requested.connect(self._filter_incidents_from_sidebar)
 
         self.dashboard.camera_selected.connect(self.open_camera)
         self.dashboard.view_alerts_requested.connect(lambda: self.navigate("alerts"))
+        self.dashboard.view_incidents_requested.connect(lambda: self.navigate("incidents"))
         self.camera_page.add_requested.connect(self._add_camera)
         self.camera_page.local_test_requested.connect(self._open_local_file_test)
         self.camera_page.remove_requested.connect(self._remove_camera)
@@ -1190,6 +1200,14 @@ class MainWindow(QMainWindow):
             self.alerts_page.refresh()
         elif page == "cameras":
             self._sync_cameras()
+
+    def _filter_incidents_from_sidebar(self, status: str) -> None:
+        """Open incident history with one of the flyout's status shortcuts."""
+        self.navigate("incidents")
+        self.incidents_page.search_input.clear()
+        index = self.incidents_page.status_filter.findText(status)
+        if index >= 0:
+            self.incidents_page.status_filter.setCurrentIndex(index)
 
     def _on_overlay_closed(self) -> None:
         # Keep MainWindow camera-view state synchronized with the overlay.
