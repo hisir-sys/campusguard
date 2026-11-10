@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QFrame,
     QGraphicsBlurEffect,
+    QGridLayout,
     QHBoxLayout,
     QFileDialog,
     QLabel,
