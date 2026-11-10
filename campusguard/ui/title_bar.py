@@ -75,7 +75,7 @@ class TitleBar(QWidget):
         self.logo = LogoMark(size=18)
         row.addWidget(self.logo)
         self.title = QLabel(title)
-        self.title.setStyleSheet("font-weight: 600; font-size: 10pt; background: transparent;")
+        self.title.setStyleSheet("font-weight: 600; font-size: 10pt; letter-spacing: -0.1px; background: transparent;")
         row.addWidget(self.title)
         self.subtitle = QLabel(subtitle)
         self.subtitle.setProperty("muted", True)
