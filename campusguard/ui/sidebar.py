@@ -554,12 +554,20 @@ class Sidebar(QWidget):
     def _filter_cameras(self, query: str) -> None:
         needle = query.casefold().strip()
         self.camera_results.clear()
+        grouped: dict[str, list] = {}
         for camera in self._cameras:
-            haystack = f"{camera.name} {camera.camera_id} {camera.source_address}".casefold()
+            group = (getattr(camera, "group_name", "") or "Ungrouped").strip()
+            haystack = f"{camera.name} {camera.camera_id} {camera.source_address} {group}".casefold()
             if not needle or needle in haystack:
+                grouped.setdefault(group, []).append(camera)
+        for group, cameras in sorted(grouped.items(), key=lambda pair: pair[0].casefold()):
+            heading = QListWidgetItem(f"{group}  ·  {len(cameras)}")
+            heading.setFlags(Qt.ItemFlag.NoItemFlags)
+            self.camera_results.addItem(heading)
+            for camera in cameras:
                 item = QListWidgetItem(camera.name)
                 item.setData(Qt.ItemDataRole.UserRole, ("camera", str(camera.camera_id)))
-                item.setToolTip(f"{camera.name} · {camera.camera_id}")
+                item.setToolTip(f"{camera.name} · {camera.camera_id} · {group}")
                 self.camera_results.addItem(item)
         for index, command in enumerate(search_commands(self._commands, needle)):
             item = QListWidgetItem(f"{command.title}  ·  {command.group}")
