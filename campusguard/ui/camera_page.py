@@ -38,14 +38,16 @@ class CameraRow(QFrame):
         self.setObjectName("cameraRow")
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(18, 15, 18, 15)
-        layout.setSpacing(16)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 16, 20, 16)
+        layout.setSpacing(13)
 
-        # Camera identity
+        # Identity and live state share the first line, matching the reference's
+        # clean camera cards while keeping the real stream metadata visible.
+        identity_row = QHBoxLayout()
+        identity_row.setSpacing(14)
         identity = QVBoxLayout()
         identity.setSpacing(5)
-
         title_row = QHBoxLayout()
         title_row.setSpacing(8)
 
@@ -55,65 +57,55 @@ class CameraRow(QFrame):
 
         self.source_badge = QLabel(camera.source_type.upper())
         self.source_badge.setStyleSheet(
-            "font-size: 10px; font-weight: 600; padding: 3px 7px; "
-            "border-radius: 5px; background: rgba(255,255,255,0.08);"
+            "font-size: 9px; font-weight: 600; letter-spacing: .5px; padding: 4px 8px; "
+            "border-radius: 7px; background: rgba(255,255,255,0.08);"
         )
         title_row.addWidget(self.source_badge)
         title_row.addStretch(1)
         identity.addLayout(title_row)
 
-        address = QLabel(
-            f"{camera.camera_id}  ·  {camera.source_address}"
-        )
+        address = QLabel(f"{camera.camera_id}  ·  {camera.source_address}")
         address.setProperty("muted", True)
         address.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         address.setWordWrap(False)
         identity.addWidget(address)
+        identity_row.addLayout(identity, 1)
 
-        layout.addLayout(identity, 1)
-
-        # Status
         status_box = QVBoxLayout()
         status_box.setSpacing(4)
-
         self.status_label = QLabel()
         set_status_label(self.status_label, "CONNECTING")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         status_box.addWidget(self.status_label)
-
         self.metrics = QLabel("FPS: N/A  ·  Resolution: N/A")
         self.metrics.setProperty("muted", True)
-        self.metrics.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.metrics.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         status_box.addWidget(self.metrics)
+        identity_row.addLayout(status_box, 0)
+        layout.addLayout(identity_row)
 
-        layout.addLayout(status_box)
+        controls = QHBoxLayout()
+        controls.setSpacing(16)
 
-        # AI toggle
         ai_box = QVBoxLayout()
         ai_box.setSpacing(3)
-        ai_box.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
         self.ai_checkbox = QCheckBox("AI monitoring")
         self.ai_checkbox.setChecked(camera.ai_enabled)
         self.ai_checkbox.toggled.connect(
             lambda checked: self.ai_changed.emit(camera.camera_id, checked)
         )
         ai_box.addWidget(self.ai_checkbox)
-
         self.ai_hint = QLabel("Enabled" if camera.ai_enabled else "Disabled")
         self.ai_hint.setProperty("muted", True)
-        self.ai_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.ai_hint.setStyleSheet("font-size: 8pt;")
         ai_box.addWidget(self.ai_hint)
+        controls.addLayout(ai_box)
 
-        layout.addLayout(ai_box)
-
-        # Group
         group_box = QVBoxLayout()
         group_box.setSpacing(3)
-        group_box.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.group_input = QLineEdit(camera.group_name)
         self.group_input.setMinimumWidth(120)
-        self.group_input.setMaximumWidth(150)
+        self.group_input.setMaximumWidth(190)
         self.group_input.setPlaceholderText("e.g. Block A")
         self.group_input.editingFinished.connect(
             lambda: self.group_changed.emit(self.camera.camera_id, self.group_input.text())
@@ -121,16 +113,15 @@ class CameraRow(QFrame):
         group_box.addWidget(self.group_input)
         group_hint = QLabel("Group / floor")
         group_hint.setProperty("muted", True)
-        group_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        group_hint.setStyleSheet("font-size: 8pt;")
         group_box.addWidget(group_hint)
-        layout.addLayout(group_box)
+        controls.addLayout(group_box, 1)
 
-        # Per-camera sensitivity
         sens_box = QVBoxLayout()
         sens_box.setSpacing(3)
-        sens_box.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.sensitivity_combo = QComboBox()
-        self.sensitivity_combo.setMinimumWidth(190)
+        self.sensitivity_combo.setMinimumWidth(160)
+        self.sensitivity_combo.setMaximumWidth(210)
         for label, offset in SENSITIVITY_LEVELS:
             self.sensitivity_combo.addItem(label, offset)
         self._select_sensitivity(camera.threshold_offset)
@@ -142,27 +133,23 @@ class CameraRow(QFrame):
         sens_box.addWidget(self.sensitivity_combo)
         sens_hint = QLabel("Alert sensitivity")
         sens_hint.setProperty("muted", True)
-        sens_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        sens_hint.setStyleSheet("font-size: 8pt;")
         sens_box.addWidget(sens_hint)
-        layout.addLayout(sens_box)
+        controls.addLayout(sens_box)
 
-        # Actions
         actions = QHBoxLayout()
         actions.setSpacing(7)
-
         reconnect = QPushButton("Reconnect")
         reconnect.clicked.connect(
             lambda: self.reconnect_requested.emit(camera.camera_id)
         )
         actions.addWidget(reconnect)
-
         remove = QPushButton("Remove")
         remove.setProperty("danger", True)
         remove.clicked.connect(self._confirm_remove)
         actions.addWidget(remove)
-
-        layout.addLayout(actions)
-
+        controls.addLayout(actions)
+        layout.addLayout(controls)
     def _select_sensitivity(self, offset: float) -> None:
         index = min(
             range(self.sensitivity_combo.count()),
