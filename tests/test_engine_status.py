@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QApplication
 
 from campusguard import storage
 from campusguard.settings import AppSettings
-from campusguard.ui.dashboard_page import DashboardPage
+from campusguard.ui.dashboard_v3 import DashboardPage
 
 APP = QApplication.instance() or QApplication([])
 
@@ -41,10 +41,20 @@ def test_second_camera_still_loading_does_not_mask_ready_first(tmp_path):
 
 
 
-def test_dashboard_close_detaches_card_event_filters(tmp_path):
+def test_dashboard_close_marks_page_closing(tmp_path):
     page = _page(tmp_path)
-    assert set(page._event_filter_targets) == {page._engine_card, page._stats_card}
-    assert all(target is page._engine_card or target is page._stats_card for target in page._event_filter_targets)
     page.close()
     assert page._closing
     assert not page._event_filter_targets
+
+
+def test_chart_buckets_count_incidents_per_day():
+    from datetime import datetime, timedelta, timezone
+    from campusguard.ui.dashboard_v3 import bucket_incidents, week_totals
+
+    now = datetime.now(timezone.utc)
+    rows = [{"happened_at": (now - timedelta(hours=h)).isoformat()} for h in (1, 2, 30, 200)]
+    data = bucket_incidents(rows, "7d", now)
+    assert len(data) == 7 and sum(v for _, v in data) == 3
+    assert data[-1][1] == 2
+    assert week_totals(rows, now) == (3, 1)

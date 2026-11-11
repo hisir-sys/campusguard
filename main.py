@@ -29,7 +29,7 @@ def _asset_root() -> Path:
 
 
 def _load_brand_fonts() -> None:
-    """Register the bundled website fonts (DM Sans, Manrope) so the UI does not
+    """Register the bundled fonts (Inter, JetBrains Mono, Outfit) so the UI does not
     fall back to Segoe UI on machines that do not have them installed."""
     for font_file in sorted((_asset_root() / "assets" / "fonts").glob("*.ttf")):
         QFontDatabase.addApplicationFont(str(font_file))
@@ -391,7 +391,7 @@ def run_self_check(result_file: str | None) -> int:
     def fonts() -> None:
         _load_brand_fonts()
         families = set(QFontDatabase.families())
-        for family in ("DM Sans", "Manrope"):
+        for family in ("Inter", "JetBrains Mono", "Outfit"):
             if family not in families:
                 raise RuntimeError(f"font {family} not registered")
 

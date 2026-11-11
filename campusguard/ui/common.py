@@ -66,11 +66,16 @@ class ClickableFrame(QFrame):
 
 def make_page_title(title: str, subtitle: str) -> QWidget:
     widget = QWidget()
+    widget.setObjectName("pageTitle")
+    widget.setProperty("pageTitle", title)
+    widget.setProperty("pageSubtitle", subtitle)
+    # The window header (shell_v3.HeaderBar) shows the page title, so this block stays hidden.
+    widget.setVisible(False)
     layout = QVBoxLayout(widget)
     layout.setContentsMargins(0, 0, 0, 8)
     layout.setSpacing(8)
     heading = QLabel(title)
-    heading.setStyleSheet("font-family: 'Outfit', 'DM Sans', 'Segoe UI', sans-serif; font-size: 22pt; font-weight: 600; letter-spacing: -0.5px;")
+    heading.setStyleSheet("font-family: 'Outfit', 'Inter', 'Segoe UI', sans-serif; font-size: 22pt; font-weight: 600; letter-spacing: -0.5px;")
     description = QLabel(subtitle)
     description.setProperty("muted", True)
     layout.addWidget(heading)

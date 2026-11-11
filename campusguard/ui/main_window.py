@@ -41,7 +41,8 @@ from campusguard.settings import (
 from campusguard.storage import Repository
 from campusguard.ui.camera_page import CamerasPage, LocalVideoTestDialog
 from campusguard.ui.common import apply_theme, make_card, make_page_title
-from campusguard.ui.dashboard_page import DashboardPage
+from campusguard.ui.dashboard_v3 import DashboardPage
+from campusguard.ui.shell_v3 import CommandPalette, HeaderBar
 from campusguard.ui.glass_nav import BackdropWidget
 from campusguard.ui.command_search import Command
 from campusguard.ui.sidebar import COMPACT_WIDTH, Sidebar
@@ -586,7 +587,7 @@ class MainWindow(QMainWindow):
         self._add_shortcut("Ctrl+3", lambda: self.navigate("incidents"))
         self._add_shortcut("Ctrl+4", lambda: self.navigate("alerts"))
         self._add_shortcut("Ctrl+5", lambda: self.navigate("settings"))
-        self._add_shortcut("Ctrl+K", self.top_bar.focus_search)
+        self._add_shortcut("Ctrl+K", self.open_palette)
         self._apply_runtime_settings()
         self.navigate(self.settings.start_page)
 
@@ -692,6 +693,9 @@ class MainWindow(QMainWindow):
         workspace.setContentsMargins(0, 0, 0, 0)
         workspace.setSpacing(10)
 
+        self.header = HeaderBar()
+        workspace.addWidget(self.header, 0)
+
         self.stack = QStackedWidget()
         self.stack.setObjectName("workspaceStack")
 
@@ -724,6 +728,7 @@ class MainWindow(QMainWindow):
         if self._custom_frame:
             self.title_bar = TitleBar(self)
             self.setMenuWidget(self.title_bar)
+        self.palette_overlay = CommandPalette(central)
         self._in_app_overlay = InAppOverlay(central)
         self._in_app_overlay.closed.connect(self._on_overlay_closed)
         self._in_app_overlay.footage_requested.connect(self.open_camera_footage)
@@ -743,6 +748,8 @@ class MainWindow(QMainWindow):
         super().resizeEvent(event)
         if hasattr(self, "_in_app_overlay"):
             self._in_app_overlay.setGeometry(self.centralWidget().rect())
+        if hasattr(self, "palette_overlay"):
+            self.palette_overlay.setGeometry(self.centralWidget().rect())
         if hasattr(self, "_severity_alert"):
             self._severity_alert._position()
         self._position_bottom_bar()
@@ -1102,6 +1109,10 @@ class MainWindow(QMainWindow):
         return self._info_scroll(content)
 
     def _connect_pages(self) -> None:
+        self.header.palette_requested.connect(self.open_palette)
+        self.header.incidents_requested.connect(lambda: self.navigate("incidents"))
+        self.header.theme_requested.connect(self._toggle_theme)
+        self.header.simulate_requested.connect(self._simulate_alert)
         self.top_bar.page_requested.connect(self.navigate)
         self.top_bar.theme_toggle_requested.connect(self._toggle_theme)
         self.top_bar.login_requested.connect(self._toggle_operator)
@@ -1109,7 +1120,9 @@ class MainWindow(QMainWindow):
         self.top_bar.camera_selected.connect(self.open_camera)
 
         self.dashboard.camera_selected.connect(self.open_camera)
-        self.dashboard.view_alerts_requested.connect(lambda: self.navigate("alerts"))
+        self.dashboard.view_alerts_requested.connect(lambda: self.navigate("incidents"))
+        self.dashboard.report_requested.connect(self._export_trend_report)
+        self.dashboard.status_change_requested.connect(self._set_incident_status)
         self.camera_page.add_requested.connect(self._add_camera)
         self.camera_page.local_test_requested.connect(self._open_local_file_test)
         self.camera_page.remove_requested.connect(self._remove_camera)
@@ -1184,6 +1197,7 @@ class MainWindow(QMainWindow):
             return
         self.stack.setCurrentWidget(self._pages[page])
         self.top_bar.set_active(page)
+        self.header.set_page(page)
         if page == "incidents":
             self.incidents_page.refresh()
         elif page == "alerts":
@@ -1666,7 +1680,9 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         self.top_bar.set_hover_open(self.settings.sidebar_hover_open)
-        self.top_bar.set_commands(self._build_commands())
+        commands = self._build_commands()
+        self.top_bar.set_commands(commands)
+        self.palette_overlay.set_commands(commands)
         self._dispatcher.set_plan(self._build_alert_plan())
 
     def _build_alert_plan(self, token: str | None = None) -> AlertPlan:
@@ -2006,6 +2022,8 @@ class MainWindow(QMainWindow):
             None,
         )
         self.navigate("incidents")
+        if public_id.startswith("SIM-"):
+            return
         if incident is None:
             self.statusBar().showMessage(f"Incident {public_id} is no longer available.", 5000)
             return
@@ -2143,6 +2161,18 @@ class MainWindow(QMainWindow):
 
     def _update_alert_badge(self) -> None:
         self.top_bar.set_badge("alerts", self.repository.active_alert_count())
+        self.header.set_open_count(self.repository.open_incident_count())
+
+    def open_palette(self) -> None:
+        self.palette_overlay.set_commands(self._build_commands())
+        self.palette_overlay.open_palette()
+
+    def _simulate_alert(self) -> None:
+        """Show a sample alert so staff can see what one looks like. Nothing is saved or sent."""
+        camera = next(iter(self.cameras.values()), None)
+        name = camera.name if camera else "Sample camera"
+        self._severity_alert.show_alert("SIM-0000", "FIGHT DETECTED", name, 0.91)
+        self.statusBar().showMessage("Sample alert only. Nothing was saved and nobody was notified.", 5000)
 
     def _sync_cameras(self) -> None:
         cameras = list(self.cameras.values())

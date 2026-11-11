@@ -12,7 +12,7 @@ def pytest_sessionfinish(session, exitstatus):
 
         app = QApplication.instance()
         if app is not None:
-            from campusguard.ui.dashboard_page import DashboardPage
+            from campusguard.ui.dashboard_v3 import DashboardPage
 
             for widget in app.allWidgets():
                 if isinstance(widget, DashboardPage):

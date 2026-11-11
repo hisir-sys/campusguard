@@ -1,4 +1,4 @@
-"""CampusGuard visual system: restrained indigo glass, 8pt spacing, dark/light parity."""
+"""CampusGuard visual system (v3): graphite glass, coral signal, Inter / Outfit / JetBrains Mono."""
 
 from __future__ import annotations
 
@@ -41,44 +41,45 @@ class Palette:
     lens: str = "#8FA6C8"  # the blue lens dot: selection, focus, live status
 
 
-# Midnight + aqua. Dark = the logo's #0B0D12 with soft aqua light behind frosted glass;
-# light = the logo's paper (#F4F4F2) with white glass. One accent (aqua), used sparingly.
+# v3 graphite + coral signal. Dark = near-black with soft white blobs behind glass;
+# light = cool grey with white glass. Surfaces and text stay neutral; the coral signal
+# colour is reserved for alerts, "new" markers and the one thing that needs attention.
 DARK = Palette(
     "dark",
-    "#0B0D12", "#07090D",
-    "#38BDF8", 46, "#2DD4BF", 28,
-    "#F4F6FA", "#C7CCD8", "#8F97A9",
-    "#5CD6F5", "#86E2F9",
-    "#5FD7A0", "#F5B45A", "#FF7A7A",
-    "#131722", 235,
+    "#0A0A0B", "#0A0A0B",
+    "#FFFFFF", 26, "#FFFFFF", 14,
+    "#F5F5F7", "#C4C4CB", "#9A9AA2",
+    "#F5F5F7", "#FFFFFF",
+    "#8FCFA9", "#E3B872", "#E58B76",
+    "#1B1B1E", 235,
     "#FFFFFF", 22,
     "#FFFFFF", 10,
-    "#151925", 205,
-    "#05070B", 150,
+    "#1E1E21", 160,
+    "#1B1B1E", 150,
     "#FFFFFF",
     14,
-    "#141824",
-    "#E6F4FB",
-    "#5CD6F5",
+    "#1E1E21",
+    "#F5F5F7",
+    "#F5F5F7",
 )
 
 LIGHT = Palette(
     "light",
-    "#F4F4F2", "#ECEDF0",
-    "#7DD3FC", 110, "#99F6E4", 80,
-    "#0B0D12", "#3A3F4C", "#5B6070",
-    "#0A7EA4", "#0C6E91",
-    "#1E8E5E", "#A8680F", "#C23B3B",
+    "#E4E4E7", "#E4E4E7",
+    "#000000", 20, "#000000", 10,
+    "#0B0B0D", "#3A3A40", "#6B6B73",
+    "#0B0B0D", "#26262B",
+    "#2F7D57", "#94610F", "#B4412F",
     "#FFFFFF", 235,
-    "#0B0D12", 24,
-    "#0B0D12", 8,
+    "#000000", 24,
+    "#000000", 8,
     "#FFFFFF", 225,
-    "#FFFFFF", 200,
+    "#FFFFFF", 170,
     "#FFFFFF",
     0,
     "#FFFFFF",
-    "#0B0D12",
-    "#0A7EA4",
+    "#0B0B0D",
+    "#0B0B0D",
 )
 
 _current: Palette = DARK
@@ -117,7 +118,7 @@ def rgba(hex_color: str, alpha: int) -> str:
 _QSS = """
 QWidget {
   color: @text@;
-  font-family: "DM Sans", "Segoe UI", sans-serif;
+  font-family: "Inter", "Segoe UI", sans-serif;
   font-size: @base_pt@pt;
 }
 QMainWindow { background: @bg1@; }\nQWidget#centralContent { background: transparent; }
@@ -157,7 +158,7 @@ QFrame[card="true"] {
   background: @card@;
   border: 1px solid @card_line@;
   border-top: 1px solid @card_top@;
-  border-radius: 18px;
+  border-radius: 20px;
 }
 QFrame[tile="true"] {
   background: @veil@;
@@ -198,6 +199,17 @@ QFrame#dashboardModelTile:hover {
   background: @veil_hover@;
 }
 
+QLabel#heroNumber { font-family: "Outfit", "Inter"; font-size: 54pt; font-weight: 500; color: @text@; }
+QLabel#statNumber { font-family: "JetBrains Mono", "Consolas"; font-size: 20pt; font-weight: 500; color: @text@; }
+QLabel[v3pill="plain"], QLabel[v3pill="up"], QLabel[v3pill="new"] {
+  border-radius: 11px; padding: 3px 10px; font-size: 8.5pt; font-weight: 500;
+}
+QLabel[v3pill="plain"] { border: 1px solid @line@; color: @muted@; background: transparent; }
+QLabel[v3pill="up"] { background: @veil_hover@; color: @text@; border: none; }
+QLabel[v3pill="new"] { background: @bad_bg@; color: @bad@; border: none; }
+QFrame#incidentRow { background: transparent; border: none; border-top: 1px solid @line_soft@; }
+
+QLabel#pageHeading { font-family: "Outfit", "Inter"; font-size: 22pt; font-weight: 600; }
 QLabel { background: transparent; }
 QLabel[muted="true"] { color: @muted@; }
 QLabel[eyebrow="true"] {
@@ -210,8 +222,8 @@ QLabel[kvlabel="true"] { color: @muted@; font-size: 9pt; font-weight: 500; }
 QLabel[kvvalue="true"] { color: @text@; font-size: 10pt; font-weight: 600; }
 QLabel[pill="true"] {
   background: @veil@; border: 1px solid @line_soft@;
-  border-radius: 9px; padding: 3px 9px;
-  color: @text_dim@; font-size: 8pt; font-weight: 600;
+  border-radius: 11px; padding: 3px 10px;
+  color: @text_dim@; font-size: 8pt; font-weight: 500;
 }
 QLabel[tone="good"] { color: @good@; }
 QLabel[tone="warn"] { color: @warn@; }
@@ -219,16 +231,16 @@ QLabel[tone="bad"] { color: @bad@; }
 
 QPushButton {
   background: @veil@; color: @text@;
-  border: 1px solid @line@; border-radius: 9px;
-  padding: 8px 14px; font-weight: 500;
+  border: 1px solid @line@; border-radius: 17px;
+  padding: 8px 16px; font-weight: 500;
 }
 QPushButton:hover {
   background: @veil_hover@; border-color: @accent_line@;
 }
 QPushButton:pressed { background: @veil_press@; }
 QPushButton:focus {
-  border: 1px solid @line@;
-  padding: 8px 14px;
+  border: 1px solid @line_strong@;
+  padding: 8px 16px;
 }
 QPushButton:disabled { color: @muted@; }
 QPushButton[primary="true"] {
@@ -246,15 +258,15 @@ QPushButton[link="true"]:hover { color: @text@; }
 
 QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
   background: @field@; color: @text@;
-  border: 1px solid @line@; border-radius: 9px;
-  padding: 8px 9px;
+  border: 1px solid @line@; border-radius: 12px;
+  padding: 8px 12px;
   selection-background-color: @accent@; selection-color: @on_accent@;
 }
 QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover {
   border-color: @line_strong@;
 }
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {
-  border: 1px solid @lens@; padding: 8px 9px;
+  border: 1px solid @line_strong@; padding: 8px 12px;
 }
 QComboBox::drop-down { border: none; width: 28px; background: transparent; }
 QComboBox::down-arrow { image: url(@chev_down@); width: 12px; height: 12px; }
@@ -280,7 +292,7 @@ QCheckBox::indicator {
   width: 16px; height: 16px; border-radius: 5px;
 }
 QCheckBox::indicator:checked {
-  background: @lens@; border: 1px solid @lens@; image: url(@check_icon@);
+  background: @accent@; border: 1px solid @accent@; image: url(@check_icon@);
 }
 QCheckBox::indicator:unchecked {
   background: @field@; border: 1px solid @line_strong@;
@@ -290,7 +302,7 @@ QSlider::groove:horizontal {
   height: 4px; background: @line_strong@; border-radius: 2px;
 }
 QSlider::handle:horizontal {
-  background: @lens@; width: 14px; margin: -5px 0; border-radius: 7px;
+  background: @accent@; width: 14px; margin: -5px 0; border-radius: 7px;
 }
 
 QTableWidget {
@@ -312,13 +324,13 @@ QTabWidget::pane {
 QTabWidget > QWidget { background: transparent; }
 QTabBar { background: transparent; qproperty-drawBase: 0; }
 QTabBar::tab {
-  background: @veil@; color: @text_dim@;
-  border: 1px solid @line_soft@; border-radius: 9px;
-  padding: 8px 18px; margin: 0 6px 0 0; font-weight: 600;
+  background: transparent; color: @text_dim@;
+  border: 1px solid @line_soft@; border-radius: 16px;
+  padding: 6px 16px; margin: 0 6px 0 0; font-weight: 500;
 }
 QTabBar::tab:hover { color: @text@; border-color: @line_strong@; }
 QTabBar::tab:selected {
-  background: @veil_hover@; color: @text@; border-color: @lens@;
+  background: @accent@; color: @on_accent@; border-color: @accent@;
 }
 QGroupBox {
   background: transparent; border: 1px solid @line@; border-radius: 12px;
@@ -338,7 +350,7 @@ QMenu {
 QMenu::item { padding: 7px 18px; border-radius: 6px; }
 QMenu::item:selected { background: @veil_hover@; }
 QProgressBar { background: @veil@; border: none; border-radius: 4px; text-align: center; color: @text@; }
-QProgressBar::chunk { background: @lens@; border-radius: 4px; }
+QProgressBar::chunk { background: @accent@; border-radius: 4px; }
 
 QScrollBar:vertical { background: transparent; width: 7px; margin: 4px 0; }
 QScrollBar::handle:vertical {
@@ -396,7 +408,7 @@ def _ui_assets(p: "Palette") -> dict[str, str]:
             return ""
         return path.as_posix()
 
-    tick = "#0E0F11" if p.name == "dark" else "#FFFFFF"
+    tick = "#0A0A0B" if p.name == "dark" else "#FFFFFF"
     return {
         "check_icon": svg("check", '<path d="m5 12.5 4.5 4.5L19 7.5"/>', tick, 3.2),
         "chev_down": svg("chev-down", '<path d="m6 9 6 6 6-6"/>', p.text_dim, 2.4),
@@ -414,12 +426,12 @@ def build_qss(theme: str) -> str:
         "bg1": p.bg1, "popup": rgba(p.glass, 188 if p.name == "dark" else 196),
         "glass": rgba(p.glass, p.glass_alpha),
         "card": (
-            "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(255, 255, 255, 24), stop:1 rgba(255, 255, 255, 8))"
+            "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(52, 52, 56, 175), stop:1 rgba(24, 24, 27, 150))"
             if p.name == "dark"
-            else "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(255, 255, 255, 215), stop:1 rgba(255, 255, 255, 140))"
+            else "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(255, 255, 255, 210), stop:1 rgba(255, 255, 255, 128))"
         ),
-        "card_line": "rgba(255, 255, 255, 30)" if p.name == "dark" else "rgba(11, 13, 18, 24)",
-        "card_top": "rgba(255, 255, 255, 58)" if p.name == "dark" else "rgba(255, 255, 255, 255)",
+        "card_line": "rgba(255, 255, 255, 26)" if p.name == "dark" else "rgba(255, 255, 255, 215)",
+        "card_top": "rgba(255, 255, 255, 90)" if p.name == "dark" else "rgba(255, 255, 255, 255)",
         "glass_line": rgba(p.line, 14 * k // 10),
         "line": rgba(p.line, 18 * k // 10),
         "line_soft": rgba(p.line, 11 * k // 10),
@@ -430,15 +442,15 @@ def build_qss(theme: str) -> str:
         "field": rgba(p.field, p.field_alpha),
         "table": rgba(p.surface, max(210, p.surface_alpha - 24)),
         "table_alt": rgba(p.veil, 4),
-        "select": rgba(p.accent, 58 if p.name == "dark" else 120),
+        "select": rgba(p.ink, 20 if p.name == "dark" else 16),
         "handle": rgba(p.text, 62),
         "handle_hover": rgba(p.text, 110),
-        "bad_line": rgba(p.bad, 100),
+        "bad_line": rgba(p.bad, 100), "bad_bg": rgba(p.bad, 38),
         "accent_line": rgba(p.ink, 190)
         , "ink": p.ink,
         "lens": p.lens,
-        "video": "#080A0E" if p.name == "dark" else "#1B1E26",
-        "on_accent": "#06222B" if p.name == "dark" else "#FFFFFF",
+        "video": "#0F0F11" if p.name == "dark" else "#1B1B1E",
+        "on_accent": "#0A0A0B" if p.name == "dark" else "#FFFFFF",
         "base_pt": str(_base_pt),
         **_ui_assets(p),
     }
