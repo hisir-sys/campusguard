@@ -222,15 +222,15 @@ class Switch(QAbstractButton):
 
     def __init__(self, checked: bool = False, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setCheckable(True)
-        self.setChecked(checked)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFixedSize(40, 24)
         self._t = 1.0 if checked else 0.0
         self._anim = QVariantAnimation(self)
         self._anim.setDuration(380)
         self._anim.setEasingCurve(QEasingCurve.Type.OutBack)
         self._anim.valueChanged.connect(self._tick)
+        self.setCheckable(True)
+        self.setChecked(checked)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFixedSize(40, 24)
         self.toggled.connect(self._start)
 
     def _tick(self, value) -> None:

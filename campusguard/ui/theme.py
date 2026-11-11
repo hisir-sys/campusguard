@@ -287,16 +287,11 @@ QComboBox QAbstractItemView {
   outline: 0;
 }
 
-QCheckBox { spacing: 8px; font-weight: 500; }
-QCheckBox::indicator {
-  width: 16px; height: 16px; border-radius: 5px;
-}
-QCheckBox::indicator:checked {
-  background: @accent@; border: 1px solid @accent@; image: url(@check_icon@);
-}
-QCheckBox::indicator:unchecked {
-  background: @field@; border: 1px solid @line_strong@;
-}
+QCheckBox { spacing: 12px; font-weight: 400; }
+QCheckBox::indicator { width: 40px; height: 24px; border: none; background: transparent; }
+QCheckBox::indicator:checked { image: url(@sw_on@); }
+QCheckBox::indicator:unchecked { image: url(@sw_off@); }
+QCheckBox::indicator:disabled { opacity: 0.4; }
 
 QSlider::groove:horizontal {
   height: 4px; background: @line_strong@; border-radius: 2px;
@@ -393,7 +388,7 @@ def _ui_assets(p: "Palette") -> dict[str, str]:
     try:
         folder.mkdir(parents=True, exist_ok=True)
     except OSError:
-        return {"check_icon": "", "chev_down": "", "chev_up": ""}
+        return {"check_icon": "", "chev_down": "", "chev_up": "", "sw_on": "", "sw_off": ""}
 
     def svg(name: str, body: str, color: str, width: float) -> str:
         path = folder / f"{name}-{p.name}.svg"
@@ -409,7 +404,25 @@ def _ui_assets(p: "Palette") -> dict[str, str]:
         return path.as_posix()
 
     tick = "#0A0A0B" if p.name == "dark" else "#FFFFFF"
+
+    def switch(name: str, track: str, track_opacity: float, knob: str, x: int) -> str:
+        path = folder / f"{name}-{p.name}.svg"
+        text = (
+            '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="24" viewBox="0 0 40 24">'
+            f'<rect width="40" height="24" rx="12" fill="{track}" fill-opacity="{track_opacity}"/>'
+            f'<circle cx="{x}" cy="12" r="9" fill="{knob}"/></svg>'
+        )
+        try:
+            if not path.exists() or path.read_text(encoding="utf-8") != text:
+                path.write_text(text, encoding="utf-8")
+        except OSError:
+            return ""
+        return path.as_posix()
+
+    off_track = "#FFFFFF" if p.name == "dark" else "#000000"
     return {
+        "sw_on": switch("sw-on", p.text, 1.0, p.bg0, 28),
+        "sw_off": switch("sw-off", off_track, 0.14, p.muted, 12),
         "check_icon": svg("check", '<path d="m5 12.5 4.5 4.5L19 7.5"/>', tick, 3.2),
         "chev_down": svg("chev-down", '<path d="m6 9 6 6 6-6"/>', p.text_dim, 2.4),
         "chev_up": svg("chev-up", '<path d="m6 15 6-6 6 6"/>', p.text_dim, 2.4),

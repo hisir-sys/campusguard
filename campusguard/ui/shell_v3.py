@@ -25,6 +25,42 @@ PAGE_TITLES: dict[str, tuple[str, str]] = {
 }
 
 
+class _BadgeButton(GhostButton):
+    """Pill button with a small coral count at its right edge."""
+
+    def __init__(self, text: str) -> None:
+        super().__init__(text)
+        self._count = 0
+        self.setStyleSheet("padding-right: 34px;")
+        self.setFixedWidth(132)
+
+    def set_count(self, count: int) -> None:
+        self._count = max(0, int(count))
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
+        if not self._count:
+            return
+        p = get_palette()
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        text = str(self._count if self._count < 100 else "99+")
+        font = painter.font()
+        font.setPointSizeF(8.5)
+        painter.setFont(font)
+        width = max(20, painter.fontMetrics().horizontalAdvance(text) + 12)
+        rect = QRectF(self.width() - width - 10, (self.height() - 20) / 2, width, 20)
+        fill = QColor(p.bad)
+        fill.setAlpha(46)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(fill)
+        painter.drawRoundedRect(rect, 10, 10)
+        painter.setPen(QColor(p.bad))
+        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, text)
+        painter.end()
+
+
 class HeaderBar(QWidget):
     palette_requested = Signal()
     incidents_requested = Signal()
@@ -48,21 +84,14 @@ class HeaderBar(QWidget):
         lay.addLayout(titles, 1)
         self.palette_button = GhostButton("Ctrl K")
         self.palette_button.setToolTip("Search pages, settings and actions")
-        self.incidents_button = GhostButton("Incidents")
+        self.incidents_button = _BadgeButton("Incidents")
         self.theme_button = GhostButton("Light / Dark")
         self.simulate_button = GhostButton("Simulate alert", primary=True)
         self.simulate_button.setToolTip("Show a sample alert. Nothing is saved and nobody is notified")
-        self.badge = make_pill("0", "new")
-        self.badge.hide()
         self.palette_button.clicked.connect(self.palette_requested.emit)
         self.incidents_button.clicked.connect(self.incidents_requested.emit)
         self.theme_button.clicked.connect(self.theme_requested.emit)
         self.simulate_button.clicked.connect(self.simulate_requested.emit)
-        row = QHBoxLayout(self.incidents_button)
-        row.setContentsMargins(0, 0, 12, 0)
-        row.addStretch(1)
-        row.addWidget(self.badge)
-        self.incidents_button.setMinimumWidth(110)
         for button in (self.palette_button, self.incidents_button, self.theme_button, self.simulate_button):
             lay.addWidget(button, 0, Qt.AlignmentFlag.AlignTop)
         self.setFixedHeight(64)
@@ -73,8 +102,7 @@ class HeaderBar(QWidget):
         self.subtitle.setText(subtitle)
 
     def set_open_count(self, count: int) -> None:
-        self.badge.setText(str(count))
-        self.badge.setVisible(count > 0)
+        self.incidents_button.set_count(count)
 
 
 class CommandPalette(QWidget):

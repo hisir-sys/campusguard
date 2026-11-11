@@ -228,7 +228,8 @@ class LocalVideoTestDialog(QFrame):
         title = QLabel("Local File Test")
         title.setObjectName("localVideoTestTitle")
         title.setStyleSheet("font-size: 17px; font-weight: 600;")
-        header.addWidget(title, 1)
+        header.addWidget(title, 0)
+        header.addStretch(1)
         self.close_button = QPushButton("×")
         self.close_button.setFixedSize(36, 36)
         self.close_button.setToolTip("Close local file testing")
@@ -412,7 +413,7 @@ class CamerasPage(QWidget):
         )
         header.addWidget(title, 1)
 
-        local_button = QPushButton("▣  Local files")
+        local_button = QPushButton("Test a video file")
         local_button.setMinimumHeight(38)
         local_button.setToolTip(
             "Test a local video file with the production AI pipeline. "
@@ -421,7 +422,7 @@ class CamerasPage(QWidget):
         local_button.clicked.connect(self.local_test_requested.emit)
         header.addWidget(local_button, 0, Qt.AlignmentFlag.AlignBottom)
 
-        add_button = QPushButton("＋  Add camera")
+        add_button = QPushButton("Add camera")
         add_button.setProperty("primary", True)
         add_button.setMinimumHeight(38)
         add_button.clicked.connect(self._add_camera)

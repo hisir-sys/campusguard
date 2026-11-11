@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 
 from campusguard.settings import START_PAGES, AppSettings
 from campusguard.ui.common import make_card, make_page_title
+from campusguard.ui.v3widgets import Segmented
 
 
 class SettingsSection(QFrame):
@@ -97,6 +98,13 @@ class SettingsPage(QWidget):
         )
         header.addWidget(self.status_pill, 0, Qt.AlignmentFlag.AlignTop)
         root.addLayout(header)
+        self.status_pill.hide()
+        self.tabs = Segmented(["General", "Appearance", "Detection", "Alerts", "Storage", "Connection", "Help"], "General")
+        self.tabs.changed.connect(self._show_tab)
+        tab_row = QHBoxLayout()
+        tab_row.addWidget(self.tabs)
+        tab_row.addStretch(1)
+        root.addLayout(tab_row)
 
         scroll = self.scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -467,6 +475,15 @@ class SettingsPage(QWidget):
         content_layout.addWidget(update_section)
 
         content_layout.addStretch(1)
+        self._tab_sections = {
+            "General": [workspace_section],
+            "Appearance": [appearance_section],
+            "Detection": [ai_section, status_section],
+            "Alerts": [phone_section],
+            "Storage": [health_section],
+            "Connection": [connection_section],
+            "Help": [update_section],
+        }
         scroll.setWidget(content)
         root.addWidget(scroll, 1)
 
@@ -483,6 +500,13 @@ class SettingsPage(QWidget):
         self.theme_input.currentIndexChanged.connect(self._emit_settings)
 
         self._refresh_status_cards()
+        self._show_tab("General")
+
+    def _show_tab(self, name: str) -> None:
+        for tab, sections in self._tab_sections.items():
+            for section in sections:
+                section.setVisible(tab == name)
+        self.scroll.verticalScrollBar().setValue(0)
 
     def _mini_card(self, title: str, description: str) -> QWidget:
         frame = QFrame()
@@ -566,6 +590,11 @@ class SettingsPage(QWidget):
         """Scroll to and focus a named control (used by whole-app search)."""
         widget = getattr(self, name, None)
         if widget is not None:
+            for tab, sections in self._tab_sections.items():
+                if any(section.isAncestorOf(widget) for section in sections):
+                    self.tabs.set_current(tab)
+                    self._show_tab(tab)
+                    break
             self.scroll.ensureWidgetVisible(widget, 40, 80)
             widget.setFocus()
 

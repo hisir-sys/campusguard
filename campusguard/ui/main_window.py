@@ -42,12 +42,15 @@ from campusguard.storage import Repository
 from campusguard.ui.camera_page import CamerasPage, LocalVideoTestDialog
 from campusguard.ui.common import apply_theme, make_card, make_page_title
 from campusguard.ui.dashboard_v3 import DashboardPage
+from campusguard.ui.services_v3 import ServicesPage
 from campusguard.ui.shell_v3 import CommandPalette, HeaderBar
 from campusguard.ui.glass_nav import BackdropWidget
 from campusguard.ui.command_search import Command
 from campusguard.ui.sidebar import COMPACT_WIDTH, Sidebar
 from campusguard.ui.title_bar import TitleBar
-from campusguard.ui.history_pages import AlertsPage, FootagePlayerDialog, IncidentsPage
+from campusguard.ui.alerts_v3 import AlertsPage
+from campusguard.ui.history_pages import FootagePlayerDialog
+from campusguard.ui.incidents_v3 import IncidentsPage
 from campusguard.ui.icons import set_icon_theme
 from campusguard.ui.screen_fit import compute_fit
 from campusguard.ui.settings_page import SettingsPage
@@ -769,7 +772,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     def _build_information_pages(self) -> dict[str, QWidget]:
         return {
-            "services": self._make_services_page(),
+            "services": self._make_services_v3(),
             "about": self._make_about_page(),
             "tools": self._make_tools_page(),
             "how-it-works": self._make_how_it_works_page(),
@@ -794,6 +797,7 @@ class MainWindow(QMainWindow):
     @staticmethod
     def _section_header(title: str, description: str) -> QWidget:
         box = QWidget()
+        box.setVisible(False)  # the window header (HeaderBar) already shows this page's title
         layout = QVBoxLayout(box)
         layout.setContentsMargins(0, 0, 0, 8)
         layout.setSpacing(8)
@@ -948,6 +952,39 @@ class MainWindow(QMainWindow):
         layout.addWidget(card)
         layout.addStretch(1)
         return self._info_scroll(content)
+
+    def _make_services_v3(self) -> QWidget:
+        page = ServicesPage()
+        self.services_page = page
+        page.detection_toggled.connect(lambda on: self.settings_page.detection_toggle.setChecked(on))
+        page.reconnect_all_requested.connect(self._reconnect_all_cameras)
+        page.clear_footage_requested.connect(self._clear_footage_storage)
+        page.connection_settings_requested.connect(self._open_connection_settings)
+        return page
+
+    def _reconnect_all_cameras(self) -> None:
+        for camera_id in list(self.cameras):
+            self._reconnect_camera(camera_id)
+        self.statusBar().showMessage("Reconnecting every camera", 3000)
+
+    def _open_connection_settings(self) -> None:
+        self.navigate("settings")
+        self.settings_page.tabs.set_current("Connection", emit=True)
+
+    def _refresh_services(self) -> None:
+        footage_dir = self.repository.footage_dir
+        clips = size = 0
+        try:
+            for path in footage_dir.glob("*.mp4"):
+                clips += 1
+                size += path.stat().st_size
+        except OSError:
+            pass
+        live = sum(1 for st in self.camera_stats.values() if st.status == "LIVE")
+        self.services_page.update_state(
+            self.settings.detection_enabled, live, len(self.cameras), self.settings.connection_mode,
+            getattr(self.settings, "server_address", "") or "school server", clips, size / 1_048_576,
+        )
 
     def _make_services_page(self) -> QWidget:
         content = QWidget()
@@ -1135,7 +1172,13 @@ class MainWindow(QMainWindow):
         self.incidents_page.clear_all_requested.connect(self._clear_all_history)
         self.incidents_page.whatsapp_requested.connect(self._open_whatsapp)
         self.incidents_page.clear_footage_requested.connect(self._clear_footage_storage)
+        self.incidents_page.export_requested.connect(self._export_report)
         self.alerts_page.clear_all_requested.connect(self._clear_all_history)
+        self.alerts_page.channel_toggled.connect(self._set_alert_channel)
+        self.alerts_page.test_alert_requested.connect(self._send_test_alert)
+        self.alerts_page.phone_settings_requested.connect(self._open_phone_settings)
+        self.alerts_page.review_requested.connect(self._view_alert_incident)
+        self._sync_alert_channels()
         self.settings_page.settings_changed.connect(self._save_settings)
         self.settings_page.whatsapp_token_changed.connect(self._on_whatsapp_token)
         self.settings_page.test_alert_requested.connect(self._send_test_alert)
@@ -1481,6 +1524,7 @@ class MainWindow(QMainWindow):
             self._rebuild_information_pages()
         self._apply_runtime_settings()
         self.settings_page.set_saved()
+        self._sync_alert_channels()
         if previous_mode != self.settings.connection_mode:
             self._stop_cloud_sync()
             if self.settings.connection_mode == "local":
@@ -2162,6 +2206,28 @@ class MainWindow(QMainWindow):
     def _update_alert_badge(self) -> None:
         self.top_bar.set_badge("alerts", self.repository.active_alert_count())
         self.header.set_open_count(self.repository.open_incident_count())
+        if hasattr(self, "services_page"):
+            self._refresh_services()
+
+    _CHANNEL_FIELDS = {
+        "alert_sound_toggle": "alert_sound_enabled",
+        "auto_open_whatsapp_toggle": "auto_open_whatsapp",
+        "ntfy_attach_toggle": "ntfy_attach_clip",
+    }
+
+    def _sync_alert_channels(self) -> None:
+        self.alerts_page.set_channel_states(
+            {key: bool(getattr(self.settings, field)) for key, field in self._CHANNEL_FIELDS.items()}
+        )
+
+    def _set_alert_channel(self, key: str, value: bool) -> None:
+        widget = getattr(self.settings_page, key, None)
+        if widget is not None and widget.isChecked() != value:
+            widget.setChecked(value)  # goes through the Settings page, so saving stays in one place
+
+    def _open_phone_settings(self) -> None:
+        self.navigate("settings")
+        self.settings_page.tabs.set_current("Alerts", emit=True)
 
     def open_palette(self) -> None:
         self.palette_overlay.set_commands(self._build_commands())

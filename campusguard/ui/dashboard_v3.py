@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
-    QFrame, QGridLayout, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QWidget,
+    QFrame, QGridLayout, QHBoxLayout, QLabel, QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
 )
 
 from campusguard.settings import CameraConfig, CameraStats
@@ -372,6 +372,8 @@ class DashboardPage(QWidget):
             tile = self._tiles.get(camera.camera_id)
             if tile is None:
                 tile = CameraPreview(camera)
+                tile.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+                tile.setMinimumWidth(0)
                 tile.selected.connect(self.camera_selected.emit)
                 self._tiles[camera.camera_id] = tile
             else:

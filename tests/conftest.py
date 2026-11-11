@@ -1,6 +1,28 @@
 """Shared pytest cleanup for Qt widgets and native inference workers."""
 from __future__ import annotations
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _finish_server_viewer_threads():
+    """A page closed mid-request leaves its worker thread running; let it end before the next test.
+
+    Without this, a later test's garbage collection could destroy a QThread that is still running,
+    which crashes the interpreter (seen as an occasional segfault in the server-viewer tests).
+    """
+    yield
+    try:
+        from campusguard.ui import server_viewer
+    except Exception:
+        return
+    for task in list(server_viewer._RUNNING_TASKS):
+        try:
+            task.requestInterruption()
+            task.wait(8000)
+        except RuntimeError:
+            pass
+
 
 def pytest_sessionfinish(session, exitstatus):
     """Stop camera QThreads, dispose Qt widgets, then join shared AI workers."""
@@ -67,3 +89,10 @@ def pytest_sessionfinish(session, exitstatus):
             terminal.write_sep("=", "CampusGuard cleanup errors")
             for message in cleanup_errors:
                 terminal.write_line(message)
+
+
+@pytest.fixture(autouse=True)
+def _collect_after_each_test():
+    yield
+    import gc
+    gc.collect()

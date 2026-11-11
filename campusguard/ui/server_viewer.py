@@ -122,6 +122,9 @@ class _ClickablePreview(QLabel):
         super().mousePressEvent(event)
 
 
+_RUNNING_TASKS: set = set()  # keeps a task alive until its thread ends, so a page closed mid-request cannot crash
+
+
 class _ServerTask(QThread):
     succeeded = Signal(object)
     failed = Signal(str)
@@ -129,6 +132,8 @@ class _ServerTask(QThread):
     def __init__(self, operation: Callable[[], object], parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._operation = operation
+        _RUNNING_TASKS.add(self)
+        self.finished.connect(lambda: _RUNNING_TASKS.discard(self))
 
     def run(self) -> None:
         try:
