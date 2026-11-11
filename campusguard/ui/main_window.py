@@ -39,7 +39,8 @@ from campusguard.settings import (
     CameraStats,
 )
 from campusguard.storage import Repository
-from campusguard.ui.camera_page import CamerasPage, LocalVideoTestDialog
+from campusguard.ui.camera_page import LocalVideoTestDialog
+from campusguard.ui.cameras_v3 import CamerasPage
 from campusguard.ui.common import apply_theme, make_card, make_page_title
 from campusguard.ui.dashboard_v3 import DashboardPage
 from campusguard.ui.services_v3 import ServicesPage
@@ -704,6 +705,7 @@ class MainWindow(QMainWindow):
 
         self.dashboard = DashboardPage(self.repository)
         self.camera_page = CamerasPage()
+        self.camera_page.credentials_provider = self._load_camera_credentials
         self.incidents_page = IncidentsPage(self.repository)
         self.alerts_page = AlertsPage(self.repository)
         self.settings_page = SettingsPage(self.settings)
@@ -1165,8 +1167,7 @@ class MainWindow(QMainWindow):
         self.camera_page.remove_requested.connect(self._remove_camera)
         self.camera_page.reconnect_requested.connect(self._reconnect_camera)
         self.camera_page.ai_changed.connect(self._set_camera_ai)
-        self.camera_page.sensitivity_changed.connect(self._set_camera_sensitivity)
-        self.camera_page.group_changed.connect(self._set_camera_group)
+        self.camera_page.edit_requested.connect(self._edit_camera)
         self.dashboard.clear_notifications_requested.connect(self._clear_dashboard_notifications)
         self.incidents_page.status_change_requested.connect(self._set_incident_status)
         self.incidents_page.clear_all_requested.connect(self._clear_all_history)
@@ -1358,6 +1359,13 @@ class MainWindow(QMainWindow):
             )
             return
 
+        group = " ".join(str(values.get("group_name", "")).split())[:40]
+        offset = float(values.get("threshold_offset", 0.0) or 0.0)
+        if group:
+            self.repository.set_camera_group(camera.camera_id, group)
+        if offset:
+            self.repository.set_camera_threshold_offset(camera.camera_id, offset)
+        camera = replace(camera, group_name=group, threshold_offset=offset)
         self.cameras[camera.camera_id] = camera
         self.camera_stats[camera.camera_id] = CameraStats()
         self._previous_camera_status[camera.camera_id] = "CONNECTING"
@@ -1374,6 +1382,52 @@ class MainWindow(QMainWindow):
         )
         self._sync_cameras()
         self.statusBar().showMessage(f"Added {camera.name}; connecting to the configured source.", 6000)
+
+    def _load_camera_credentials(self, camera_id: str):
+        try:
+            return self.vault.load(camera_id)
+        except Exception:
+            return None
+
+    def _edit_camera(self, camera_id: str, values: dict) -> None:
+        camera = self.cameras.get(camera_id)
+        if camera is None:
+            return
+        credentials = CameraCredentials(values["username"], values["password"])
+        previous_credentials = self._load_camera_credentials(camera_id) or CameraCredentials()
+        try:
+            self.vault.save(camera_id, credentials)
+        except Exception:
+            self._in_app_overlay.show_notice(
+                "Credential vault unavailable",
+                "CampusGuard could not store the camera credentials securely, so the changes were not saved.",
+            )
+            return
+        group = " ".join(str(values.get("group_name", "")).split())[:40]
+        offset = float(values.get("threshold_offset", 0.0) or 0.0)
+        connection_changed = (
+            values["source_type"] != camera.source_type or values["source_address"] != camera.source_address
+        )
+        self.repository.update_camera(camera_id, values["name"], values["source_type"], values["source_address"])
+        self.repository.set_camera_group(camera_id, group)
+        self.repository.set_camera_threshold_offset(camera_id, offset)
+        updated = replace(
+            camera,
+            name=values["name"],
+            source_type=values["source_type"],
+            source_address=values["source_address"],
+            group_name=group,
+            threshold_offset=offset,
+        )
+        self.cameras[camera_id] = updated
+        if self.camera_manager is not None:
+            self.camera_manager.set_camera_threshold_offset(camera_id, offset)
+            # Credentials or address may have changed, so restart the stream on the new settings.
+            if connection_changed or credentials != previous_credentials:
+                self.camera_stats[camera_id] = CameraStats(status="CONNECTING")
+                self.camera_manager.reconnect(camera_id, updated)
+        self._sync_cameras()
+        self.statusBar().showMessage(f"{updated.name}: changes saved.", 4000)
 
     def _remove_camera(self, camera_id: str) -> None:
         camera = self.cameras.get(camera_id)

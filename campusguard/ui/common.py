@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 
 # camera_runtime pulls in PyTorch/OpenCV; import it lazily (see the methods
 # below) so the window and splash animation are not blocked at start-up.
-from campusguard.settings import CameraConfig, CameraCredentials, CameraStats
+from campusguard.settings import SENSITIVITY_LEVELS, CameraConfig, CameraCredentials, CameraStats
 from campusguard.ui.icons import IconLabel, set_icon_theme
 from campusguard.ui.theme import build_qss, get_palette, rgba, set_current
 
@@ -298,9 +298,16 @@ _ACTIVE_SCANS: set = set()
 
 
 class CameraFormDialog(QDialog):
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        camera: CameraConfig | None = None,
+        credentials: CameraCredentials | None = None,
+        groups: list[str] | None = None,
+    ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Add external camera")
+        self._editing = camera
+        self.setWindowTitle("Edit camera" if camera else "Add external camera")
         self.setMinimumWidth(460)
         self._test_thread: CameraTestThread | None = None
         self._form_data: dict[str, str] | None = None
@@ -315,6 +322,7 @@ class CameraFormDialog(QDialog):
         root.addWidget(intro)
 
         form = QFormLayout()
+        self._form = form
         self.name_input = QLineEdit()
         self.name_input.setPlaceholderText("North Gate")
         self.type_input = QComboBox()
@@ -326,6 +334,16 @@ class CameraFormDialog(QDialog):
         self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.password_input.setPlaceholderText("Stored in the OS credential vault")
         form.addRow("Camera name", self.name_input)
+        self.group_input = QComboBox()
+        self.group_input.setEditable(True)
+        self.group_input.addItems(sorted({g for g in (groups or []) if g}))
+        self.group_input.setCurrentText("")
+        self.group_input.lineEdit().setPlaceholderText("e.g. Entrances, Block A")
+        form.addRow("Zone / group", self.group_input)
+        self.sensitivity_input = QComboBox()
+        for label, offset in SENSITIVITY_LEVELS:
+            self.sensitivity_input.addItem(label, offset)
+        form.addRow("Alert sensitivity", self.sensitivity_input)
         form.addRow("Source type", self.type_input)
 
         self.detected_widget = QWidget()
@@ -379,6 +397,23 @@ class CameraFormDialog(QDialog):
         self.type_input.currentTextChanged.connect(self._update_placeholder)
         self._update_placeholder(self.type_input.currentText())
         self._update_usb_controls(self.type_input.currentText())
+        if camera is not None:
+            self._prefill(camera, credentials)
+
+    def _prefill(self, camera: CameraConfig, credentials: CameraCredentials | None) -> None:
+        self.name_input.setText(camera.name)
+        self.group_input.setCurrentText(camera.group_name)
+        index = min(
+            range(self.sensitivity_input.count()),
+            key=lambda i: abs(float(self.sensitivity_input.itemData(i)) - float(camera.threshold_offset)),
+        )
+        self.sensitivity_input.setCurrentIndex(index)
+        self.type_input.setCurrentText(camera.source_type.upper())
+        self.address_input.setText(camera.source_address)
+        if credentials is not None and camera.source_type.upper() != "USB":
+            self.username_input.setText(credentials.username)
+            self.password_input.setText(credentials.password)
+        self.save_button.setText("Save changes")
 
     @property
     def form_data(self) -> dict[str, str] | None:
@@ -398,6 +433,7 @@ class CameraFormDialog(QDialog):
     def _update_usb_controls(self, source_type: str) -> None:
         is_usb = source_type.upper() == "USB"
         self.detected_widget.setVisible(is_usb)
+        self._form.setRowVisible(self.detected_widget, is_usb)
         if is_usb:
             self.username_input.clear()
             self.password_input.clear()
@@ -470,6 +506,8 @@ class CameraFormDialog(QDialog):
             "source_address": self.address_input.text().strip(),
             "username": self.username_input.text(),
             "password": self.password_input.text(),
+            "group_name": " ".join(self.group_input.currentText().split())[:40],
+            "threshold_offset": float(self.sensitivity_input.currentData() or 0.0),
         }
 
     def _test_connection(self) -> None:

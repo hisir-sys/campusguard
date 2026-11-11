@@ -126,3 +126,39 @@ def test_autostart_is_a_safe_noop_off_windows(monkeypatch):
     monkeypatch.setattr(autostart.sys, "platform", "linux")
     assert not autostart.supported() and not autostart.is_enabled() and not autostart.set_enabled(True)
     assert autostart.command().startswith('"')
+
+
+def test_cameras_page_grid_edit_and_toggle(app, repo):
+    from campusguard.settings import CameraConfig, CameraCredentials, CameraStats
+    from campusguard.ui.cameras_v3 import CamerasPage
+    from campusguard.ui.common import CameraFormDialog
+
+    camera = repo.list_cameras()[0]
+    repo.update_camera(camera.camera_id, "Gate One", "HTTP", "http://x/v")
+    edited = repo.list_cameras()[0]
+    assert (edited.name, edited.source_type, edited.source_address) == ("Gate One", "HTTP", "http://x/v")
+    page = CamerasPage()
+    cams = [
+        CameraConfig("CAM-001", "Gate 1", "RTSP", "rtsp://x/1", True, "2026-01-01", 0.0, "Entrances"),
+        CameraConfig("CAM-002", "Library", "RTSP", "rtsp://x/2", False, "2026-01-01", 0.0, "Indoor"),
+    ]
+    page.sync_cameras(cams, {"CAM-001": CameraStats(status="LIVE"), "CAM-002": CameraStats(status="OFFLINE")})
+    assert page.summary_label.text() == "2 cameras · 1 online"
+    assert page._cards["CAM-001"].toggle.text() == "Disable"
+    assert page._cards["CAM-002"].toggle.text() == "Enable"
+    seen = []
+    page.ai_changed.connect(lambda cid, on: seen.append((cid, on)))
+    page._cards["CAM-002"].toggle.click()
+    assert seen == [("CAM-002", True)]
+    page.attention_filter.setChecked(True)
+    assert page._visible_ids() == ["CAM-002"]
+    page.attention_filter.setChecked(False)
+
+    dialog = CameraFormDialog(camera=cams[0], credentials=CameraCredentials("u", "p"), groups=["Entrances"])
+    assert dialog.name_input.text() == "Gate 1"
+    assert dialog.address_input.text() == "rtsp://x/1"
+    assert dialog.username_input.text() == "u"
+    dialog.name_input.setText("Gate One")
+    dialog._save()
+    assert dialog.form_data["name"] == "Gate One"
+    assert dialog.form_data["group_name"] == "Entrances"

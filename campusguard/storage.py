@@ -243,6 +243,14 @@ class Repository:
             connection.execute("UPDATE cameras SET group_name = ? WHERE camera_id = ?", (group_name, camera_id))
         self.log_audit("camera_group", camera_id, group_name or "(none)")
 
+    def update_camera(self, camera_id: str, name: str, source_type: str, source_address: str) -> None:
+        with self._lock, self._connection() as connection:
+            connection.execute(
+                "UPDATE cameras SET name = ?, source_type = ?, source_address = ? WHERE camera_id = ?",
+                (name, source_type, source_address, camera_id),
+            )
+        self.log_audit("camera_edit", camera_id, f"{name} ({source_type})")
+
     def remove_camera(self, camera_id: str) -> None:
         with self._lock, self._connection() as connection:
             connection.execute("DELETE FROM cameras WHERE camera_id = ?", (camera_id,))
