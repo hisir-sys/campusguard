@@ -20,7 +20,6 @@ from campusguard.engine.registry import ACTIVE_CAMERAS
 from campusguard.footage import FightFootageRecorder
 from campusguard.storage import application_data_dir
 from campusguard.credentials import CredentialVault
-from dataclasses import replace as _dc_replace
 
 from campusguard.settings import AppSettings, CameraConfig, CameraCredentials, effective_threshold
 
@@ -33,7 +32,6 @@ except (AttributeError, cv2.error):
 # build_capture_source lives in campusguard.sources (importable without OpenCV/torch);
 # re-exported here for existing callers.
 from campusguard.sources import build_capture_source  # noqa: E402,F401
-
 
 
 def enumerate_local_cameras(max_devices: int = 80) -> list[dict[str, object]]:
@@ -915,11 +913,6 @@ class CameraManager(QObject):
         for session in self._sessions.values():
             session.options.update_settings(settings)
 
-    def set_camera_preview(self, camera_id: str, enabled: bool) -> None:
-        """Stop/resume sending live frames to the UI for a camera nobody is watching."""
-        session = self._sessions.get(camera_id)
-        if session is not None:
-            session.options.set_preview_enabled(enabled)
 
     def set_camera_snapshot(self, camera_id: str, enabled: bool) -> None:
         """Enable JPEG previews only while a remote viewer watches."""

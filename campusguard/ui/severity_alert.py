@@ -1,273 +1,187 @@
+"""The v3 "Fight detected" modal: a scrim, a glass card that pops in, and two actions."""
 from __future__ import annotations
 
-import math
 import time
 
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QTimer, Qt, Signal
-from PySide6.QtWidgets import (
-    QFrame,
-    QGraphicsOpacityEffect,
-    QHBoxLayout,
-    QLabel,
-    QProgressBar,
-    QPushButton,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtCore import QEasingCurve, QTimer, QVariantAnimation, Qt, Signal
+from PySide6.QtGui import QColor, QPainter
+from PySide6.QtWidgets import QGraphicsOpacityEffect, QLabel, QVBoxLayout, QWidget
 
 from campusguard import alarm_sound
-from campusguard.ui.severity import severity_color
 from campusguard.ui.theme import get_palette, rgba
+from campusguard.ui.v3widgets import GhostButton, GlassCard, make_pill, mono
 
 
-class SeverityAlertToast(QFrame):
-    """Compact, auto-dismissing glass alert that lives inside the app window."""
+class FightAlert(QWidget):
+    """Covers the window with a soft scrim and centres the alert card. Critical alerts stay
+    (and keep sounding) until someone acts; lower levels close themselves after a while."""
 
     view_requested = Signal(str)
 
+    # title text is shared with the severity labels used on the Incidents and Alerts pages
     _LEVELS = {
-        "medium": {"title": "ALERT", "accent": "#C4B085", "popup_ms": 5000, "glyph": "!"},
-        "high": {"title": "CRITICAL ALERT", "accent": "#C79A7E", "popup_ms": 7000, "glyph": "!!"},
-        "critical": {"title": "DANGER", "accent": "#C58790", "popup_ms": 15000, "glyph": "!!!"},
+        "medium": {"title": "ALERT", "auto_ms": 12000},
+        "high": {"title": "CRITICAL ALERT", "auto_ms": 20000},
+        "critical": {"title": "DANGER", "auto_ms": 0},
     }
+    CARD_WIDTH = 420
 
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent)
-        self.setObjectName("severityAlertToast")
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
-        self.setFixedWidth(430)
+        self.setObjectName("fightAlert")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
         self._incident_id = ""
         self._level = "medium"
-        self._pulse_started = 0.0
+        self._open = 0.0
 
-        self._opacity = QGraphicsOpacityEffect(self)
-        self._opacity.setOpacity(0.0)
-        self.setGraphicsEffect(self._opacity)
-        self._fade = QPropertyAnimation(self._opacity, b"opacity", self)
-        self._fade.setDuration(240)
-        self._fade.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._card = GlassCard(self, radius=24, lift=False)
+        self._card.setObjectName("fightAlertCard")
+        self._card.setFixedWidth(self.CARD_WIDTH)
+        self.restyle()
+        self._pill = make_pill("Alert", "new")
+        self._pill.setMinimumWidth(56)
+        self._headline = QLabel("Fight detected")
+        self._headline.setObjectName("fightAlertTitle")
+        self._meta = QLabel()
+        self._meta.setFont(mono(9))
+        self._meta.setProperty("muted", True)
+        self._meta.setWordWrap(True)
+        self._review = GhostButton("Review clip", primary=True)
+        self._review.clicked.connect(self._view_incident)
+        self._dismiss = GhostButton("Dismiss")
+        self._dismiss.clicked.connect(self.dismiss)
 
-        self._dismiss_timer = QTimer(self)
-        self._dismiss_timer.setSingleShot(True)
-        self._dismiss_timer.timeout.connect(self._fade_out)
-        self._pulse_timer = QTimer(self)
-        self._pulse_timer.setInterval(70)
-        self._pulse_timer.timeout.connect(self._pulse)
-
-        self._badge = QLabel("!")
-        self._badge.setObjectName("severityAlertBadge")
-        self._badge.setFixedSize(46, 46)
-        self._badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._title = QLabel("ALERT")
-        self._title.setObjectName("severityAlertTitle")
-        self._headline = QLabel()
-        self._headline.setObjectName("severityAlertMessage")
-        self._headline.setWordWrap(True)
-        self._detail = QLabel()
-        self._detail.setObjectName("severityAlertDetail")
-        self._close = QPushButton("\u2715")
-        self._close.setObjectName("severityAlertClose")
-        self._close.setFixedSize(26, 26)
-        self._close.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._close.setToolTip("Dismiss")
-        self._close.clicked.connect(self.dismiss)
-
-        text = QVBoxLayout()
-        text.setContentsMargins(0, 0, 0, 0)
-        text.setSpacing(2)
-        text.addWidget(self._title)
-        text.addWidget(self._headline)
-        text.addWidget(self._detail)
-        head = QHBoxLayout()
-        head.setContentsMargins(0, 0, 0, 0)
-        head.setSpacing(14)
-        head.addWidget(self._badge, 0, Qt.AlignmentFlag.AlignTop)
-        head.addLayout(text, 1)
-        head.addWidget(self._close, 0, Qt.AlignmentFlag.AlignTop)
-
-        self._confidence_label = QLabel("Confidence")
-        self._confidence_label.setObjectName("severityAlertDetail")
-        self._confidence_value = QLabel()
-        self._confidence_value.setObjectName("severityAlertValue")
-        self._bar = QProgressBar()
-        self._bar.setObjectName("severityAlertBar")
-        self._bar.setRange(0, 1000)
-        self._bar.setTextVisible(False)
-        self._bar.setFixedHeight(7)
-        meter = QHBoxLayout()
-        meter.setContentsMargins(0, 0, 0, 0)
-        meter.addWidget(self._confidence_label)
-        meter.addStretch(1)
-        meter.addWidget(self._confidence_value)
-
-        self._view = QPushButton("View incident")
-        self._view.setObjectName("severityAlertView")
-        self._view.setMinimumHeight(36)
-        self._view.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._view.clicked.connect(self._view_incident)
-        self._ok = QPushButton("Dismiss")
-        self._ok.setObjectName("severityAlertDismiss")
-        self._ok.setMinimumHeight(36)
-        self._ok.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._ok.clicked.connect(self.dismiss)
-        actions = QHBoxLayout()
-        actions.setContentsMargins(0, 4, 0, 0)
+        actions = QVBoxLayout()
         actions.setSpacing(8)
-        actions.addStretch(1)
-        actions.addWidget(self._ok)
-        actions.addWidget(self._view)
-
-        self._countdown = QProgressBar()
-        self._countdown.setObjectName("severityAlertCountdown")
-        self._countdown.setRange(0, 1000)
-        self._countdown.setValue(1000)
-        self._countdown.setTextVisible(False)
-        self._countdown.setFixedHeight(3)
-        self._countdown_anim = QPropertyAnimation(self._countdown, b"value", self)
-        self._countdown_anim.setEasingCurve(QEasingCurve.Type.Linear)
-
-        body = QVBoxLayout()
-        body.setContentsMargins(18, 16, 16, 12)
-        body.setSpacing(10)
-        body.addLayout(head)
-        body.addLayout(meter)
-        body.addWidget(self._bar)
+        actions.addWidget(self._review)
+        actions.addWidget(self._dismiss)
+        body = QVBoxLayout(self._card)
+        body.setContentsMargins(28, 28, 28, 24)
+        body.setSpacing(12)
+        body.addWidget(self._pill, 0, Qt.AlignmentFlag.AlignLeft)
+        body.addWidget(self._headline)
+        body.addWidget(self._meta)
+        body.addSpacing(4)
         body.addLayout(actions)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        layout.addLayout(body)
-        layout.addWidget(self._countdown)
 
-        self._apply_theme()
+        self._effect = QGraphicsOpacityEffect(self._card)
+        self._card.setGraphicsEffect(self._effect)
+        self._anim = QVariantAnimation(self)
+        self._anim.setDuration(500)
+        self._anim.valueChanged.connect(self._on_anim)
+        self._anim.finished.connect(self._anim_done)
+        self._closing = False
+        self._auto = QTimer(self)
+        self._auto.setSingleShot(True)
+        self._auto.timeout.connect(self.dismiss)
+        self.hide()
         QTimer.singleShot(2500, alarm_sound.prewarm)   # build sounds off the UI thread
 
-    def _apply_theme(self, border_alpha: int | None = None) -> None:
-        palette = get_palette()
-        accent = severity_color(self._level.upper())
-        on_accent = "#121315" if palette.name == "dark" else "#F4F4F5"
-        is_critical = self._level == "critical"
-        glass_alpha = 236 if palette.name == "dark" else 244
-        if border_alpha is None:
-            border_alpha = 150 if is_critical else 100
-        self._badge.setText(self._LEVELS[self._level]["glyph"])
-        self.setStyleSheet(
+    def restyle(self) -> None:
+        p = get_palette()
+        self._card.setStyleSheet(
             f"""
-            QFrame#severityAlertToast {{
-                background: {rgba(palette.glass, glass_alpha)};
-                color: {palette.text};
-                border: 1px solid {rgba(accent, border_alpha)};
-                border-radius: 18px;
-            }}
-            QLabel {{ background: transparent; }}
-            QLabel#severityAlertBadge {{
-                background: {rgba(accent, 46)}; color: {accent};
-                border: 1px solid {rgba(accent, 140)}; border-radius: 23px;
-                font-size: 15pt; font-weight: 600;
-            }}
-            QLabel#severityAlertTitle {{ color: {accent}; font-size: 9pt; font-weight: 600; letter-spacing: 0px; }}
-            QLabel#severityAlertMessage {{ color: {palette.text}; font-size: 13pt; font-weight: 600; }}
-            QLabel#severityAlertDetail {{ color: {palette.muted}; font-size: 9pt; }}
-            QLabel#severityAlertValue {{ color: {accent}; font-size: 11pt; font-weight: 600; }}
-            QPushButton#severityAlertClose {{
-                background: transparent; color: {palette.muted}; border: none; border-radius: 13px; font-size: 10pt;
-            }}
-            QPushButton#severityAlertClose:hover {{ background: {rgba(palette.text, 24)}; color: {palette.text}; }}
-            QPushButton#severityAlertView {{
-                background: {accent}; color: {on_accent}; border: none; border-radius: 10px;
-                padding: 0 16px; font-weight: 600;
-            }}
-            QPushButton#severityAlertView:hover {{ background: {rgba(accent, 225)}; }}
-            QPushButton#severityAlertDismiss {{
-                background: {rgba(palette.text, 16)}; color: {palette.text}; border: 1px solid {rgba(palette.text, 40)};
-                border-radius: 10px; padding: 0 16px; font-weight: 600;
-            }}
-            QPushButton#severityAlertDismiss:hover {{ background: {rgba(palette.text, 30)}; }}
-            QProgressBar#severityAlertBar {{
-                background: {rgba(palette.text, 22)}; border: none; border-radius: 3px;
-            }}
-            QProgressBar#severityAlertBar::chunk {{ background: {accent}; border-radius: 3px; }}
-            QProgressBar#severityAlertCountdown {{ background: transparent; border: none; }}
-            QProgressBar#severityAlertCountdown::chunk {{ background: {rgba(accent, 200)}; }}
+            QFrame#fightAlertCard {{ background: {rgba(p.glass, 252)}; border: none; border-radius: 24px; }}
+            QLabel#fightAlertTitle {{ color: {p.text}; font-family: Outfit, Inter, sans-serif;
+                font-size: 22px; font-weight: 600; background: transparent; }}
             """
         )
 
-    def _pulse(self) -> None:
-        """Critical alerts breathe: the border glows in and out until dismissed."""
-        phase = (time.monotonic() - self._pulse_started) * 5.0
-        self._apply_theme(border_alpha=int(110 + 60 * (0.5 + 0.5 * math.sin(phase))))
+    # ----- animation ------------------------------------------------------
 
-    def _present(self, incident_id: str, event: str, camera_name: str, score: float, peak: bool) -> None:
-        self._level = "medium" if score < 85 else "high" if score < 95 else "critical"
-        config = self._LEVELS[self._level]
-        self._incident_id = incident_id
-        self._title.setText(config["title"])
-        self._headline.setText(event)
-        self._detail.setText(f"{camera_name}  \u00b7  {time.strftime('%H:%M:%S')}")
-        self._confidence_label.setText("Peak confidence" if peak else "Confidence")
-        self._confidence_value.setText(f"{score:.0f}%")
-        self._bar.setValue(int(max(0.0, min(100.0, score)) * 10))
-        self._apply_theme()
-        if self._level == "critical":
-            self._pulse_started = time.monotonic()
-            self._pulse_timer.start()
-        else:
-            self._pulse_timer.stop()
-        self._dismiss_timer.start(config["popup_ms"])
-        self._countdown_anim.stop()
-        self._countdown_anim.setDuration(config["popup_ms"])
-        self._countdown_anim.setStartValue(1000)
-        self._countdown_anim.setEndValue(0)
-        self._countdown_anim.start()
-        self.adjustSize()
-        self.setFixedHeight(self.sizeHint().height())
-        self._position()
-        self.show()
-        self.raise_()
+    def _run(self, start: float, end: float, curve: QEasingCurve.Type, ms: int) -> None:
+        self._anim.stop()
+        self._anim.setEasingCurve(curve)
+        self._anim.setDuration(ms)
+        self._anim.setStartValue(start)
+        self._anim.setEndValue(end)
+        self._anim.start()
 
-    def show_alert(
-        self,
-        incident_id: str,
-        event: str,
-        camera_name: str,
-        confidence: float,
-    ) -> None:
-        score = confidence * 100.0 if confidence <= 1.0 else confidence
-        if score < 70:
-            return
-        self._fade.stop()
-        self._opacity.setOpacity(0.0)
-        self._present(incident_id, event, camera_name, score, peak=False)
-        self._fade.setStartValue(0.0)
-        self._fade.setEndValue(1.0)
-        self._fade.start()
-        alarm_sound.play(self._level)
+    def _on_anim(self, value) -> None:
+        self._open = float(value)
+        self._effect.setOpacity(max(0.0, min(1.0, self._open * 1.5)))
+        self._place_card()
+        self.update()
 
-    def update_alert(
-        self,
-        incident_id: str,
-        event: str,
-        camera_name: str,
-        confidence: float,
-    ) -> None:
-        """Refresh the same incident's peak confidence without replaying its alarm."""
-        score = confidence * 100.0 if confidence <= 1.0 else confidence
-        if score < 70:
-            return
-        self._fade.stop()
-        self._opacity.setOpacity(1.0)
-        self._present(incident_id, event, camera_name, score, peak=True)
+    def _anim_done(self) -> None:
+        if self._closing:
+            self._closing = False
+            self.hide()
 
-    def _position(self) -> None:
-        parent = self.parentWidget()
-        if parent is None:
-            return
-        self.move(max(18, parent.width() - self.width() - 24), 22)
+    def _place_card(self) -> None:
+        self._card.adjustSize()
+        size = self._card.sizeHint()
+        x = (self.width() - self.CARD_WIDTH) // 2
+        rise = int((1.0 - min(1.0, self._open)) * 18)
+        y = (self.height() - size.height()) // 2 + rise
+        self._card.setGeometry(x, max(12, y), self.CARD_WIDTH, size.height())
+
+    def paintEvent(self, event) -> None:
+        del event
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), QColor(0, 0, 0, int(max(0.0, min(1.0, self._open)) * 150)))
+        painter.end()
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
-        self._position()
+        self._place_card()
+
+    def mousePressEvent(self, event) -> None:
+        if not self._card.geometry().contains(event.position().toPoint()):
+            self.dismiss()
+        event.accept()
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() == Qt.Key.Key_Escape:
+            self.dismiss()
+            return
+        super().keyPressEvent(event)
+
+    # ----- public API -----------------------------------------------------
+
+    def _present(self, incident_id: str, camera_name: str, score: float, replay: bool) -> None:
+        self.restyle()
+        self._level = "medium" if score < 85 else "high" if score < 95 else "critical"
+        config = self._LEVELS[self._level]
+        self._incident_id = incident_id
+        self._pill.setText(config["title"].capitalize())
+        self._meta.setText(f"{incident_id} · {camera_name} · {score:.0f}% · {time.strftime('%d %b %H:%M')}")
+        if config["auto_ms"]:
+            self._auto.start(config["auto_ms"])
+        else:
+            self._auto.stop()
+        self.setGeometry(self.parentWidget().rect())
+        already = self.isVisible() and not self._closing
+        self._closing = False
+        self.show()
+        self.raise_()
+        if already or not replay:
+            self._anim.stop()
+            self._open = 1.0
+            self._effect.setOpacity(1.0)
+            self._place_card()
+            self.update()
+        else:
+            self._open = 0.0
+            self._effect.setOpacity(0.0)
+            self._run(0.0, 1.0, QEasingCurve.Type.OutBack, 500)
+        self._review.setFocus()
+
+    def show_alert(self, incident_id: str, event: str, camera_name: str, confidence: float) -> None:
+        del event
+        score = confidence * 100.0 if confidence <= 1.0 else confidence
+        if score < 70:
+            return
+        self._present(incident_id, camera_name, score, replay=True)
+        alarm_sound.play(self._level)
+
+    def update_alert(self, incident_id: str, event: str, camera_name: str, confidence: float) -> None:
+        """Refresh the same incident's peak confidence without replaying its alarm."""
+        del event
+        score = confidence * 100.0 if confidence <= 1.0 else confidence
+        if score < 70:
+            return
+        self._present(incident_id, camera_name, score, replay=False)
 
     def _view_incident(self) -> None:
         incident_id = self._incident_id
@@ -276,26 +190,9 @@ class SeverityAlertToast(QFrame):
             self.view_requested.emit(incident_id)
 
     def dismiss(self) -> None:
-        self._dismiss_timer.stop()
-        self._fade_out()
-
-    def _fade_out(self) -> None:
+        self._auto.stop()
         alarm_sound.stop()
-        self._pulse_timer.stop()
-        self._countdown_anim.stop()
-        self._fade.stop()
-        self._fade.setStartValue(self._opacity.opacity())
-        self._fade.setEndValue(0.0)
-        try:
-            self._fade.finished.disconnect(self._hide_after_fade)
-        except (TypeError, RuntimeError):
-            pass
-        self._fade.finished.connect(self._hide_after_fade)
-        self._fade.start()
-
-    def _hide_after_fade(self) -> None:
-        try:
-            self._fade.finished.disconnect(self._hide_after_fade)
-        except (TypeError, RuntimeError):
-            pass
-        self.hide()
+        if not self.isVisible() or self._closing:
+            return
+        self._closing = True
+        self._run(self._open, 0.0, QEasingCurve.Type.InCubic, 220)

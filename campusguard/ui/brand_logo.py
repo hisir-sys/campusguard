@@ -7,7 +7,6 @@ Colours follow the active theme (dark / light).
 """
 from __future__ import annotations
 
-import math
 import sqlite3
 import json
 from pathlib import Path
@@ -23,17 +22,9 @@ LOGO_LIME_LIGHT = "#0B0D12"          # midnight mark on paper
 LENS_DARK = "#5CD6F5"                # accent, dark theme
 LENS_LIGHT = "#0A7EA4"               # accent, light theme
 SPLASH = {
-    "dark": {"bg": "#0B0D12", "fg": "#FFFFFF", "mute": "#A3A9B8", "line": "#2A2E3A"},
-    "light": {"bg": "#F4F4F2", "fg": "#0B0D12", "mute": "#5B6070", "line": "#D3D5DB"},
+    "dark": {"bg": "#0A0A0B", "fg": "#F5F5F7", "mute": "#9A9AA2", "line": "#2A2A2E"},
+    "light": {"bg": "#E4E4E7", "fg": "#0B0B0D", "mute": "#6B6B73", "line": "#C9C9CF"},
 }
-
-
-def lens_color() -> QColor:
-    return QColor(LENS_LIGHT if get_palette().name == "light" else LENS_DARK)
-
-
-def logo_color() -> QColor:
-    return QColor(LOGO_LIME_LIGHT if get_palette().name == "light" else LOGO_LIME_DARK)
 
 
 def ui_logo_color() -> QColor:
@@ -59,13 +50,6 @@ def saved_theme() -> str:
         return value if value in {"dark", "light"} else "dark"
     except Exception:
         return "dark"
-
-
-def _smooth(edge0: float, edge1: float, x: float) -> float:
-    if edge1 <= edge0:
-        return 1.0 if x >= edge1 else 0.0
-    t = max(0.0, min(1.0, (x - edge0) / (edge1 - edge0)))
-    return t * t * (3 - 2 * t)
 
 
 def bezier(x1: float, y1: float, x2: float, y2: float):

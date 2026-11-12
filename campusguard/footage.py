@@ -144,6 +144,3 @@ def clear_footage(output_dir: Path) -> int:
             continue
     return removed
 
-
-def footage_exists(path_text: str | None) -> bool:
-    return bool(path_text and Path(path_text).is_file())

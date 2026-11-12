@@ -13,7 +13,7 @@ from campusguard.settings import CameraConfig, CameraStats
 from campusguard.storage import Repository
 from campusguard.ui.common import CameraPreview
 from campusguard.ui.v3widgets import (
-    BarChart, clear_layout, GhostButton, GlassCard, Meter, Orb, Segmented, card_title, make_pill, mono, mono_label,
+    BarChart, clear_layout, GhostButton, GlassCard, Meter, Orb, Segmented, card_title, make_pill, mono_label,
 )
 
 _CLOSED = {"RESOLVED", "DISMISSED", "FALSE_ALARM", "CONFIRMED"}

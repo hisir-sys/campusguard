@@ -1,19 +1,20 @@
 """v3 shell pieces: the page header with its four actions, and the Ctrl K command palette."""
 from __future__ import annotations
 
-from PySide6.QtCore import QEasingCurve, QPoint, QRectF, Qt, QVariantAnimation, Signal
-from PySide6.QtGui import QColor, QKeyEvent, QPainter, QPen
+from PySide6.QtCore import QEasingCurve, QRectF, Qt, QVariantAnimation, Signal
+from PySide6.QtGui import QColor, QKeyEvent, QPainter
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QVBoxLayout, QWidget,
 )
 
 from campusguard.ui.command_search import Command, search_commands
 from campusguard.ui.theme import get_palette
-from campusguard.ui.v3widgets import GhostButton, GlassCard, make_pill
+from campusguard.ui.v3widgets import GhostButton, GlassCard
 
 PAGE_TITLES: dict[str, tuple[str, str]] = {
     "dashboard": ("Dashboard", "Live overview of cameras, incidents and the detection engine"),
     "cameras": ("Cameras", "Add, edit and monitor every camera"),
+    "floor-map": ("Floor map", "See where every camera is and which one is alerting"),
     "incidents": ("Incidents", "Review, confirm and export every detected fight"),
     "alerts": ("Alerts", "Alerts raised on this server and on the other servers of the school"),
     "settings": ("Settings", "Detection, alerts, appearance and connection"),

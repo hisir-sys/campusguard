@@ -18,7 +18,6 @@ from PySide6.QtWidgets import (
 from campusguard.ui.theme import get_palette, qcolor
 
 MONO = "JetBrains Mono"
-DISPLAY = "Outfit"
 
 
 def mono(point: float = 9, weight: int = 400) -> QFont:
@@ -299,33 +298,6 @@ class Meter(QWidget):
         painter.drawRoundedRect(QRectF(0, y, self.width(), h), 2, 2)
         painter.setBrush(QColor(get_palette().text))
         painter.drawRoundedRect(QRectF(0, y, self.width() * self._value, h), 2, 2)
-        painter.end()
-
-
-class Dot(QWidget):
-    """Status dot: filled = online, hollow = offline, coral = alert."""
-
-    def __init__(self, state: str = "on", parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self._state = state
-        self.setFixedSize(10, 10)
-
-    def set_state(self, state: str) -> None:
-        self._state = state
-        self.update()
-
-    def paintEvent(self, event) -> None:
-        p = get_palette()
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        rect = QRectF(1, 1, 8, 8)
-        if self._state == "off":
-            painter.setPen(QPen(QColor(p.muted), 1))
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-        else:
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor(p.bad if self._state == "alert" else p.text))
-        painter.drawEllipse(rect)
         painter.end()
 
 

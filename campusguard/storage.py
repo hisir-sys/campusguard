@@ -99,6 +99,17 @@ class Repository:
             created_at TEXT NOT NULL,
             is_read INTEGER NOT NULL DEFAULT 0
         );
+        CREATE TABLE IF NOT EXISTS floor_plans (
+            plan_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            image_path TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS camera_pins (
+            camera_id TEXT PRIMARY KEY,
+            plan_id INTEGER NOT NULL,
+            x REAL NOT NULL,
+            y REAL NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
@@ -254,6 +265,44 @@ class Repository:
     def remove_camera(self, camera_id: str) -> None:
         with self._lock, self._connection() as connection:
             connection.execute("DELETE FROM cameras WHERE camera_id = ?", (camera_id,))
+            connection.execute("DELETE FROM camera_pins WHERE camera_id = ?", (camera_id,))
+
+    # ----- floor plans ----------------------------------------------------
+    def add_floor_plan(self, name: str, image_path: str) -> int:
+        with self._lock, self._connection() as connection:
+            cursor = connection.execute("INSERT INTO floor_plans (name, image_path) VALUES (?, ?)", (name, image_path))
+            plan_id = int(cursor.lastrowid)
+        self.log_audit("floor_plan_add", str(plan_id), name)
+        return plan_id
+
+    def list_floor_plans(self) -> list[dict[str, Any]]:
+        with self._lock, self._connection() as connection:
+            rows = connection.execute("SELECT plan_id, name, image_path FROM floor_plans ORDER BY plan_id").fetchall()
+        return [{"plan_id": int(r[0]), "name": r[1], "image_path": r[2]} for r in rows]
+
+    def remove_floor_plan(self, plan_id: int) -> None:
+        with self._lock, self._connection() as connection:
+            connection.execute("DELETE FROM camera_pins WHERE plan_id = ?", (plan_id,))
+            connection.execute("DELETE FROM floor_plans WHERE plan_id = ?", (plan_id,))
+        self.log_audit("floor_plan_remove", str(plan_id), "")
+
+    def set_camera_pin(self, camera_id: str, plan_id: int, x: float, y: float) -> None:
+        x, y = min(1.0, max(0.0, float(x))), min(1.0, max(0.0, float(y)))
+        with self._lock, self._connection() as connection:
+            connection.execute(
+                "INSERT INTO camera_pins (camera_id, plan_id, x, y) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(camera_id) DO UPDATE SET plan_id = excluded.plan_id, x = excluded.x, y = excluded.y",
+                (camera_id, plan_id, x, y),
+            )
+
+    def remove_camera_pin(self, camera_id: str) -> None:
+        with self._lock, self._connection() as connection:
+            connection.execute("DELETE FROM camera_pins WHERE camera_id = ?", (camera_id,))
+
+    def list_camera_pins(self) -> dict[str, tuple[int, float, float]]:
+        with self._lock, self._connection() as connection:
+            rows = connection.execute("SELECT camera_id, plan_id, x, y FROM camera_pins").fetchall()
+        return {r[0]: (int(r[1]), float(r[2]), float(r[3])) for r in rows}
 
     def set_camera_ai(self, camera_id: str, enabled: bool) -> None:
         with self._lock, self._connection() as connection:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtWidgets import (
@@ -23,6 +25,9 @@ from PySide6.QtWidgets import (
 from campusguard.settings import SENSITIVITY_LEVELS, CameraConfig, CameraCredentials, CameraStats
 from campusguard.ui.icons import IconLabel, set_icon_theme
 from campusguard.ui.theme import build_qss, get_palette, rgba, set_current
+
+if TYPE_CHECKING:
+    from campusguard.camera_runtime import CameraTestThread
 
 
 def apply_theme(application, theme: str) -> None:
@@ -51,17 +56,6 @@ def set_tone(widget: QWidget, tone: str) -> None:
     widget.setProperty("tone", tone)
     widget.style().unpolish(widget)
     widget.style().polish(widget)
-
-
-class ClickableFrame(QFrame):
-    """A QFrame that emits clicked() when pressed with the left mouse button."""
-
-    clicked = Signal()
-
-    def mousePressEvent(self, event) -> None:
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.clicked.emit()
-        super().mousePressEvent(event)
 
 
 def make_page_title(title: str, subtitle: str) -> QWidget:
@@ -584,62 +578,3 @@ class CameraFormDialog(QDialog):
             return
         super().reject()
 
-
-class EnlargedCameraDialog(QDialog):
-    def __init__(self, camera: CameraConfig, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.setWindowTitle(f"{camera.name} — {camera.camera_id}")
-        self.resize(1100, 720)
-        self._stats = CameraStats()
-        self._state = "CONNECTING"
-        self._confidence: float | None = None
-        self.image_label = QLabel("Waiting for camera frames")
-        self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.image_label.setStyleSheet("background: #111215; color: #a3a5aa;")
-        self.info_label = QLabel("FPS: N/A   Resolution: N/A")
-        layout = QVBoxLayout(self)
-        layout.addWidget(self.image_label, 1)
-        layout.addWidget(self.info_label)
-
-    def set_frame(self, image, state: str, confidence: float | None) -> None:
-        self._state = state
-        self._confidence = confidence
-        pixmap = QPixmap.fromImage(image)
-        self.image_label.setText("")
-        self.image_label.setPixmap(
-            pixmap.scaled(
-                self.image_label.size(),
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-        )
-        self._render_info()
-
-    def set_camera_stats(self, stats: CameraStats) -> None:
-        self._stats = stats
-        if stats.status != "LIVE":
-            self._state = stats.status
-            self._confidence = None
-            self.image_label.setPixmap(QPixmap())
-            self.image_label.setText(
-                stats.message
-                or ("Connecting to camera…" if stats.status == "CONNECTING" else "Waiting for camera frames")
-            )
-        self._render_info()
-
-    def _render_info(self) -> None:
-        fps = f"{self._stats.fps:.1f}" if self._stats.fps is not None else "N/A"
-        suffix = (
-            f"   Confidence: {self._confidence:.0%}"
-            if self._confidence is not None
-            else ""
-        )
-        self.info_label.setText(
-            f"{self._state}   FPS: {fps}   Resolution: {self._stats.resolution}{suffix}"
-        )
-
-    def keyPressEvent(self, event) -> None:
-        if event.key() == Qt.Key.Key_Escape:
-            self.reject()
-            return
-        super().keyPressEvent(event)

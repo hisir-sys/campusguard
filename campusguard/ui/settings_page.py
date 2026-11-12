@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from campusguard.settings import START_PAGES, AppSettings
-from campusguard.ui.common import make_card, make_page_title
+from campusguard.ui.common import make_page_title
 from campusguard.ui.v3widgets import Segmented
 
 
@@ -508,29 +508,6 @@ class SettingsPage(QWidget):
                 section.setVisible(tab == name)
         self.scroll.verticalScrollBar().setValue(0)
 
-    def _mini_card(self, title: str, description: str) -> QWidget:
-        frame = QFrame()
-        frame.setProperty("card", True)
-
-        layout = QVBoxLayout(frame)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(8)
-
-        title_label = QLabel(title)
-        title_label.setStyleSheet("font-size: 10px; font-weight: 600; letter-spacing: 0px;")
-        layout.addWidget(title_label)
-
-        description_label = QLabel(description)
-        description_label.setWordWrap(True)
-        description_label.setProperty("muted", True)
-        layout.addWidget(description_label)
-
-        body = QVBoxLayout()
-        body.setSpacing(7)
-        layout.addLayout(body)
-
-        frame.body = body  # type: ignore[attr-defined]
-        return frame
 
     def _request_update_check(self) -> None:
         self.check_updates_button.setEnabled(False)

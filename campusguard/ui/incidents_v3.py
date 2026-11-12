@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 )
 
 from campusguard.storage import Repository
-from campusguard.ui.history_pages import FootagePlayerDialog
+from campusguard.ui.footage_player import FootagePlayerDialog
 from campusguard.ui.v3widgets import (
     GhostButton, clear_layout, GlassCard, Meter, Segmented, card_title, make_pill, mono_label,
 )

@@ -37,7 +37,8 @@ def _load_brand_fonts() -> None:
 
 class StartupWindow(QWidget):
     """Launch screen: the CampusGuard mark slides in, the dot pops and ripples, the wordmark
-    rises and a bar fills while the app loads. Colours follow the saved dark/light theme."""
+    rises and a bar fills; then the logo fades into the grey thinking orb while the app
+    loads. Colours follow the saved dark/light theme."""
 
     LOGO_SECONDS = 3.4
 
@@ -74,10 +75,33 @@ class StartupWindow(QWidget):
         layout.setSpacing(0)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
+        # The logo and the orb share one slot; the orb takes over once the logo has played.
         self.logo = LogoReveal(panel, size=104)
         self.logo.setAccessibleName("CampusGuard start-up animation")
-        layout.addWidget(self.logo, 0, Qt.AlignmentFlag.AlignCenter)
+        self._stage = QWidget(panel)
+        self._stage.setFixedSize(self.logo.size())
+        self.logo.setParent(self._stage)
+        self.orb = ThinkingOrb(self._stage, size=150)
+        self.orb.move((self._stage.width() - 150) // 2, (self._stage.height() - 150) // 2 - 10)
+        self.orb.setAccessibleName("CampusGuard is loading")
+        self.orb.stop()
+        self.orb.hide()
+        self._orb_fade = QGraphicsOpacityEffect(self.orb)
+        self._orb_fade.setOpacity(0.0)
+        self.orb.setGraphicsEffect(self._orb_fade)
+        self._logo_fade = QGraphicsOpacityEffect(self.logo)
+        self._logo_fade.setOpacity(1.0)
+        self.logo.setGraphicsEffect(self._logo_fade)
+        layout.addWidget(self._stage, 0, Qt.AlignmentFlag.AlignCenter)
         layout.addSpacing(4)
+        self._handover = QTimer(self)
+        self._handover.setSingleShot(True)
+        self._handover.timeout.connect(self._show_orb)
+        self._handover_anim = QVariantAnimation(self)
+        self._handover_anim.setDuration(500)
+        self._handover_anim.setStartValue(0.0)
+        self._handover_anim.setEndValue(1.0)
+        self._handover_anim.valueChanged.connect(self._on_handover)
 
         self.status = QLabel("Starting")
         self.status.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -92,16 +116,36 @@ class StartupWindow(QWidget):
     def set_status(self, text: str) -> None:
         self.status.setText(text.rstrip("…. "))
 
+    def _show_orb(self) -> None:
+        self.orb.show()
+        self.orb.start()
+        self._handover_anim.start()
+
+    def _on_handover(self, value) -> None:
+        value = float(value)
+        self._orb_fade.setOpacity(value)
+        self._logo_fade.setOpacity(1.0 - value)
+        if value >= 1.0:
+            self.logo.stop()
+            self.logo.hide()
+
+    def _stop_animations(self) -> None:
+        self._handover.stop()
+        self._handover_anim.stop()
+        self.logo.stop()
+        self.orb.stop()
+
     def showEvent(self, event) -> None:
         self.logo.start()
+        self._handover.start(int(self.LOGO_SECONDS * 1000))
         super().showEvent(event)
 
     def hideEvent(self, event) -> None:
-        self.logo.stop()
+        self._stop_animations()
         super().hideEvent(event)
 
     def closeEvent(self, event) -> None:
-        self.logo.stop()
+        self._stop_animations()
         super().closeEvent(event)
 
 

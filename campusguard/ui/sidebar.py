@@ -12,12 +12,12 @@ All page / theme / login actions keep going through the same signals.
 """
 from __future__ import annotations
 
-from PySide6.QtCore import QEasingCurve, QPointF, QRectF, QSize, Qt, QVariantAnimation, Signal
+from PySide6.QtCore import QEasingCurve, QPointF, QRectF, QSize, QTimer, Qt, QVariantAnimation, Signal
 from PySide6.QtGui import (
-    QColor, QFont, QFontMetrics, QLinearGradient, QPainter, QPainterPath, QPen, QRadialGradient,
+    QColor, QFont, QFontMetricsF, QLinearGradient, QPainter, QPainterPath, QPen, QRadialGradient,
 )
 from PySide6.QtWidgets import (
-    QAbstractButton, QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QLabel, QLineEdit,
+    QAbstractButton, QFrame, QHBoxLayout, QLabel, QLineEdit,
     QListWidget, QListWidgetItem, QSizePolicy, QVBoxLayout, QWidget,
 )
 
@@ -35,9 +35,9 @@ EXPANDED_WIDTH = RAIL_WIDTH + GAP + PANEL_WIDTH
 BOTTOM_CAPSULE_HEIGHT = 236
 
 # Pages that live "inside Home".
-HOME_PAGES = ("dashboard", "cameras", "incidents", "alerts", "server-viewer")
+HOME_PAGES = ("dashboard", "cameras", "floor-map", "incidents", "alerts", "server-viewer")
 HOME_GROUPS = (
-    ("Overview", (("Dashboard", "dashboard", "layout-dashboard"), ("Cameras", "cameras", "video"))),
+    ("Overview", (("Dashboard", "dashboard", "layout-dashboard"), ("Cameras", "cameras", "video"), ("Floor map", "floor-map", "map"))),
     ("Activity", (("Incidents", "incidents", "file-warning"), ("Alerts", "alerts", "bell"))),
     ("Network", (("School server", "server-viewer", "server"),)),
 )
@@ -47,8 +47,6 @@ LEARN = (
     ("Tools", "tools", "wrench"),
     ("How it works", "how-it-works", "route"),
 )
-# Kept for code that still imports the old structure.
-SECTIONS = (("HOME", tuple(i for _t, items in HOME_GROUPS for i in items)), ("LEARN", LEARN))
 
 
 def _tones() -> dict[str, QColor]:
@@ -161,22 +159,96 @@ class _Panel(QFrame):
         painter.fillPath(path, glow)
 
 
+class _RailTip(QWidget):
+    """The v3 label bubble that appears to the right of a rail icon."""
+
+    def __init__(self) -> None:
+        super().__init__(None, Qt.WindowType.ToolTip | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowDoesNotAcceptFocus)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self._text = ""
+
+    def show_for(self, text: str, anchor: QPointF) -> None:
+        self._text = text
+        font = QFont(self.font())
+        font.setPointSizeF(9.5)
+        font.setWeight(QFont.Weight.Medium)
+        self.setFont(font)
+        width = int(QFontMetricsF(font).horizontalAdvance(text)) + 24
+        self.setFixedSize(width, 28)
+        self.move(int(anchor.x()), int(anchor.y() - 14))
+        self.show()
+
+    def paintEvent(self, event) -> None:
+        del event
+        pal = get_palette()
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(pal.text))
+        painter.drawRoundedRect(QRectF(self.rect()), 9, 9)
+        painter.setPen(QColor(pal.bg0))
+        painter.drawText(QRectF(self.rect()), int(Qt.AlignmentFlag.AlignCenter), self._text)
+
+
 class _RailButton(QAbstractButton):
-    """Icon (or avatar letter) button that sits on a dark pill."""
+    """Icon (or avatar letter) button that sits on a dark pill. The tile eases in on hover,
+    the icon swells towards the pointer (dock magnify) and dips a little while pressed."""
 
     entered = Signal()
+    moved = Signal(float)           # global y of the pointer, for the dock magnify
 
     def __init__(self, label: str, icon: str = "", parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._icon = icon
         self._letter = ""
+        self._label = label
         self._active = False
-        self._hover = False
+        self._hover = 0.0           # 0..1, eased
+        self._zoom = 1.0            # icon scale from magnify
         self._badge = 0
+        self.tip: _RailTip | None = None
+        self.tip_enabled = lambda: True
         self.setFixedSize(RAIL_WIDTH - 24, 42)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
-        self.setToolTip(label)
+        self.setMouseTracking(True)
+        self.setAccessibleName(label)
+        self._hover_anim = QVariantAnimation(self)
+        self._hover_anim.setDuration(180)
+        self._hover_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._hover_anim.valueChanged.connect(self._on_hover)
+        self._zoom_anim = QVariantAnimation(self)
+        self._zoom_anim.setDuration(200)
+        self._zoom_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._zoom_anim.valueChanged.connect(self._on_zoom)
+        self._tip_timer = QTimer(self)
+        self._tip_timer.setSingleShot(True)
+        self._tip_timer.setInterval(140)
+        self._tip_timer.timeout.connect(self._show_tip)
+
+    def _on_hover(self, value) -> None:
+        self._hover = float(value)
+        self.update()
+
+    def _on_zoom(self, value) -> None:
+        self._zoom = float(value)
+        self.update()
+
+    def _ease_hover(self, target: float) -> None:
+        self._hover_anim.stop()
+        self._hover_anim.setStartValue(self._hover)
+        self._hover_anim.setEndValue(target)
+        self._hover_anim.start()
+
+    def set_zoom(self, target: float) -> None:
+        if abs(target - self._zoom) < 0.004:
+            return
+        self._zoom_anim.stop()
+        self._zoom_anim.setStartValue(self._zoom)
+        self._zoom_anim.setEndValue(target)
+        self._zoom_anim.start()
 
     def set_icon(self, icon: str) -> None:
         self._icon = icon
@@ -186,6 +258,10 @@ class _RailButton(QAbstractButton):
         self._letter = letter
         self.update()
 
+    def set_label(self, label: str) -> None:
+        self._label = label
+        self.setAccessibleName(label)
+
     def set_active(self, active: bool) -> None:
         self._active = active
         self.update()
@@ -194,16 +270,39 @@ class _RailButton(QAbstractButton):
         self._badge = max(0, int(count))
         self.update()
 
+    def _show_tip(self) -> None:
+        if self.tip is None or not self.underMouse() or not self.tip_enabled():
+            return
+        edge = self.mapToGlobal(QPointF(self.width() + 18, self.height() / 2.0).toPoint())
+        self.tip.show_for(self._label, QPointF(edge))
+
+    def _hide_tip(self) -> None:
+        self._tip_timer.stop()
+        if self.tip is not None:
+            self.tip.hide()
+
     def enterEvent(self, event) -> None:
-        self._hover = True
-        self.update()
+        self._ease_hover(1.0)
+        self._tip_timer.start()
         self.entered.emit()
         super().enterEvent(event)
 
     def leaveEvent(self, event) -> None:
-        self._hover = False
-        self.update()
+        self._ease_hover(0.0)
+        self._hide_tip()
         super().leaveEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:
+        self.moved.emit(event.globalPosition().y())
+        super().mouseMoveEvent(event)
+
+    def mousePressEvent(self, event) -> None:
+        self._hide_tip()
+        super().mousePressEvent(event)
+
+    def hideEvent(self, event) -> None:
+        self._hide_tip()
+        super().hideEvent(event)
 
     def paintEvent(self, event) -> None:
         t = _tones()
@@ -211,15 +310,28 @@ class _RailButton(QAbstractButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         w, h = float(self.width()), float(self.height())
         body = QRectF(.5, .5, w - 1, h - 1)
-        if self._active or self._hover:
+        if self._active or self._hover > 0.01:
+            tile = QColor(t["tile"]) if self._active else QColor(255, 255, 255, int(31 * self._hover))
             painter.setPen(QPen(t["tile_edge"], 1))
-            painter.setBrush(t["tile"] if self._active else QColor(255, 255, 255, 18))
+            painter.setBrush(tile)
             painter.drawRoundedRect(body, 14, 14)
-        tint = t["icon_hot"] if (self._active or self._hover) else t["icon"]
+        hot = t["icon_hot"] if self._active else t["icon"]
+        if self._hover > 0.01 and not self._active:
+            mix = self._hover
+            hot = QColor(
+                int(t["icon"].red() + (t["icon_hot"].red() - t["icon"].red()) * mix),
+                int(t["icon"].green() + (t["icon_hot"].green() - t["icon"].green()) * mix),
+                int(t["icon"].blue() + (t["icon_hot"].blue() - t["icon"].blue()) * mix),
+            )
+        scale = self._zoom * (0.94 if self.isDown() else 1.0)
+        painter.translate(w / 2.0, h / 2.0)
+        painter.scale(scale, scale)
+        painter.translate(-w / 2.0, -h / 2.0)
         if self._letter:
-            painter.setPen(QPen(tint, 1.2))
+            painter.setPen(QPen(hot, 1.2))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             circle = QRectF((w - 26) / 2, (h - 26) / 2, 26, 26)
             painter.drawEllipse(circle)
@@ -230,20 +342,30 @@ class _RailButton(QAbstractButton):
             painter.drawText(circle, int(Qt.AlignmentFlag.AlignCenter), self._letter)
         else:
             size = 20
-            painter.drawPixmap(QPointF((w - size) / 2, (h - size) / 2), icon_pixmap(self._icon, size, tint.name()))
+            painter.drawPixmap(QPointF((w - size) / 2, (h - size) / 2), icon_pixmap(self._icon, size, hot.name()))
         if self._badge:
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(qcolor(pal.bad))
             painter.drawEllipse(QRectF(w - 15, 5, 9, 9))
+        if self.hasFocus() and not self._active:
+            painter.resetTransform()
+            painter.setPen(QPen(qcolor(pal.text, 200), 1.5))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(body.adjusted(1, 1, -1, -1), 13, 13)
 
 
 class _PanelItem(QAbstractButton):
     def __init__(self, label: str, icon: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._label, self._icon = label, icon
-        self._active = self._hover = False
+        self._active = False
+        self._hover = 0.0           # 0..1, eased: tile fades in and the row slides 4 px right
         self._badge = 0
         self._count: int | None = None
+        self._hover_anim = QVariantAnimation(self)
+        self._hover_anim.setDuration(250)
+        self._hover_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._hover_anim.valueChanged.connect(self._on_hover)
         self.setFixedHeight(40)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
@@ -264,14 +386,22 @@ class _PanelItem(QAbstractButton):
     def sizeHint(self) -> QSize:
         return QSize(PANEL_WIDTH - 28, 40)
 
-    def enterEvent(self, event) -> None:
-        self._hover = True
+    def _on_hover(self, value) -> None:
+        self._hover = float(value)
         self.update()
+
+    def _ease_hover(self, target: float) -> None:
+        self._hover_anim.stop()
+        self._hover_anim.setStartValue(self._hover)
+        self._hover_anim.setEndValue(target)
+        self._hover_anim.start()
+
+    def enterEvent(self, event) -> None:
+        self._ease_hover(1.0)
         super().enterEvent(event)
 
     def leaveEvent(self, event) -> None:
-        self._hover = False
-        self.update()
+        self._ease_hover(0.0)
         super().leaveEvent(event)
 
     def paintEvent(self, event) -> None:
@@ -298,18 +428,21 @@ class _PanelItem(QAbstractButton):
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.setBrush(qcolor(pal.ink))
                 painter.drawRoundedRect(QRectF(0, h * .28, 3, h * .44), 1.5, 1.5)
-        elif self._hover:
+        elif self._hover > 0.01:
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor(255, 255, 255, 14) if dark else QColor(255, 255, 255, 110))
+            alpha = int((14 if dark else 110) * self._hover)
+            painter.setBrush(QColor(255, 255, 255, alpha))
             painter.drawRoundedRect(body, 13, 13)
-        tint = pal.ink if (self._active and dark) else (pal.text if (self._active or self._hover) else pal.text_dim)
-        painter.drawPixmap(QPointF(14, (h - 19) / 2 - 1), icon_pixmap(self._icon, 19, tint))
+        hot = self._active or self._hover > 0.5
+        slide = 4.0 * self._hover
+        tint = pal.ink if (self._active and dark) else (pal.text if hot else pal.text_dim)
+        painter.drawPixmap(QPointF(14 + slide, (h - 19) / 2 - 1), icon_pixmap(self._icon, 19, tint))
         font = QFont(self.font())
         font.setPointSizeF(10.0)
         font.setWeight(QFont.Weight.DemiBold if self._active else QFont.Weight.Medium)
         painter.setFont(font)
-        painter.setPen(QColor(pal.text if (self._active or self._hover) else pal.text_dim))
-        rect = QRectF(46, 0, w - 46 - 44, h - 2)
+        painter.setPen(QColor(pal.text if hot else pal.text_dim))
+        rect = QRectF(46 + slide, 0, w - 46 - 44 - slide, h - 2)
         painter.drawText(rect, int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft), self._label)
         if self._count is None:
             return
@@ -401,7 +534,6 @@ class Sidebar(QWidget):
         pill.setContentsMargins(5, 10, 5, 10)
         pill.setSpacing(4)
         self.logo = LogoMark(size=26)
-        self.logo.setToolTip("CampusGuard")
         pill.addWidget(self.logo, 0, Qt.AlignmentFlag.AlignHCenter)
         pill.addSpacing(6)
         self.home_button = _RailButton("Home", "home")
@@ -430,7 +562,7 @@ class Sidebar(QWidget):
         tools = QVBoxLayout(self.tools_pill)
         tools.setContentsMargins(5, 8, 5, 8)
         tools.setSpacing(4)
-        self.theme_toggle = _RailButton("Switch light / dark theme", "sun")
+        self.theme_toggle = _RailButton("Theme", "sun")
         self.theme_toggle.entered.connect(self._close_panel)
         self.theme_toggle.clicked.connect(lambda _c=False: self.theme_toggle_requested.emit())
         tools.addWidget(self.theme_toggle)
@@ -439,13 +571,22 @@ class Sidebar(QWidget):
         self.rail_account.entered.connect(self._close_panel)
         self.rail_account.clicked.connect(lambda _c=False: self.login_requested.emit())
         tools.addWidget(self.rail_account)
-        self.settings_button = _RailButton("System settings", "settings")
+        self.settings_button = _RailButton("Settings", "settings")
         self.settings_button.entered.connect(self._close_panel)
         self.settings_button.clicked.connect(lambda _c=False: self.page_requested.emit("settings"))
         self._register("settings", self.settings_button)
         tools.addWidget(self.settings_button)
         self.rail_bottom.pill = self.tools_pill
         bottom_layout.addWidget(self.tools_pill)
+        self._rail_buttons = [
+            self.home_button, *[b for key in (k for _t, k, _i in LEARN) for b in self._items[key]],
+            self.theme_toggle, self.rail_account, self.settings_button,
+        ]
+        self._tip = _RailTip()
+        for button in self._rail_buttons:
+            button.tip = self._tip
+            button.moved.connect(self._magnify)
+            button.tip_enabled = (lambda b=button: not (b is self.home_button and self._hover_open))
         rail_col.addWidget(self.rail_bottom, 0)
         outer.addLayout(rail_col, 0)
 
@@ -529,7 +670,16 @@ class Sidebar(QWidget):
 
     def leaveEvent(self, event) -> None:
         self._close_panel()
+        for button in self._rail_buttons:
+            button.set_zoom(1.0)
         super().leaveEvent(event)
+
+    def _magnify(self, global_y: float) -> None:
+        """Dock effect: icons nearest the pointer swell, their neighbours a little less."""
+        for button in self._rail_buttons:
+            centre = button.mapToGlobal(button.rect().center()).y()
+            reach = max(0.0, 1.0 - abs(centre - global_y) / 88.0)
+            button.set_zoom(1.0 + 0.24 * reach * reach)
 
     def set_commands(self, commands: list[Command]) -> None:
         self._commands = list(commands)
@@ -626,7 +776,7 @@ class Sidebar(QWidget):
     def set_theme(self, theme: str) -> None:
         self._dark = theme == "dark"
         self.theme_toggle.set_icon("sun" if self._dark else "moon")
-        self.theme_toggle.setToolTip("Switch to light mode" if self._dark else "Switch to dark mode")
+        self.theme_toggle.set_label("Light mode" if self._dark else "Dark mode")
         self.logo.update()
         for widget in (self.rail, self.rail_bottom, self.nav_pill, self.tools_pill, self.panel):
             widget.update()
@@ -637,7 +787,7 @@ class Sidebar(QWidget):
         self.account_button.set_email(name)
         self.account_button.setToolTip(tip)
         self.rail_account.set_letter((name or "?")[:1].upper())
-        self.rail_account.setToolTip(tip)
+        self.rail_account.set_label(f"Log out {name}" if name else "Sign in")
 
     def focus_search(self) -> None:
         self.set_compact(False)

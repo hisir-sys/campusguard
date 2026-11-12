@@ -11,10 +11,10 @@ import sys
 from functools import lru_cache
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, QSize, Qt
-from PySide6.QtGui import QGuiApplication, QIcon, QPainter, QPixmap
+from PySide6.QtCore import QByteArray, Qt
+from PySide6.QtGui import QGuiApplication, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
-from PySide6.QtWidgets import QLabel, QPushButton
+from PySide6.QtWidgets import QLabel
 
 from campusguard.ui import theme
 
@@ -95,6 +95,9 @@ _ICONS: dict[str, str] = {
     "home": (
         '<path d="M3 11.5 12 4l9 7.5"/>'
         '<path d="M5.5 10v9.5a1 1 0 0 0 1 1H10v-6h4v6h3.5a1 1 0 0 0 1-1V10"/>'
+    ),
+    "map": (
+        '<path d="M9 4 3 6.5v13L9 17l6 2.5 6-2.5v-13L15 7z"/><path d="M9 4v13M15 7v12.5"/>'
     ),
     "minus": '<path d="M5 12h14"/>',
     "square": '<rect x="5" y="5" width="14" height="14" rx="2.5"/>',
@@ -211,19 +214,3 @@ class IconLabel(QLabel):
     def retint(self) -> None:
         self.setPixmap(icon_pixmap(self._name, self._size, self._tone))
 
-
-class IconButton(QPushButton):
-    """A flat push button with an icon that re-tints itself on theme change."""
-
-    def __init__(self, name: str, size: int = 18, tone: str = "text", parent=None) -> None:
-        super().__init__(parent)
-        self._name = name
-        self._size = int(size)
-        self._tone = tone
-        self.setFlat(True)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.retint()
-
-    def retint(self) -> None:
-        self.setIcon(QIcon(icon_pixmap(self._name, self._size, self._tone)))
-        self.setIconSize(QSize(self._size, self._size))

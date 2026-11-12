@@ -39,9 +39,9 @@ from campusguard.settings import (
     CameraStats,
 )
 from campusguard.storage import Repository
-from campusguard.ui.camera_page import LocalVideoTestDialog
+from campusguard.ui.local_test import LocalVideoTestDialog
 from campusguard.ui.cameras_v3 import CamerasPage
-from campusguard.ui.common import apply_theme, make_card, make_page_title
+from campusguard.ui.common import apply_theme, make_card
 from campusguard.ui.dashboard_v3 import DashboardPage
 from campusguard.ui.services_v3 import ServicesPage
 from campusguard.ui.shell_v3 import CommandPalette, HeaderBar
@@ -50,14 +50,16 @@ from campusguard.ui.command_search import Command
 from campusguard.ui.sidebar import COMPACT_WIDTH, Sidebar
 from campusguard.ui.title_bar import TitleBar
 from campusguard.ui.alerts_v3 import AlertsPage
-from campusguard.ui.history_pages import FootagePlayerDialog
+from campusguard.ui.footage_player import FootagePlayerDialog
 from campusguard.ui.incidents_v3 import IncidentsPage
 from campusguard.ui.icons import set_icon_theme
 from campusguard.ui.screen_fit import compute_fit
 from campusguard.ui.settings_page import SettingsPage
 from campusguard.ui.server_viewer import ServerViewerPage
 from campusguard.server.client import RemoteServerClient
-from campusguard.ui.severity_alert import SeverityAlertToast
+from campusguard.ui.floor_map import FloorMapPage
+from campusguard.ui.notify import ToastStack
+from campusguard.ui.severity_alert import FightAlert
 from campusguard.ui.theme import get_palette, rgba
 
 
@@ -363,40 +365,6 @@ class InAppOverlay(QFrame):
             callback()
         self.confirmed.emit()
 
-    def show_text_input(self, title: str, message: str, callback, placeholder: str = "") -> None:
-        self._clear_body()
-        self._title.setText(title)
-        self._body.setText(message)
-        self._body.setVisible(True)
-        self._body_layout.addWidget(self._body)
-
-        field = QLineEdit()
-        field.installEventFilter(self)
-        field.setPlaceholderText(placeholder)
-        field.setMinimumHeight(42)
-        self._body_layout.addWidget(field)
-
-        row = QHBoxLayout()
-        row.addStretch(1)
-        cancel = QPushButton("Cancel")
-        cancel.setProperty("secondaryButton", True)
-        cancel.clicked.connect(self._close_overlay)
-        save = QPushButton("Continue")
-        save.setProperty("primary", True)
-        save.clicked.connect(lambda: self._submit_text(field, callback))
-        row.addWidget(cancel)
-        row.addWidget(save)
-        self._body_layout.addLayout(row)
-
-        self._panel.setMinimumWidth(480)
-        self._panel.setMaximumWidth(760)
-        self._panel.setMinimumHeight(0)
-        self._panel.setMaximumHeight(390)
-        self._blur_background(True)
-        self.show()
-        self.raise_()
-        self._center()
-        field.setFocus()
 
     def _submit_text(self, field: QLineEdit, callback) -> None:
         value = field.text().strip()
@@ -639,7 +607,7 @@ class MainWindow(QMainWindow):
 
         if self._camera_engine_error is not None:
             error = self._camera_engine_error
-            self.statusBar().showMessage(f"AI engine initialization failed: {error}", 12000)
+            self._toast(f"AI engine initialization failed: {error}", 12000)
             for camera in self.cameras.values():
                 self._set_camera_status(
                     camera.camera_id,
@@ -659,7 +627,7 @@ class MainWindow(QMainWindow):
             self._connect_camera_manager()
             self._start_cameras()
         except Exception as error:
-            self.statusBar().showMessage(f"AI engine initialization failed: {error}", 12000)
+            self._toast(f"AI engine initialization failed: {error}", 12000)
             for camera in self.cameras.values():
                 self._set_camera_status(
                     camera.camera_id,
@@ -719,6 +687,8 @@ class MainWindow(QMainWindow):
         self.dashboard = DashboardPage(self.repository)
         self.camera_page = CamerasPage()
         self.camera_page.credentials_provider = self._load_camera_credentials
+        self.floor_map_page = FloorMapPage(self.repository)
+        self.floor_map_page.camera_requested.connect(self.open_camera)
         self.incidents_page = IncidentsPage(self.repository)
         self.alerts_page = AlertsPage(self.repository)
         self.settings_page = SettingsPage(self.settings)
@@ -728,6 +698,7 @@ class MainWindow(QMainWindow):
         self._pages = {
             "dashboard": self.dashboard,
             "cameras": self.camera_page,
+            "floor-map": self.floor_map_page,
             "incidents": self.incidents_page,
             "alerts": self.alerts_page,
             "settings": self.settings_page,
@@ -752,9 +723,9 @@ class MainWindow(QMainWindow):
         self._in_app_overlay.footage_requested.connect(self.open_camera_footage)
         self._in_app_overlay.incidents_requested.connect(self.open_camera_incidents)
         self._in_app_overlay.hide()
-        self._severity_alert = SeverityAlertToast(central)
+        self._severity_alert = FightAlert(central)
         self._severity_alert.view_requested.connect(self._view_alert_incident)
-        self._severity_alert.hide()
+        self._toasts = ToastStack(central)
         # This app uses the floating navigation dock instead of a status bar.
         # Hiding the empty QMainWindow status bar removes the full-width gray
         # strip that could appear beneath/behind the dock.
@@ -768,9 +739,17 @@ class MainWindow(QMainWindow):
             self._in_app_overlay.setGeometry(self.centralWidget().rect())
         if hasattr(self, "palette_overlay"):
             self.palette_overlay.setGeometry(self.centralWidget().rect())
-        if hasattr(self, "_severity_alert"):
-            self._severity_alert._position()
+        if hasattr(self, "_severity_alert") and self._severity_alert.isVisible():
+            self._severity_alert.setGeometry(self.centralWidget().rect())
+        if hasattr(self, "_toasts"):
+            self._toasts.reposition()
         self._position_bottom_bar()
+
+    def _toast(self, message: str, ms: int = 4000, undo=None) -> None:
+        """Show a v3 toast. (The window has no status bar, so every notice goes here.)"""
+        lowered = message.lower()
+        bad = any(word in lowered for word in ("could not", "failed", "not approved", "no longer", "unavailable"))
+        self._toasts.show_toast(message, undo=undo, tone="bad" if bad else "", ms=max(3000, min(ms, 8000)))
 
     def _position_bottom_bar(self) -> None:
         """Keep the floating sidebar docked to the left edge, above the pages."""
@@ -980,7 +959,7 @@ class MainWindow(QMainWindow):
     def _reconnect_all_cameras(self) -> None:
         for camera_id in list(self.cameras):
             self._reconnect_camera(camera_id)
-        self.statusBar().showMessage("Reconnecting every camera", 3000)
+        self._toast("Reconnecting every camera", 3000)
 
     def _open_connection_settings(self) -> None:
         self.navigate("settings")
@@ -1001,49 +980,6 @@ class MainWindow(QMainWindow):
             getattr(self.settings, "server_address", "") or "school server", clips, size / 1_048_576,
         )
 
-    def _make_services_page(self) -> QWidget:
-        content = QWidget()
-        layout = QVBoxLayout(content)
-        layout.setContentsMargins(4, 4, 8, 24)
-        layout.setSpacing(18)
-        layout.addWidget(self._section_header(
-            "Services",
-            "The technical service chain from external camera acquisition through AI analysis, incident persistence, and operator alerts.",
-        ))
-
-        services = (
-            ("01", "Camera Runtime", "USB / RTSP / HTTP / IP",
-             "Maintains the live camera stream, frame mailbox, connection state, FPS, and resolution."),
-            ("02", "Person Detection", "YOLO",
-             "Detects people in each frame and provides the regions used by downstream analysis."),
-            ("03", "Tracking", "ByteTrack",
-             "Maintains stable operator-facing person identities across consecutive frames."),
-            ("04", "Pose Analysis", "YOLO Pose",
-             "Associates pose keypoints with detected people for contextual movement analysis."),
-            ("05", "Spontim 1.0", "MC3-18 · 16 frames",
-             "Analyzes a temporal sequence rather than making a decision from one isolated frame."),
-            ("06", "Event Stability", "Temporal gate",
-             "Requires consecutive fight predictions and sustained confidence before creating one persistent event."),
-            ("07", "Footage Recorder", "MP4 evidence",
-             "Stores one complete detection clip in CampusGuard storage and links it to the incident."),
-            ("08", "Incident & Alert Service", "SQLite",
-             "Persists incidents, alerts, notifications, confidence, severity, status, and saved footage references."),
-            ("09", "Operator UI", "Glass workspace",
-             "Presents live cameras, incidents, alerts, system status, AI status, and in-app evidence viewing."),
-        )
-        for i, (number, title, subtitle, detail) in enumerate(services):
-            layout.addWidget(self._flow_node(number, title, f"{subtitle} — {detail}"))
-            if i != len(services) - 1:
-                layout.addWidget(self._flow_arrow())
-
-        card, body = make_card("Service contract", icon="server")
-        body.addWidget(QLabel(
-            "Capture produces frames, models produce analysis, the repository persists state, "
-            "and the UI presents that state to the operator."
-        ))
-        layout.addWidget(card)
-        layout.addStretch(1)
-        return self._info_scroll(content)
 
     def _make_tools_page(self) -> QWidget:
         content = QWidget()
@@ -1261,6 +1197,8 @@ class MainWindow(QMainWindow):
             self.alerts_page.refresh()
         elif page == "cameras":
             self._sync_cameras()
+        elif page == "floor-map":
+            self.floor_map_page.refresh()
 
     def _on_overlay_closed(self) -> None:
         # Keep MainWindow camera-view state synchronized with the overlay.
@@ -1383,7 +1321,7 @@ class MainWindow(QMainWindow):
         self.camera_stats[camera.camera_id] = CameraStats()
         self._previous_camera_status[camera.camera_id] = "CONNECTING"
         if self.camera_manager is None:
-            self.statusBar().showMessage("Camera engine is still initializing; please try again in a moment.", 3000)
+            self._toast("Camera engine is still initializing; please try again in a moment.", 3000)
             return
         try:
             self.camera_manager.start_camera(camera)
@@ -1394,7 +1332,7 @@ class MainWindow(QMainWindow):
             f"{camera.name} ({camera.camera_id}) added; connecting to external source.",
         )
         self._sync_cameras()
-        self.statusBar().showMessage(f"Added {camera.name}; connecting to the configured source.", 6000)
+        self._toast(f"Added {camera.name}; connecting to the configured source.", 6000)
 
     def _load_camera_credentials(self, camera_id: str):
         try:
@@ -1440,7 +1378,7 @@ class MainWindow(QMainWindow):
                 self.camera_stats[camera_id] = CameraStats(status="CONNECTING")
                 self.camera_manager.reconnect(camera_id, updated)
         self._sync_cameras()
-        self.statusBar().showMessage(f"{updated.name}: changes saved.", 4000)
+        self._toast(f"{updated.name}: changes saved.", 4000)
 
     def _remove_camera(self, camera_id: str) -> None:
         camera = self.cameras.get(camera_id)
@@ -1462,7 +1400,7 @@ class MainWindow(QMainWindow):
         try:
             self.vault.delete(camera_id)
         except Exception:
-            self.statusBar().showMessage(
+            self._toast(
                 "Camera removed, but its saved credentials could not be deleted from the OS vault.",
                 10000,
             )
@@ -1482,7 +1420,7 @@ class MainWindow(QMainWindow):
             return
         self.camera_stats[camera_id] = CameraStats(status="CONNECTING")
         if self.camera_manager is None:
-            self.statusBar().showMessage("Camera engine is still initializing; please try again in a moment.", 3000)
+            self._toast("Camera engine is still initializing; please try again in a moment.", 3000)
             return
         self.camera_manager.reconnect(camera_id, camera)
         self._sync_cameras()
@@ -1504,7 +1442,7 @@ class MainWindow(QMainWindow):
                 continue
             self._health_notified[message] = now
             self.repository.add_notification("system_health", message)
-            self.statusBar().showMessage(message, 10000)
+            self._toast(message, 10000)
             self.dashboard.refresh_summary()
 
     def _export_report(self) -> None:
@@ -1518,9 +1456,9 @@ class MainWindow(QMainWindow):
         try:
             count = self.repository.export_incidents_csv(path, audit_path)
         except OSError as error:
-            self.statusBar().showMessage(f"Could not save the report: {error}", 8000)
+            self._toast(f"Could not save the report: {error}", 8000)
             return
-        self.statusBar().showMessage(f"Exported {count} incidents and the audit log to {Path(path).parent}.", 8000)
+        self._toast(f"Exported {count} incidents and the audit log to {Path(path).parent}.", 8000)
 
     def _export_trend_report(self) -> None:
         from campusguard.reports import render_html
@@ -1534,31 +1472,11 @@ class MainWindow(QMainWindow):
         try:
             Path(path).write_text(render_html(self.repository.list_incidents(limit=100000)), encoding="utf-8")
         except OSError as error:
-            self.statusBar().showMessage(f"Could not save the report: {error}", 8000)
+            self._toast(f"Could not save the report: {error}", 8000)
             return
         self.repository.log_audit("export_trend_report", Path(path).name, "")
-        self.statusBar().showMessage(f"Trend report saved to {path}.", 8000)
+        self._toast(f"Trend report saved to {path}.", 8000)
 
-    def _set_camera_sensitivity(self, camera_id: str, offset: float) -> None:
-        camera = self.cameras.get(camera_id)
-        if camera is None:
-            return
-        self.cameras[camera_id] = replace(camera, threshold_offset=float(offset))
-        self.repository.set_camera_threshold_offset(camera_id, offset)
-        if self.camera_manager is not None:
-            self.camera_manager.set_camera_threshold_offset(camera_id, offset)
-        self.statusBar().showMessage(f"{camera.name}: alert sensitivity updated.", 4000)
-
-    def _set_camera_group(self, camera_id: str, group: str) -> None:
-        camera = self.cameras.get(camera_id)
-        if camera is None:
-            return
-        group = " ".join(group.split())[:40]
-        if group == camera.group_name:
-            return
-        self.cameras[camera_id] = replace(camera, group_name=group)
-        self.repository.set_camera_group(camera_id, group)
-        self.statusBar().showMessage(f"{camera.name}: group set to {group or 'none'}.", 4000)
 
     def _set_camera_ai(self, camera_id: str, enabled: bool) -> None:
         camera = self.cameras.get(camera_id)
@@ -1615,7 +1533,7 @@ class MainWindow(QMainWindow):
                         self._camera_engine_importing = True
                         self._camera_engine_error = None
                         self._begin_camera_engine_import()
-        self.statusBar().showMessage("Settings saved and applied to the selected connection mode.", 1800)
+        self._toast("Settings saved and applied to the selected connection mode.", 1800)
 
     def _rebuild_information_pages(self) -> None:
         current_key = None
@@ -1780,7 +1698,7 @@ class MainWindow(QMainWindow):
         """Fallback when no camera or command matched: search incident history."""
         self.incidents_page.search_input.setText(query.strip())
         self.navigate("incidents")
-        self.statusBar().showMessage(f"No camera or command matched \"{query.strip()}\" - showing incident search.", 6000)
+        self._toast(f"No camera or command matched \"{query.strip()}\" - showing incident search.", 6000)
 
     def _apply_runtime_settings(self) -> None:
         from campusguard import alarm_sound
@@ -1847,7 +1765,7 @@ class MainWindow(QMainWindow):
                              str(row.get("severity", "MEDIUM")), datetime.now(), row.get("footage_path"))
         numbers = parse_numbers(self.settings.alert_numbers, self.settings.country_code)
         if not numbers:
-            self.statusBar().showMessage("Add a phone number in Settings, Phone alerts first.", 6000)
+            self._toast("Add a phone number in Settings, Phone alerts first.", 6000)
             return
         message = format_message(info)
         for number in numbers:
@@ -1857,16 +1775,16 @@ class MainWindow(QMainWindow):
         try:
             self.vault.save_whatsapp_token(token)
             self._dispatcher.set_plan(self._build_alert_plan(token))
-            self.statusBar().showMessage("WhatsApp token saved securely.", 5000)
+            self._toast("WhatsApp token saved securely.", 5000)
         except Exception as error:
-            self.statusBar().showMessage(f"Could not save the token: {error}", 8000)
+            self._toast(f"Could not save the token: {error}", 8000)
 
     def _send_test_alert(self) -> None:
         from campusguard.notify import AlertInfo as _Info
 
         plan = self._build_alert_plan()
         if not plan.active:
-            self.statusBar().showMessage("Add a number and choose a WhatsApp mode, or an ntfy topic, first.", 7000)
+            self._toast("Add a number and choose a WhatsApp mode, or an ntfy topic, first.", 7000)
             return
         info = _Info("TEST-0001", "Test camera", "test", 0.91, "HIGH", datetime.now())
         self._dispatcher.set_plan(plan)
@@ -1874,7 +1792,7 @@ class MainWindow(QMainWindow):
         if plan.whatsapp_mode == "link":
             self._alert_infos["TEST-0001"] = info
             self._open_whatsapp("TEST-0001")
-        self.statusBar().showMessage("Test alert sent.", 5000)
+        self._toast("Test alert sent.", 5000)
 
     def _build_commands(self) -> list[Command]:
         def page(title: str, key: str, *words: str) -> Command:
@@ -1889,6 +1807,7 @@ class MainWindow(QMainWindow):
         return [
             page("Dashboard", "dashboard", "home", "overview"),
             page("Cameras", "cameras", "video", "feed", "footage", "live"),
+            page("Floor map", "floor-map", "map", "plan", "layout", "building", "pins"),
             page("Incidents", "incidents", "history", "fights", "events", "clips"),
             page("Alerts", "alerts", "notifications", "alarms"),
             page("Settings", "settings", "preferences", "options", "configure"),
@@ -1950,10 +1869,11 @@ class MainWindow(QMainWindow):
             camera_id,
             self.camera_stats[camera_id],
         )
+        self.floor_map_page.update_camera_stats(camera_id, self.camera_stats[camera_id])
         if self._camera_view_camera_id == camera_id:
             self._in_app_overlay.set_camera_stats(self.camera_stats[camera_id])
         if message:
-            self.statusBar().showMessage(f"{camera_id}: {message}", 8000)
+            self._toast(f"{camera_id}: {message}", 8000)
 
     def _on_camera_stats(self, camera_id: str, fps: float, resolution: str) -> None:
         if camera_id not in self.cameras:
@@ -2012,10 +1932,6 @@ class MainWindow(QMainWindow):
         self._severity_alert.show_alert(
             str(incident["public_id"]), event, camera.name, confidence
         )
-        self.statusBar().showMessage(
-            f"{severity} alert: {event} in local test footage ({confidence:.0%}).",
-            12000,
-        )
         self.incidents_page.refresh()
         self.alerts_page.refresh()
         self.dashboard.refresh_summary()
@@ -2060,10 +1976,6 @@ class MainWindow(QMainWindow):
                 self._severity_alert.update_alert(
                     public_id, "FIGHT DETECTED", camera.name, confidence
                 )
-                self.statusBar().showMessage(
-                    f"{severity} alert updated: fight confidence peaked at {score:.1f}% on {camera.name}.",
-                    8000,
-                )
                 self.incidents_page.refresh()
                 self.alerts_page.refresh()
                 self.dashboard.refresh_summary()
@@ -2098,10 +2010,6 @@ class MainWindow(QMainWindow):
                 self._severity_alert.show_alert(
                     public_id, event, camera.name, confidence
                 )
-            self.statusBar().showMessage(
-                f"{severity} fight detection on {camera.name}; duplicate incident suppressed by cooldown.",
-                12000,
-            )
             self.incidents_page.refresh()
             self.alerts_page.refresh()
             self.dashboard.refresh_summary()
@@ -2114,10 +2022,6 @@ class MainWindow(QMainWindow):
         self._send_phone_alert(camera, str(incident["public_id"]), confidence, severity)
         self._severity_alert.show_alert(
             str(incident["public_id"]), event, camera.name, confidence
-        )
-        self.statusBar().showMessage(
-            f"{severity} alert: {event} on {camera.name} ({score:.1f}%).",
-            12000,
         )
         self.incidents_page.refresh()
         self.alerts_page.refresh()
@@ -2136,7 +2040,7 @@ class MainWindow(QMainWindow):
         if public_id.startswith("SIM-"):
             return
         if incident is None:
-            self.statusBar().showMessage(f"Incident {public_id} is no longer available.", 5000)
+            self._toast(f"Incident {public_id} is no longer available.", 5000)
             return
         footage_path = str(incident.get("footage_path") or "")
         if footage_path and Path(footage_path).is_file():
@@ -2146,7 +2050,7 @@ class MainWindow(QMainWindow):
                     self.incidents_page._open_footage(path, identifier),
             )
         else:
-            self.statusBar().showMessage(
+            self._toast(
                 f"Incident {public_id} opened. Saved footage is still being finalized or is unavailable.",
                 6500,
             )
@@ -2164,14 +2068,26 @@ class MainWindow(QMainWindow):
             self._dispatcher.send_clip_later(info)
         self.incidents_page.refresh()
         self.alerts_page.refresh()
-        self.statusBar().showMessage(
+        self._toast(
             f"Fight footage saved for {public_id}.",
             6000,
         )
 
     def _set_incident_status(self, public_id: str, status: str) -> None:
+        previous = next(
+            (str(row.get("status", "")) for row in self.repository.list_incidents() if row.get("public_id") == public_id),
+            "",
+        )
         self.repository.update_incident_status(public_id, status)
         self.incidents_page.refresh()
+        self.dashboard.refresh_summary()
+
+        def undo() -> None:
+            self.repository.update_incident_status(public_id, previous)
+            self.incidents_page.refresh()
+            self.dashboard.refresh_summary()
+
+        self._toast(f"{public_id} marked {status.replace('_', ' ').lower()}", undo=undo if previous else None)
 
     def _clear_dashboard_notifications(self) -> None:
         self._in_app_overlay.show_confirmation(
@@ -2183,7 +2099,7 @@ class MainWindow(QMainWindow):
     def _confirm_clear_dashboard_notifications(self) -> None:
         self.repository.clear_notifications()
         self.dashboard.refresh_summary()
-        self.statusBar().showMessage(
+        self._toast(
             "Dashboard notifications cleared.",
             4000,
         )
@@ -2214,7 +2130,7 @@ class MainWindow(QMainWindow):
             self.repository.log_audit("evidence_approved", what, "supervisor PIN accepted")
             return True
         self.repository.log_audit("evidence_denied", what, "wrong PIN" if ok else "cancelled")
-        self.statusBar().showMessage("Not approved: nothing was deleted.", 6000)
+        self._toast("Not approved: nothing was deleted.", 6000)
         return False
 
     def _set_evidence_pin(self, current: str, new: str) -> None:
@@ -2244,7 +2160,7 @@ class MainWindow(QMainWindow):
         self.repository.clear_incident_footage_paths()
         self.incidents_page.refresh()
         self.alerts_page.refresh()
-        self.statusBar().showMessage(
+        self._toast(
             f"Saved footage cleared ({removed} video{'s' if removed != 1 else ''}).",
             5000,
         )
@@ -2265,7 +2181,7 @@ class MainWindow(QMainWindow):
         self.alerts_page.refresh()
         self.dashboard.refresh_summary()
         self._update_alert_badge()
-        self.statusBar().showMessage(
+        self._toast(
             "All incidents, alerts, and notifications were cleared.",
             5000,
         )
@@ -2305,12 +2221,13 @@ class MainWindow(QMainWindow):
         camera = next(iter(self.cameras.values()), None)
         name = camera.name if camera else "Sample camera"
         self._severity_alert.show_alert("SIM-0000", "FIGHT DETECTED", name, 0.91)
-        self.statusBar().showMessage("Sample alert only. Nothing was saved and nobody was notified.", 5000)
+        self._toast("Sample alert only. Nothing was saved and nobody was notified.", 5000)
 
     def _sync_cameras(self) -> None:
         cameras = list(self.cameras.values())
         self.dashboard.sync_cameras(cameras)
         self.camera_page.sync_cameras(cameras, self.camera_stats)
+        self.floor_map_page.sync_cameras(cameras, self.camera_stats)
         self.top_bar.set_cameras(cameras)
         self.dashboard.refresh_summary()
 

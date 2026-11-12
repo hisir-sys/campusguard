@@ -7,11 +7,11 @@ maximise, and minimise / maximise / close buttons that follow the app theme.
 from __future__ import annotations
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt
-from PySide6.QtGui import QColor, QFont, QPainter
+from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import QAbstractButton, QHBoxLayout, QLabel, QWidget
 
 from campusguard.ui.brand_logo import LogoMark
-from campusguard.ui.icons import IconLabel, icon_pixmap
+from campusguard.ui.icons import icon_pixmap
 from campusguard.ui.theme import get_palette, qcolor
 
 BAR_HEIGHT = 42

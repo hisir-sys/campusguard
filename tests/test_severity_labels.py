@@ -13,8 +13,8 @@ def test_every_server_severity_has_one_title_and_a_color():
 
 
 def test_titles_match_the_popup_alert_and_critical_is_urgent():
-    from campusguard.ui.severity_alert import SeverityAlertToast
-    levels = SeverityAlertToast._LEVELS
+    from campusguard.ui.severity_alert import FightAlert
+    levels = FightAlert._LEVELS
     assert severity_title("MEDIUM") == levels["medium"]["title"]
     assert severity_title("HIGH") == levels["high"]["title"]
     assert severity_title("CRITICAL") == levels["critical"]["title"]

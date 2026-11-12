@@ -31,18 +31,40 @@ def test_unknown_level_and_playback_never_raise():
     alarm_sound.stop()
 
 
-def test_toast_shows_updates_and_dismisses():
+def test_fight_alert_shows_updates_and_dismisses():
     from PySide6.QtWidgets import QApplication, QWidget
-    from campusguard.ui.severity_alert import SeverityAlertToast
+    from campusguard.ui.severity_alert import FightAlert
 
     app = QApplication.instance() or QApplication([])
     host = QWidget(); host.resize(900, 600); host.show()
-    toast = SeverityAlertToast(host)
-    toast.show_alert("INC-1", "Fight detected", "Gate", 0.5)
-    assert not toast.isVisible()                    # below 70%: no popup
-    toast.show_alert("INC-1", "Fight detected", "Gate", 0.97)
-    assert toast.isVisible() and toast._title.text() == "DANGER" and toast._pulse_timer.isActive()
-    toast.update_alert("INC-1", "Fight detected", "Gate", 0.99)
-    assert toast._confidence_value.text() == "99%"
-    toast.dismiss()
-    assert not toast._pulse_timer.isActive()
+    alert = FightAlert(host)
+    alert.show_alert("INC-1", "Fight detected", "Gate", 0.5)
+    assert not alert.isVisible()                    # below 70%: no popup
+    alert.show_alert("INC-1", "Fight detected", "Gate", 0.97)
+    assert alert.isVisible() and alert._pill.text() == "Danger"
+    assert "INC-1" in alert._meta.text() and "Gate" in alert._meta.text() and "97%" in alert._meta.text()
+    alert.update_alert("INC-1", "Fight detected", "Gate", 0.99)
+    assert "99%" in alert._meta.text()
+    seen = []
+    alert.view_requested.connect(seen.append)
+    alert._review.click()
+    assert seen == ["INC-1"]
+    alert.dismiss()
+    assert not alert._auto.isActive()
+
+
+def test_toast_stack_caps_and_undo():
+    from PySide6.QtWidgets import QApplication, QWidget
+    from campusguard.ui.notify import MAX_TOASTS, ToastStack
+
+    app = QApplication.instance() or QApplication([])
+    host = QWidget(); host.resize(900, 600); host.show()
+    stack = ToastStack(host)
+    undone = []
+    for i in range(MAX_TOASTS + 2):
+        stack.show_toast(f"Message {i}")
+    assert len(stack._toasts) == MAX_TOASTS
+    toast = stack.show_toast("Removed", undo=lambda: undone.append(1))
+    from PySide6.QtWidgets import QPushButton
+    toast.findChild(QPushButton, "toastUndo").click()
+    assert undone == [1] and toast not in stack._toasts

@@ -1,5 +1,14 @@
 # CampusGuard Desktop — Update Notes
 
+## Floor map, notifications and launch
+
+- **Floor map** (new page under Home): import floor-plan images, drag cameras onto the plan or click a camera and then the plan, move or remove pins. Pins show camera status and pulse coral while the camera has a new incident. Plans and pins are saved on this PC.
+- **Fight detected** is now the v3 modal: a scrim, a glass card with the severity pill, incident, camera, confidence and time, and Review clip / Dismiss. Critical alerts keep sounding until dismissed.
+- Notices are v3 toasts in the bottom-right corner (they used to go to a hidden status bar, so they were never seen). Marking an incident confirmed or a false alarm offers **Undo**.
+- Launch: the logo plays on the v3 graphite colours, then fades into the grey thinking orb while the app loads.
+- Navigation rail: eased hover, dock-style icon magnify, a label bubble beside each icon and a keyboard focus ring; Home panel rows slide on hover.
+- Removed the old dashboard, charts, history and camera pages, the old top and bottom bars and other unused code.
+
 ## v3 interface
 
 - New look across the whole desktop app: graphite surfaces with a coral signal colour, Inter for text, Outfit for titles and JetBrains Mono for figures, in dark and light.
