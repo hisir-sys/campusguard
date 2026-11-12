@@ -1,5 +1,14 @@
 # CampusGuard Desktop — Update Notes
 
+## v3 interface
+
+- New look across the whole desktop app: graphite surfaces with a coral signal colour, Inter for text, Outfit for titles and JetBrains Mono for figures, in dark and light.
+- New Dashboard, Incidents (list, clip, notes, confirm / false alarm, WhatsApp), Alerts (channels and history), Services (pause, reconnect, start with Windows) and Settings tabs, plus a Ctrl K command palette and a Simulate alert button.
+- Cameras is now a card grid with **Edit** (new), Disable/Enable AI, Reconnect and Remove. The camera form also sets zone and alert sensitivity.
+- Login and the app and installer icon use the three-pill logo.
+- Fixed: old rows stayed painted over new ones in the Incidents, Alerts and Dashboard lists; a Python error printed on shutdown from the overlay's event filter; unreadable text on the How it works steps in light mode.
+- **Not tested here:** live YOLO detection, WhatsApp Cloud and ntfy delivery, GPU video decoding and a real school RTSP network. The blur behind dialogs is approximated with a translucent layer.
+
 ## Phase 3–4: remote desktop client and school server installer
 
 - Added a token-protected remote server viewer with camera health, polled JPEG previews, incident/alert actions, clip playback, camera management and CSV import. Local mode remains the default and uses the existing desktop workflow.

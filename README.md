@@ -24,8 +24,6 @@
 | ![Incidents](docs/screenshots/dark-incidents.png) | ![Incidents](docs/screenshots/light-incidents.png) |
 | ![Alerts](docs/screenshots/dark-alerts.png) | ![Alerts](docs/screenshots/light-alerts.png) |
 | ![Settings](docs/screenshots/dark-settings.png) | ![Settings](docs/screenshots/light-settings.png) |
-| ![Navigation panel](docs/screenshots/dark-navigation.png) | ![Navigation panel](docs/screenshots/light-navigation.png) |
-| ![Incident list](docs/screenshots/dark-incident-popup.png) | ![Incident list](docs/screenshots/light-incident-popup.png) |
 | ![Alert pop-up](docs/screenshots/dark-alert-toast.png) | ![Alert pop-up](docs/screenshots/light-alert-toast.png) |
 | ![School server](docs/screenshots/dark-server-viewer.png) | ![School server](docs/screenshots/light-server-viewer.png) |
 
