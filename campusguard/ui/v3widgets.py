@@ -531,6 +531,23 @@ class GhostButton(QPushButton):
         self.setMinimumHeight(34)
 
 
+def clear_layout(layout) -> None:
+    """Remove every item and delete its widgets at once.
+
+    deleteLater() alone leaves the old widgets visible until the event loop runs, so a
+    list rebuilt twice in one pass shows ghost rows. Hiding and unparenting first fixes that.
+    """
+    while layout.count():
+        item = layout.takeAt(0)
+        widget = item.widget()
+        if widget is not None:
+            widget.hide()
+            widget.setParent(None)
+            widget.deleteLater()
+        elif item.layout() is not None:
+            clear_layout(item.layout())
+
+
 def card_title(text: str) -> QLabel:
     label = QLabel(text)
     label.setProperty("cardtitle", True)

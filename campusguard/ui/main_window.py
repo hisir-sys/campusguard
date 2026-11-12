@@ -832,7 +832,7 @@ class MainWindow(QMainWindow):
         card.setMinimumWidth(0)
         card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         subtitle_label = QLabel(subtitle)
-        subtitle_label.setStyleSheet("font-size: 9pt; color: palette(mid); font-weight: 600;")
+        subtitle_label.setStyleSheet(f"font-size: 9pt; color: {get_palette().muted}; font-weight: 600;")
         subtitle_label.setWordWrap(True)
         body_label = QLabel(body)
         body_label.setWordWrap(True)
@@ -850,7 +850,7 @@ class MainWindow(QMainWindow):
         node.setStyleSheet(
             f"QFrame#technicalFlowNode {{ "
             f"background: {pal.glass}; "
-            f"border: 1px solid rgba(255,255,255,0.07); "
+            f"border: 1px solid {rgba(pal.text, 26)}; "
             f"border-radius: 16px; }}"
         )
         layout = QHBoxLayout(node)
@@ -886,7 +886,7 @@ class MainWindow(QMainWindow):
         text = QLabel(detail)
         text.setWordWrap(True)
         text.setStyleSheet(
-            "font-size: 9pt; color: palette(mid); border: none;"
+            f"font-size: 9pt; color: {pal.muted}; border: none;"
         )
 
         text_column.addWidget(heading)

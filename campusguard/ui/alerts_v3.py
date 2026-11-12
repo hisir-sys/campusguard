@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QScrollArea, QVBoxLay
 
 from campusguard.storage import Repository
 from campusguard.ui.incidents_v3 import when
-from campusguard.ui.v3widgets import GhostButton, GlassCard, Meter, Switch, card_title, make_pill, mono_label
+from campusguard.ui.v3widgets import clear_layout, GhostButton, GlassCard, Meter, Switch, card_title, make_pill, mono_label
 
 CHANNELS = (
     ("alert_sound_toggle", "Alarm sound on this computer"),
@@ -121,10 +121,7 @@ class AlertsPage(QWidget):
         if key == self._key:
             return
         self._key = key
-        while self.rows_layout.count():
-            item = self.rows_layout.takeAt(0)
-            if item.widget() is not None:
-                item.widget().deleteLater()
+        clear_layout(self.rows_layout)
         active = sum(1 for a in local if not a["acknowledged"])
         self.count_label.setText(f"{active} active · {len(local) + len(remote)} total")
         rows = [("local", a) for a in local] + [("remote", a) for a in remote]

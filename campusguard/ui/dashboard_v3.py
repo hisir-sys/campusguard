@@ -13,7 +13,7 @@ from campusguard.settings import CameraConfig, CameraStats
 from campusguard.storage import Repository
 from campusguard.ui.common import CameraPreview
 from campusguard.ui.v3widgets import (
-    BarChart, GhostButton, GlassCard, Meter, Orb, Segmented, card_title, make_pill, mono, mono_label,
+    BarChart, clear_layout, GhostButton, GlassCard, Meter, Orb, Segmented, card_title, make_pill, mono, mono_label,
 )
 
 _CLOSED = {"RESOLVED", "DISMISSED", "FALSE_ALARM", "CONFIRMED"}
@@ -307,10 +307,7 @@ class DashboardPage(QWidget):
         if key == self._incident_key:
             return
         self._incident_key = key
-        while self._recent_layout.count():
-            item = self._recent_layout.takeAt(0)
-            if item.widget() is not None:
-                item.widget().deleteLater()
+        clear_layout(self._recent_layout)
         if not rows:
             empty = QLabel("No incidents recorded")
             empty.setProperty("muted", True)

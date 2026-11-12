@@ -162,3 +162,17 @@ def test_cameras_page_grid_edit_and_toggle(app, repo):
     dialog._save()
     assert dialog.form_data["name"] == "Gate One"
     assert dialog.form_data["group_name"] == "Entrances"
+
+
+def test_incident_list_leaves_no_stale_rows(app, repo):
+    from campusguard.ui.incidents_v3 import _ClickRow
+
+    for _ in range(3):
+        _incident(repo)
+    page = IncidentsPage(repo)
+    page.show()
+    for row_id in [r["public_id"] for r in repo.list_incidents(limit=10)]:
+        page.select(row_id)  # each select rebuilds the list in the same event-loop pass
+    rows = page.findChildren(_ClickRow)
+    assert len(rows) == 3
+    assert all(row.parent() is not None for row in rows)

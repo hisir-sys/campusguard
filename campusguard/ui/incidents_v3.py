@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 from campusguard.storage import Repository
 from campusguard.ui.history_pages import FootagePlayerDialog
 from campusguard.ui.v3widgets import (
-    GhostButton, GlassCard, Meter, Segmented, card_title, make_pill, mono_label,
+    GhostButton, clear_layout, GlassCard, Meter, Segmented, card_title, make_pill, mono_label,
 )
 
 NEW = {"NEW", "ACKNOWLEDGED"}
@@ -205,10 +205,7 @@ class IncidentsPage(QWidget):
         key = (tuple((r["public_id"], r.get("status"), round(float(r.get("confidence") or 0), 3), r.get("footage_path")) for r in shown), self._selected)
         if key != self._rendered_key:
             self._rendered_key = key
-            while self.rows_layout.count():
-                item = self.rows_layout.takeAt(0)
-                if item.widget() is not None:
-                    item.widget().deleteLater()
+            clear_layout(self.rows_layout)
             if not shown:
                 empty = QLabel("No incidents match" if self._rows else "No incidents recorded")
                 empty.setProperty("muted", True)
