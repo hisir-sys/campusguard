@@ -137,6 +137,9 @@ class InAppOverlay(QFrame):
         app = QApplication.instance()
         if app is not None:
             app.installEventFilter(self)
+            # An application-wide filter must not outlive this widget, or Qt keeps
+            # delivering events to a deleted object while the interpreter shuts down.
+            app.aboutToQuit.connect(self.release_event_filter)
 
         self._content = QVBoxLayout(self._panel)
         self._content.setContentsMargins(24, 20, 24, 22)
@@ -246,6 +249,14 @@ class InAppOverlay(QFrame):
             return
         super().keyPressEvent(event)
 
+    def release_event_filter(self) -> None:
+        app = QApplication.instance()
+        if app is not None:
+            try:
+                app.removeEventFilter(self)
+            except RuntimeError:
+                pass
+
     def eventFilter(self, watched, event) -> bool:
         if event.type() == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Escape:
             if self.isVisible():
@@ -263,7 +274,9 @@ class InAppOverlay(QFrame):
                     return True
             except AttributeError:
                 pass
-        return super().eventFilter(watched, event)
+        # QObject's default filter never consumes an event. Returning here directly
+        # avoids PySide re-entering this override while the interpreter shuts down.
+        return False
 
     def hideEvent(self, event) -> None:
         self._confirm_callback = None
@@ -815,7 +828,7 @@ class MainWindow(QMainWindow):
     @staticmethod
     def _tech_card(title: str, subtitle: str, body: str, icon: str | None = None) -> QWidget:
         card, body_layout = make_card(title, icon=icon)
-        card.setMinimumHeight(188)
+        card.setMinimumHeight(136)
         card.setMinimumWidth(0)
         card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         subtitle_label = QLabel(subtitle)
@@ -841,7 +854,7 @@ class MainWindow(QMainWindow):
             f"border-radius: 16px; }}"
         )
         layout = QHBoxLayout(node)
-        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setContentsMargins(20, 16, 20, 16)
         layout.setSpacing(16)
 
         badge = QFrame()
@@ -886,24 +899,24 @@ class MainWindow(QMainWindow):
     @staticmethod
     def _flow_arrow() -> QWidget:
         wrapper = QWidget()
-        wrapper.setFixedHeight(26)
+        wrapper.setFixedHeight(14)
         layout = QHBoxLayout(wrapper)
-        layout.setContentsMargins(20, 0, 0, 0)
+        layout.setContentsMargins(38, 0, 0, 0)  # centred under the 38px step badge
         layout.setSpacing(0)
 
         line = QFrame()
-        line.setFixedHeight(2)
+        line.setFixedSize(2, 14)
         line.setStyleSheet(
             "background: rgba(128,130,136,0.30); border: none;"
         )
-        layout.addWidget(line, 1, Qt.AlignmentFlag.AlignVCenter)
+        layout.addWidget(line)
         layout.addStretch(1)
         return wrapper
 
     def _make_about_page(self) -> QWidget:
         content = QWidget()
         layout = QVBoxLayout(content)
-        layout.setContentsMargins(28, 24, 28, 36)
+        layout.setContentsMargins(4, 4, 8, 24)
         layout.setSpacing(18)
         layout.addWidget(self._section_header(
             "About CampusGuard",
@@ -991,7 +1004,7 @@ class MainWindow(QMainWindow):
     def _make_services_page(self) -> QWidget:
         content = QWidget()
         layout = QVBoxLayout(content)
-        layout.setContentsMargins(28, 24, 28, 36)
+        layout.setContentsMargins(4, 4, 8, 24)
         layout.setSpacing(18)
         layout.addWidget(self._section_header(
             "Services",
@@ -1035,7 +1048,7 @@ class MainWindow(QMainWindow):
     def _make_tools_page(self) -> QWidget:
         content = QWidget()
         layout = QVBoxLayout(content)
-        layout.setContentsMargins(28, 24, 28, 36)
+        layout.setContentsMargins(4, 4, 8, 24)
         layout.setSpacing(18)
         layout.addWidget(self._section_header(
             "Tools",
@@ -1090,7 +1103,7 @@ class MainWindow(QMainWindow):
     def _make_how_it_works_page(self) -> QWidget:
         content = QWidget()
         layout = QVBoxLayout(content)
-        layout.setContentsMargins(28, 24, 28, 40)
+        layout.setContentsMargins(4, 4, 8, 24)
         layout.setSpacing(18)
         layout.addWidget(self._section_header(
             "How It Works",
@@ -2345,6 +2358,7 @@ class MainWindow(QMainWindow):
         # Keep the window alive if any native worker cannot be joined. This
         # makes shutdown failure visible and gives the operator a safe retry.
         self._closing = True
+        self._in_app_overlay.release_event_filter()
         self._dispatcher.cancel_all()
         self._stop_cloud_sync()
         for timer_name in ("_camera_engine_poll", "_refresh_timer"):
@@ -2373,6 +2387,7 @@ class MainWindow(QMainWindow):
                 self._camera_footage_viewer = None
         except Exception as error:
             self._closing = False
+            QApplication.instance().installEventFilter(self._in_app_overlay)
             if getattr(self, "_refresh_timer", None) is not None:
                 self._refresh_timer.start()
             QMessageBox.warning(

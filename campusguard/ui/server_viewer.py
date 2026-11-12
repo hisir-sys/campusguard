@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 from campusguard.server.client import RemoteServerClient
 from campusguard.ui.theme import get_palette, rgba
 from campusguard.ui.common import make_page_title
+from campusguard.ui.v3widgets import Segmented
 
 
 class _LiveStreamWorker(QThread):
@@ -281,6 +282,12 @@ class ServerViewerPage(QWidget):
         self._remote_alert_timer.timeout.connect(self.remote_alert_banner.hide)
 
         self.tabs = QTabWidget()
+        # v3 pill switcher drives the stack; the native tab bar is hidden.
+        self.tabs.tabBar().hide()
+        self.tab_switch = Segmented(["Cameras", "Incidents", "Alerts", "School"], "Cameras")
+        self.tab_switch.changed.connect(self._switch_tab)
+        self.tabs.currentChanged.connect(self._tab_changed)
+        root.addWidget(self.tab_switch, 0, Qt.AlignmentFlag.AlignLeft)
         root.addWidget(self.tabs, 1)
         self.cameras_tab = QWidget()
         camera_root = QVBoxLayout(self.cameras_tab)
@@ -438,6 +445,15 @@ class ServerViewerPage(QWidget):
         callback, self._pending_success = self._pending_success, None
         if callback is not None and not self._closing:
             callback(value)
+
+    def _switch_tab(self, label: str) -> None:
+        for index in range(self.tabs.count()):
+            if self.tabs.tabText(index) == label:
+                self.tabs.setCurrentIndex(index)
+                return
+
+    def _tab_changed(self, index: int) -> None:
+        self.tab_switch.set_current(self.tabs.tabText(index), False)
 
     def _worker_failed(self, message: str) -> None:
         self.connection_status.setText(f"Server unreachable or access unavailable. Retrying automatically. {message}")
