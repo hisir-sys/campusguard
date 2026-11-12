@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 
 from campusguard import auth, auth_config
 from campusguard.ui.common import apply_theme
-from campusguard.ui.icons import logo_pixmap
+from campusguard.ui.brand_logo import LogoMark
 from campusguard.ui.theme import get_palette, rgba
 from campusguard.ui.workers import Worker
 
@@ -43,18 +43,16 @@ class LoginDialog(QDialog):
         root.setContentsMargins(36, 32, 36, 28)
         root.setSpacing(0)
 
-        logo = QLabel()
-        logo.setPixmap(logo_pixmap(48))
-        logo.setFixedSize(48, 48)
-        root.addWidget(logo)
+        logo = LogoMark(size=40)
+        root.addWidget(logo, 0, Qt.AlignmentFlag.AlignLeft)
         root.addSpacing(18)
 
-        self.eyebrow = QLabel("CUSTOMER SIGN IN")
+        self.eyebrow = QLabel("Customer account")
         self.eyebrow.setObjectName("loginEyebrow")
         root.addWidget(self.eyebrow)
         root.addSpacing(6)
 
-        self.title = QLabel("Welcome back.")
+        self.title = QLabel("Sign in")
         self.title.setObjectName("loginTitle")
         root.addWidget(self.title)
         root.addSpacing(8)
@@ -178,7 +176,7 @@ class LoginDialog(QDialog):
 
     def _apply_mode(self) -> None:
         reset = self._reset_mode
-        self.title.setText("Reset your password." if reset else "Welcome back.")
+        self.title.setText("Reset password" if reset else "Sign in")
         self.intro.setText(
             "Enter your account email and we'll send a secure reset link if the account exists."
             if reset
