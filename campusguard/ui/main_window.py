@@ -1111,6 +1111,7 @@ class MainWindow(QMainWindow):
         self.dashboard.view_alerts_requested.connect(lambda: self.navigate("incidents"))
         self.dashboard.report_requested.connect(self._export_trend_report)
         self.dashboard.status_change_requested.connect(self._set_incident_status)
+        self.camera_page.open_requested.connect(self.open_camera)
         self.camera_page.add_requested.connect(self._add_camera)
         self.camera_page.local_test_requested.connect(self._open_local_file_test)
         self.camera_page.remove_requested.connect(self._remove_camera)
@@ -1891,6 +1892,7 @@ class MainWindow(QMainWindow):
 
     def _on_frame(self, camera_id: str, image, state: str, confidence) -> None:
         self.dashboard.update_frame(camera_id, image, state, confidence)
+        self.camera_page.update_frame(camera_id, image)
         if self._camera_view_camera_id == camera_id:
             self._in_app_overlay.set_camera_frame(image, state, confidence)
 

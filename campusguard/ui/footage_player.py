@@ -1,11 +1,11 @@
-"""Footage player dialog used by the incident pages."""
+"""Incident footage players: the full-screen viewer and the inline player of the side panel."""
 from __future__ import annotations
 
 from pathlib import Path
 
 import cv2
 
-from PySide6.QtCore import QTimer, Qt
+from PySide6.QtCore import QTimer, Qt, Signal
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSizePolicy,
     QSlider,
     QVBoxLayout,
     QWidget,
@@ -354,4 +355,170 @@ class FootagePlayerDialog(QWidget):
         if self.capture is not None:
             self.capture.release()
             self.capture = None
+        super().closeEvent(event)
+
+
+class InlineClipPlayer(QWidget):
+    """A small player for the incident side panel: video, play / pause, seek bar and a
+    full-screen button that hands the clip to FootagePlayerDialog."""
+
+    fullscreen_requested = Signal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.capture = None
+        self.path = ""
+        self.fps = 25.0
+        self.frames = 0
+        self._seeking = False
+        self._pixmap: QPixmap | None = None
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        self.video = QLabel("Select an incident to review its clip")
+        self.video.setProperty("videoSurface", True)
+        self.video.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.video.setMinimumHeight(220)
+        self.video.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Expanding)
+        layout.addWidget(self.video, 1)
+        self.timeline = QSlider(Qt.Orientation.Horizontal)
+        self.timeline.setRange(0, 0)
+        self.timeline.sliderPressed.connect(lambda: setattr(self, "_seeking", True))
+        self.timeline.sliderReleased.connect(self._release_seek)
+        self.timeline.sliderMoved.connect(self._seek)
+        layout.addWidget(self.timeline)
+        controls = QHBoxLayout()
+        controls.setSpacing(8)
+        self.play_button = QPushButton("Play")
+        self.play_button.setProperty("primary", True)
+        self.play_button.setMinimumHeight(34)
+        self.play_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.play_button.clicked.connect(self.toggle)
+        self.time_label = QLabel("")
+        self.time_label.setProperty("muted", True)
+        self.fullscreen_button = QPushButton("Full screen")
+        self.fullscreen_button.setMinimumHeight(34)
+        self.fullscreen_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.fullscreen_button.clicked.connect(self.fullscreen_requested.emit)
+        controls.addWidget(self.play_button)
+        controls.addWidget(self.time_label, 1)
+        controls.addWidget(self.fullscreen_button)
+        layout.addLayout(controls)
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self._next)
+        self._set_enabled(False)
+
+    def _set_enabled(self, enabled: bool) -> None:
+        for widget in (self.play_button, self.timeline, self.fullscreen_button):
+            widget.setEnabled(enabled)
+
+    def clear(self, message: str) -> None:
+        self.timer.stop()
+        self._release()
+        self.path = ""
+        self._pixmap = None
+        self.video.setPixmap(QPixmap())
+        self.video.setText(message)
+        self.time_label.setText("")
+        self.timeline.setRange(0, 0)
+        self.play_button.setText("Play")
+        self._set_enabled(False)
+
+    def _release(self) -> None:
+        if self.capture is not None:
+            self.capture.release()
+            self.capture = None
+
+    def load(self, path: str) -> bool:
+        """Open a clip and show its first frame. Returns False when it cannot be decoded."""
+        if path == self.path and self.capture is not None:
+            return True
+        self.timer.stop()
+        self._release()
+        try:
+            capture = cv2.VideoCapture(path)
+        except Exception:
+            capture = None
+        if capture is None or not capture.isOpened():
+            self.clear("Clip saved, but it cannot be played here")
+            return False
+        self.capture = capture
+        self.path = path
+        self.fps = capture.get(cv2.CAP_PROP_FPS) or 25.0
+        if self.fps < 1 or self.fps > 120:
+            self.fps = 25.0
+        self.frames = max(0, int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0))
+        self.timeline.setRange(0, max(0, self.frames - 1))
+        self.timeline.setValue(0)
+        self.play_button.setText("Play")
+        self._set_enabled(True)
+        self._show_next()
+        return True
+
+    def toggle(self) -> None:
+        if self.capture is None:
+            return
+        if self.timer.isActive():
+            self.timer.stop()
+            self.play_button.setText("Play")
+            return
+        if self.frames and self.timeline.value() >= self.frames - 1:
+            self._seek(0)
+        self.timer.start(int(1000 / self.fps))
+        self.play_button.setText("Pause")
+
+    def pause(self) -> None:
+        self.timer.stop()
+        self.play_button.setText("Play")
+
+    def _next(self) -> None:
+        if not self._show_next():
+            self.timer.stop()
+            self.play_button.setText("Play")
+
+    def _show_next(self) -> bool:
+        if self.capture is None:
+            return False
+        ok, frame = self.capture.read()
+        if not ok:
+            return False
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        h, w, _ = rgb.shape
+        self._pixmap = QPixmap.fromImage(QImage(rgb.data, w, h, 3 * w, QImage.Format.Format_RGB888).copy())
+        self._paint_frame()
+        position = int(self.capture.get(cv2.CAP_PROP_POS_FRAMES) or 0)
+        if not self._seeking:
+            self.timeline.blockSignals(True)
+            self.timeline.setValue(max(0, position - 1))
+            self.timeline.blockSignals(False)
+        self.time_label.setText(f"{(position / self.fps):.1f} s / {(self.frames / self.fps):.1f} s")
+        return True
+
+    def _paint_frame(self) -> None:
+        if self._pixmap is not None:
+            self.video.setPixmap(self._pixmap.scaled(
+                max(1, self.video.width()), max(1, self.video.height()),
+                Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation,
+            ))
+
+    def _seek(self, frame: int) -> None:
+        if self.capture is not None:
+            self.capture.set(cv2.CAP_PROP_POS_FRAMES, max(0, frame))
+            self._show_next()
+
+    def _release_seek(self) -> None:
+        self._seeking = False
+        self._seek(self.timeline.value())
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._paint_frame()
+
+    def hideEvent(self, event) -> None:
+        self.pause()
+        super().hideEvent(event)
+
+    def closeEvent(self, event) -> None:
+        self.timer.stop()
+        self._release()
         super().closeEvent(event)

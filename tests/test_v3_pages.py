@@ -144,11 +144,11 @@ def test_cameras_page_grid_edit_and_toggle(app, repo):
     ]
     page.sync_cameras(cams, {"CAM-001": CameraStats(status="LIVE"), "CAM-002": CameraStats(status="OFFLINE")})
     assert page.summary_label.text() == "2 cameras · 1 online"
-    assert page._cards["CAM-001"].toggle.text() == "Disable"
-    assert page._cards["CAM-002"].toggle.text() == "Enable"
+    assert page._cards["CAM-001"].body.toggle.text() == "Disable"
+    assert page._cards["CAM-002"].body.toggle.text() == "Enable"
     seen = []
     page.ai_changed.connect(lambda cid, on: seen.append((cid, on)))
-    page._cards["CAM-002"].toggle.click()
+    page._cards["CAM-002"].body.toggle.click()
     assert seen == [("CAM-002", True)]
     page.attention_filter.setChecked(True)
     assert page._visible_ids() == ["CAM-002"]
@@ -176,3 +176,29 @@ def test_incident_list_leaves_no_stale_rows(app, repo):
     rows = page.findChildren(_ClickRow)
     assert len(rows) == 3
     assert all(row.parent() is not None for row in rows)
+
+
+def test_camera_card_shows_live_frame_and_opens_on_click(app):
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtGui import QColor, QImage
+    from PySide6.QtTest import QTest
+    from campusguard.settings import CameraConfig, CameraStats
+    from campusguard.ui.cameras_v3 import CamerasPage
+
+    page = CamerasPage()
+    page.resize(1000, 600)
+    page.show()
+    page.sync_cameras([CameraConfig("CAM-001", "Gate 1", "RTSP", "rtsp://x/1", True, "2026-01-01")],
+                      {"CAM-001": CameraStats(status="LIVE")})
+    card = page._cards["CAM-001"]
+    image = QImage(640, 360, QImage.Format.Format_RGB32)
+    image.fill(QColor("#336699"))
+    page.update_frame("CAM-001", image)
+    assert card.body.thumb.has_frame()
+    assert abs(card.body.thumb.height() * 16 - (card.width() - 40) * 9) <= 16     # kept 16:9
+    opened = []
+    page.open_requested.connect(opened.append)
+    QTest.mouseClick(card.body, Qt.MouseButton.LeftButton, pos=QPoint(40, 20))
+    assert opened == ["CAM-001"]
+    page.update_camera_stats("CAM-001", CameraStats(status="OFFLINE"))
+    assert not card.body.thumb.has_frame()

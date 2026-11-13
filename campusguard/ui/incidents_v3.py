@@ -5,13 +5,12 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit, QScrollArea, QVBoxLayout, QWidget,
 )
 
 from campusguard.storage import Repository
-from campusguard.ui.footage_player import FootagePlayerDialog
+from campusguard.ui.footage_player import FootagePlayerDialog, InlineClipPlayer
 from campusguard.ui.v3widgets import (
     GhostButton, clear_layout, GlassCard, Meter, Segmented, card_title, make_pill, mono_label,
 )
@@ -45,26 +44,6 @@ def when(value: str) -> str:
         return datetime.fromisoformat(str(value)).astimezone().strftime("%d %b %H:%M")
     except (TypeError, ValueError):
         return str(value)
-
-
-def first_frame(path: str, width: int = 480) -> QPixmap | None:
-    """First frame of the clip as a thumbnail, or None when it cannot be decoded."""
-    try:
-        import cv2
-    except Exception:
-        return None
-    try:
-        capture = cv2.VideoCapture(path)
-        ok, frame = capture.read()
-        capture.release()
-        if not ok:
-            return None
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        h, w, _ = frame.shape
-        image = QImage(frame.data, w, h, 3 * w, QImage.Format.Format_RGB888).copy()
-        return QPixmap.fromImage(image).scaledToWidth(width, Qt.TransformationMode.SmoothTransformation)
-    except Exception:
-        return None
 
 
 class IncidentsPage(QWidget):
@@ -138,18 +117,11 @@ class IncidentsPage(QWidget):
         d.setSpacing(10)
         self.detail_title = card_title("Select an incident")
         d.addWidget(self.detail_title)
-        self.preview = QLabel("Select an incident to review its clip")
-        self.preview.setProperty("videoSurface", True)
-        self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.preview.setMinimumHeight(220)
-        d.addWidget(self.preview)
-        play_row = QHBoxLayout()
-        self.play_button = GhostButton("Play", primary=True)
-        self.play_button.clicked.connect(self._play)
+        self.player = InlineClipPlayer()
+        self.player.fullscreen_requested.connect(self._play)
+        d.addWidget(self.player, 1)
         self.clip_label = mono_label("", point=9)
-        play_row.addWidget(self.play_button)
-        play_row.addWidget(self.clip_label, 1)
-        d.addLayout(play_row)
+        d.addWidget(self.clip_label)
         self.meta_label = mono_label("", point=9)
         d.addWidget(self.meta_label)
         self.meter = Meter(0.0, width=200)
@@ -263,13 +235,12 @@ class IncidentsPage(QWidget):
     # ------------------------------------------------------------------ detail
     def _show_detail(self, row: dict | None, keep_note: bool = False) -> None:
         enabled = row is not None
-        for widget in (self.play_button, self.confirm_button, self.false_button, self.resolve_button,
+        for widget in (self.confirm_button, self.false_button, self.resolve_button,
                        self.whatsapp_button, self.note):
             widget.setEnabled(enabled)
         if row is None:
             self.detail_title.setText("Select an incident")
-            self.preview.setPixmap(QPixmap())
-            self.preview.setText("Select an incident to review its clip")
+            self.player.clear("Select an incident to review its clip")
             self.clip_label.setText("")
             self.meta_label.setText("")
             self.meter.set_value(0)
@@ -279,23 +250,10 @@ class IncidentsPage(QWidget):
         self.detail_title.setText(str(row["public_id"]))
         path = str(row.get("footage_path") or "")
         has_clip = bool(path) and Path(path).is_file()
-        self.play_button.setEnabled(has_clip)
         if has_clip:
-            if getattr(self, "_thumb_for", None) != path:
-                self._thumb_for = path
-                pixmap = first_frame(path)
-                if pixmap is not None:
-                    self.preview.setPixmap(pixmap.scaled(self.preview.width() or 360, 220,
-                                                         Qt.AspectRatioMode.KeepAspectRatio,
-                                                         Qt.TransformationMode.SmoothTransformation))
-                else:
-                    self.preview.setPixmap(QPixmap())
-                    self.preview.setText(f"{row.get('camera_name', '')}\nClip saved")
-            self.clip_label.setText(Path(path).name)
+            self.clip_label.setText(Path(path).name if self.player.load(path) else "clip cannot be decoded")
         else:
-            self._thumb_for = None
-            self.preview.setPixmap(QPixmap())
-            self.preview.setText(f"{row.get('camera_name', '')}\nNo clip saved for this incident")
+            self.player.clear(f"{row.get('camera_name', '')}\nNo clip saved for this incident")
             self.clip_label.setText("no clip")
         confidence = float(row.get("confidence") or 0)
         self.meta_label.setText(f"{when(row.get('happened_at'))} · {int(round(confidence * 100))}% confidence · {row.get('severity', '')}")
@@ -343,6 +301,7 @@ class IncidentsPage(QWidget):
         row = next((r for r in self._rows if r["public_id"] == self._selected), None)
         path = str(row.get("footage_path") or "") if row else ""
         if path and Path(path).is_file():
+            self.player.pause()
             self._open_footage(path, str(row["public_id"]))
 
     def _open_footage(self, path: str, public_id: str) -> None:

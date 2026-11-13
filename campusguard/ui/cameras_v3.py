@@ -1,8 +1,10 @@
 """Cameras (v3): a card grid with Edit, Disable/Enable, Reconnect and Remove on every camera."""
 from __future__ import annotations
 
-from PySide6.QtCore import QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
+import time
+
+from PySide6.QtCore import QEasingCurve, QRectF, Qt, QVariantAnimation, Signal
+from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -23,7 +25,7 @@ from campusguard.ui.v3widgets import GhostButton, GlassCard, is_dark, make_pill,
 
 ONLINE = {"LIVE", "ONLINE", "CONNECTED"}
 BAD = {"OFFLINE", "ERROR", "DISCONNECTED"}
-CARD_MIN_WIDTH = 250
+CARD_MIN_WIDTH = 340
 
 
 def sensitivity_label(offset: float) -> str:
@@ -67,12 +69,21 @@ class ElidedLabel(QLabel):
 
 
 class Thumb(QWidget):
-    """Striped placeholder where the live frame goes; dimmed when the camera is off."""
+    """The live frame of a camera. Until frames arrive (or while the camera is off) it shows
+    striped placeholder, dimmed when AI is off."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setFixedHeight(104)
+        self.setFixedHeight(128)
         self._dim = False
+        self._frame: QPixmap | None = None
+
+    def set_frame(self, frame: QPixmap | None) -> None:
+        self._frame = frame
+        self.update()
+
+    def has_frame(self) -> bool:
+        return self._frame is not None
 
     def set_dim(self, value: bool) -> None:
         self._dim = value
@@ -89,11 +100,18 @@ class Thumb(QWidget):
         p.fillPath(path, base)
         p.save()
         p.setClipPath(path)
-        stripe = QColor(255, 255, 255, 10 if dark else 70) if True else base
-        p.setPen(QPen(stripe, 6))
-        step = 16
-        for x in range(-self.height(), self.width() + self.height(), step):
-            p.drawLine(x, self.height(), x + self.height(), 0)
+        if self._frame is not None:
+            source = self._frame
+            scale = max(self.width() / source.width(), self.height() / source.height())
+            w, h = source.width() * scale, source.height() * scale
+            p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+            p.drawPixmap(QRectF((self.width() - w) / 2, (self.height() - h) / 2, w, h), source, QRectF(source.rect()))
+            if self._dim:
+                p.fillRect(self.rect(), QColor(0, 0, 0, 120))
+        else:
+            p.setPen(QPen(QColor(255, 255, 255, 10 if dark else 70), 6))
+            for x in range(-self.height(), self.width() + self.height(), 16):
+                p.drawLine(x, self.height(), x + self.height(), 0)
         p.restore()
         text = QColor(get_palette().text)
         text.setAlpha(60 if self._dim else 40)
@@ -103,7 +121,8 @@ class Thumb(QWidget):
         p.end()
 
 
-class CameraCard(GlassCard):
+class _CardBody(GlassCard):
+    open_requested = Signal(str)
     edit_requested = Signal(str)
     remove_requested = Signal(str)
     reconnect_requested = Signal(str)
@@ -116,6 +135,8 @@ class CameraCard(GlassCard):
         self.setObjectName("cameraCard")
         self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
         self.setMinimumWidth(0)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip("Click to open the live view full screen")
 
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 16, 16, 16)
@@ -173,7 +194,14 @@ class CameraCard(GlassCard):
 
     def update_stats(self, stats: CameraStats) -> None:
         self.stats = stats
+        if (stats.status or "").upper() not in ONLINE:
+            self.thumb.set_frame(None)
         self._refresh()
+
+    def mouseReleaseEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):
+            self.open_requested.emit(self.camera.camera_id)
+        super().mouseReleaseEvent(event)
 
     def _refresh(self) -> None:
         camera = self.camera
@@ -193,7 +221,85 @@ class CameraCard(GlassCard):
         self.thumb.set_dim(not camera.ai_enabled)
 
 
+class CameraCard(QWidget):
+    """A camera card that rises 6 px while the pointer is over it. The wrapper keeps the grid
+    cell the same size; only the card inside it moves."""
+
+    LIFT = 6
+    open_requested = Signal(str)
+    edit_requested = Signal(str)
+    remove_requested = Signal(str)
+    reconnect_requested = Signal(str)
+    ai_changed = Signal(str, bool)
+
+    def __init__(self, camera: CameraConfig, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        self.setMinimumWidth(0)
+        self._last_frame = 0.0
+        self.body = _CardBody(camera)
+        for name in ("open_requested", "edit_requested", "remove_requested", "reconnect_requested", "ai_changed"):
+            getattr(self.body, name).connect(getattr(self, name))
+        self._layout = QVBoxLayout(self)
+        self._layout.addWidget(self.body)
+        self._rise = 0.0
+        self._anim = QVariantAnimation(self)
+        self._anim.setDuration(220)
+        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._anim.valueChanged.connect(self._set_rise)
+        self._set_rise(0.0)
+
+    @property
+    def camera(self) -> CameraConfig:
+        return self.body.camera
+
+    def _set_rise(self, value) -> None:
+        self._rise = float(value)
+        lift = round(self.LIFT * self._rise)
+        self._layout.setContentsMargins(0, self.LIFT - lift, 0, lift)
+
+    def _ease(self, target: float) -> None:
+        self._anim.stop()
+        self._anim.setStartValue(self._rise)
+        self._anim.setEndValue(target)
+        self._anim.start()
+
+    def enterEvent(self, event) -> None:
+        self._ease(1.0)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:
+        self._ease(0.0)
+        super().leaveEvent(event)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        # keep the live picture 16:9 however wide the card is
+        height = max(128, int((self.width() - 40) * 9 / 16))
+        if self.body.thumb.height() != height:
+            self.body.thumb.setFixedHeight(height)
+
+    def update_camera(self, camera: CameraConfig) -> None:
+        self.body.update_camera(camera)
+
+    def update_stats(self, stats: CameraStats) -> None:
+        self.body.update_stats(stats)
+
+    def set_frame(self, image) -> None:
+        """Show the newest live frame; at most about ten per second per card."""
+        now = time.monotonic()
+        if now - self._last_frame < 0.1 or not self.isVisibleTo(self.window()):
+            return
+        self._last_frame = now
+        thumb = self.body.thumb
+        scaled = image.scaled(thumb.width() * 2, thumb.height() * 2, Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                              Qt.TransformationMode.FastTransformation)
+        thumb.set_frame(QPixmap.fromImage(scaled))
+
+
 class CamerasPage(QWidget):
+    open_requested = Signal(str)
     add_requested = Signal(dict)
     edit_requested = Signal(str, dict)
     local_test_requested = Signal()
@@ -286,6 +392,7 @@ class CamerasPage(QWidget):
             card = self._cards.get(camera.camera_id)
             if card is None:
                 card = CameraCard(camera)
+                card.open_requested.connect(self.open_requested.emit)
                 card.edit_requested.connect(self._edit_camera)
                 card.remove_requested.connect(self.remove_requested.emit)
                 card.reconnect_requested.connect(self.reconnect_requested.emit)
@@ -307,6 +414,11 @@ class CamerasPage(QWidget):
             card.update_stats(stats)
         self._apply_filter()
         self._update_summary()
+
+    def update_frame(self, camera_id: str, image) -> None:
+        card = self._cards.get(camera_id)
+        if card is not None:
+            card.set_frame(image)
 
     def cameras(self) -> list[CameraConfig]:
         return [self._cards[i].camera for i in self._order if i in self._cards]
@@ -374,6 +486,7 @@ class CamerasPage(QWidget):
             self.grid.setColumnStretch(column, 0)
         for index, camera_id in enumerate(ids):
             self.grid.addWidget(self._cards[camera_id], index // columns, index % columns)
+            self._cards[camera_id].show()   # adding to a layout hides a re-parented widget
         for column in range(columns):
             self.grid.setColumnStretch(column, 1)
 
