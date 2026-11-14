@@ -89,3 +89,58 @@ def test_sidebar_hover_panel_expands_and_collapses_with_animation():
     assert bar.width() == COMPACT_WIDTH
     assert bar.panel.isHidden()
     bar.close()
+
+
+def _alpha_of_rule(qss: str, selector: str, prop: str = "background") -> int:
+    """Alpha (0-255) of the first rgba() colour a QSS rule sets for `prop`."""
+    import re
+
+    block = qss.split(selector, 1)[1].split("}", 1)[0]
+    match = re.search(prop + r":\s*rgba\(\s*\d+,\s*\d+,\s*\d+,\s*(\d+)\)", block)
+    assert match, f"{selector} has no rgba {prop}"
+    return int(match.group(1))
+
+
+def test_popups_that_float_over_the_page_are_never_see_through():
+    """The dark-mode hover panel, the Ctrl K palette and shared dialogs/menus let the dashboard
+    show through their text. Floating surfaces must be fully opaque in both themes."""
+    from campusguard.ui import sidebar
+    from campusguard.ui.shell_v3 import CommandPalette
+
+    for name in ("dark", "light"):
+        theme.set_current(name)
+        qss = theme.build_qss(name)
+        assert _alpha_of_rule(qss, "QDialog, QMessageBox, QInputDialog {") == 255
+        assert _alpha_of_rule(qss, "QMenu {") == 255
+        assert _alpha_of_rule(qss, "QToolTip {") == 255
+
+        tones = sidebar._tones()
+        assert tones["panel_top"].alpha() == 255 and tones["panel_bottom"].alpha() == 255
+
+        host = QWidget()
+        palette = CommandPalette(host)
+        assert "255)" in palette.panel.styleSheet().split("border")[0]
+    theme.set_current("dark")
+
+
+def test_command_palette_follows_theme_switches():
+    from campusguard.ui.shell_v3 import CommandPalette
+
+    host = QWidget()
+    palette = CommandPalette(host)
+    theme.set_current("light")
+    palette.retint()
+    light_sheet = palette.panel.styleSheet()
+    theme.set_current("dark")
+    palette.retint()
+    assert palette.panel.styleSheet() != light_sheet
+    assert "255, 255, 255, 255" in light_sheet
+
+
+def test_row_hover_is_visible_on_a_solid_panel_in_both_themes():
+    from campusguard.ui import sidebar
+
+    for name in ("dark", "light"):
+        theme.set_current(name)
+        assert sidebar._tones()["row_hover"].alpha() >= 12
+    theme.set_current("dark")

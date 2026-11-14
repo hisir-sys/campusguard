@@ -60,10 +60,13 @@ def _tones() -> dict[str, QColor]:
             "pill_edge": QColor(255, 255, 255, 24),
             "icon": QColor("#A2A2AB"), "icon_hot": QColor("#FFFFFF"),
             "tile": QColor(255, 255, 255, 30), "tile_edge": QColor(255, 255, 255, 40),
-            "panel_top": QColor(255, 255, 255, 30), "panel_bottom": QColor(255, 255, 255, 9),
-            "panel_edge": QColor(255, 255, 255, 42),
-            "active_top": QColor(255, 255, 255, 34), "active_bottom": QColor(255, 255, 255, 22),
-            "active_edge": QColor(255, 255, 255, 40),
+            # The panel floats over the page, so it is a solid surface: anything translucent lets
+            # the heading and cards underneath show through the menu text.
+            "panel_top": QColor(36, 36, 40, 255), "panel_bottom": QColor(27, 27, 30, 255),
+            "panel_edge": QColor(255, 255, 255, 52),
+            "active_top": QColor(255, 255, 255, 40), "active_bottom": QColor(255, 255, 255, 28),
+            "active_edge": QColor(255, 255, 255, 46),
+            "row_hover": QColor(255, 255, 255, 26),
             "caption": QColor(255, 255, 255, 56),
             "badge": QColor(255, 255, 255, 24),
         }
@@ -74,10 +77,11 @@ def _tones() -> dict[str, QColor]:
         "pill_edge": QColor(11, 13, 18, 30),
         "icon": QColor("#6B6B73"), "icon_hot": QColor("#0B0B0D"),
         "tile": QColor(0, 0, 0, 18), "tile_edge": QColor(0, 0, 0, 30),
-        "panel_top": QColor(255, 255, 255, 230), "panel_bottom": QColor(255, 255, 255, 170),
-        "panel_edge": QColor(11, 13, 18, 28),
-        "active_top": QColor(0, 0, 0, 22), "active_bottom": QColor(0, 0, 0, 14),
-        "active_edge": QColor(0, 0, 0, 30),
+        "panel_top": QColor(255, 255, 255, 255), "panel_bottom": QColor(246, 246, 248, 255),
+        "panel_edge": QColor(11, 13, 18, 40),
+        "active_top": QColor(0, 0, 0, 24), "active_bottom": QColor(0, 0, 0, 16),
+        "active_edge": QColor(0, 0, 0, 32),
+        "row_hover": QColor(0, 0, 0, 14),
         "caption": QColor(0, 0, 0, 70),
         "badge": QColor("#D7DBDA"),
     }
@@ -430,8 +434,9 @@ class _PanelItem(QAbstractButton):
                 painter.drawRoundedRect(QRectF(0, h * .28, 3, h * .44), 1.5, 1.5)
         elif self._hover > 0.01:
             painter.setPen(Qt.PenStyle.NoPen)
-            alpha = int((14 if dark else 110) * self._hover)
-            painter.setBrush(QColor(255, 255, 255, alpha))
+            hover = QColor(t["row_hover"])
+            hover.setAlpha(int(hover.alpha() * self._hover))
+            painter.setBrush(hover)
             painter.drawRoundedRect(body, 13, 13)
         hot = self._active or self._hover > 0.5
         slide = 4.0 * self._hover

@@ -122,6 +122,7 @@ class CommandPalette(QWidget):
         self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
         self._anim.valueChanged.connect(self._on_fade)
         self.panel = GlassCard(self, radius=20)
+        self.panel.setObjectName("commandPanel")
         self.panel.setFixedWidth(560)
         lay = QVBoxLayout(self.panel)
         lay.setContentsMargins(16, 16, 16, 12)
@@ -141,6 +142,18 @@ class CommandPalette(QWidget):
         self.hint = QLabel("↑ ↓ to move   Enter to open   Esc to close")
         self.hint.setProperty("muted", True)
         lay.addWidget(self.hint)
+        self.retint()
+
+    def retint(self) -> None:
+        """The palette floats over the page, so its panel is a solid surface (the shared card
+        style is translucent, which let the dashboard show through the search results)."""
+        from campusguard.ui.theme import rgba
+
+        p = get_palette()
+        self.panel.setStyleSheet(
+            f"QFrame#commandPanel {{ background: {rgba(p.glass, 255)}; "
+            f"border: 1px solid {rgba(p.line, 80 if p.name == 'dark' else 90)}; border-radius: 20px; }}"
+        )
 
     def _on_fade(self, value) -> None:
         self._fade = float(value)

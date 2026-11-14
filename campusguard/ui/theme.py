@@ -436,7 +436,7 @@ def build_qss(theme: str) -> str:
         "text": p.text, "text_dim": p.text_dim, "muted": p.muted,
         "accent": p.accent, "accent_hover": p.accent_hover,
         "good": p.good, "warn": p.warn, "bad": p.bad,
-        "bg1": p.bg1, "popup": rgba(p.glass, 188 if p.name == "dark" else 196),
+        "bg1": p.bg1, "popup": rgba(p.glass, 255),  # menus, dialogs, tooltips and dropdowns float over content: never see-through
         "glass": rgba(p.glass, p.glass_alpha),
         "card": (
             "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(52, 52, 56, 175), stop:1 rgba(24, 24, 27, 150))"

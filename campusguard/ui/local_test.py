@@ -98,7 +98,7 @@ class LocalVideoTestDialog(QFrame):
         palette = get_palette()
         overlay = rgba("#000000" if palette.name == "dark" else "#667085",
                        178 if palette.name == "dark" else 112)
-        panel = rgba(palette.glass, min(242, max(208, palette.glass_alpha + 60)))
+        panel = rgba(palette.glass, 250)  # sits over a dimmed overlay: keep it solid
         line = rgba(palette.line, min(150, max(55, palette.line_alpha * 3)))
         self.setStyleSheet(
             f"QFrame#localVideoTestOverlay {{ background: {overlay}; border: none; }}"

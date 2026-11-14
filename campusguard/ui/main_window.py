@@ -81,7 +81,7 @@ class InAppOverlay(QFrame):
                 border: none;
             }}
             QFrame#inAppPanel {{
-                background: {rgba(palette.glass, min(194, max(148, int(palette.glass_alpha * 0.82))))};
+                background: {rgba(palette.glass, 250)};
                 border: 1px solid {rgba(palette.line, min(110, int(palette.line_alpha * 3.2)))};
                 border-radius: 30px;
             }}
@@ -212,7 +212,7 @@ class InAppOverlay(QFrame):
                 border: none;
             }}
             QFrame#inAppPanel {{
-                background: {rgba(palette.glass, min(194, max(148, int(palette.glass_alpha * 0.82))))};
+                background: {rgba(palette.glass, 250)};
                 border: 1px solid {rgba(palette.line, min(110, int(palette.line_alpha * 3.2)))};
                 border-radius: 30px;
             }}
