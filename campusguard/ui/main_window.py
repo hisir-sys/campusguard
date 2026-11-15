@@ -566,6 +566,11 @@ class MainWindow(QMainWindow):
         if self.settings.connection_mode == "local":
             self._begin_camera_engine_import()
             QTimer.singleShot(5000, self._start_cloud_sync)
+            QTimer.singleShot(30000, self._run_retention)
+            self._retention_timer = QTimer(self)
+            self._retention_timer.setInterval(6 * 60 * 60 * 1000)
+            self._retention_timer.timeout.connect(self._run_retention)
+            self._retention_timer.start()
 
         self._add_shortcut("Ctrl+1", lambda: self.navigate("dashboard"))
         self._add_shortcut("Ctrl+2", lambda: self.navigate("cameras"))
@@ -1498,6 +1503,7 @@ class MainWindow(QMainWindow):
         # ordinary settings edits remain in-place and responsive.
         previous_theme = self.settings.theme
         previous_mode = self.settings.connection_mode
+        previous_sync = self.settings.cloud_sync
         self.settings = AppSettings.from_dict(settings.to_dict())
         self.repository.save_settings(self.settings)
         if self.camera_manager is not None:
@@ -1511,6 +1517,10 @@ class MainWindow(QMainWindow):
         self._apply_runtime_settings()
         self.settings_page.set_saved()
         self._sync_alert_channels()
+        if previous_sync != self.settings.cloud_sync:
+            self._stop_cloud_sync()  # turning it off takes effect immediately
+            if self.settings.cloud_sync == "on":
+                QTimer.singleShot(500, self._start_cloud_sync)
         if previous_mode != self.settings.connection_mode:
             self._stop_cloud_sync()
             if self.settings.connection_mode == "local":
@@ -2241,6 +2251,14 @@ class MainWindow(QMainWindow):
         """Send this PC's summary + incident metadata to the website account (local mode only)."""
         if getattr(self, "_cloud_sync", None) is not None or self.settings.connection_mode != "local":
             return
+        from campusguard.cloud_sync import consent_action
+
+        action = consent_action(self.settings.cloud_sync)
+        if action == "ask":
+            self._ask_cloud_sync_consent()  # nothing is sent until the user says yes
+            return
+        if action != "start":
+            return
         try:
             import uuid
 
@@ -2267,6 +2285,49 @@ class MainWindow(QMainWindow):
         except Exception:
             self._cloud_sync = None
 
+    def _ask_cloud_sync_consent(self) -> None:
+        """Show the one-time notice. Non-blocking, so it can never stall start-up."""
+        if getattr(self, "_sync_notice", None) is not None or getattr(self, "_closing", False):
+            return
+        from campusguard.ui.sync_consent import SyncConsentDialog
+
+        dialog = SyncConsentDialog(self)
+        self._sync_notice = dialog
+
+        def answered(_result: int) -> None:
+            self._sync_notice = None
+            if not getattr(self, "_closing", False):
+                self.settings_page.set_cloud_sync_choice(dialog.choice)  # saves + starts or stops sync
+            dialog.deleteLater()
+
+        dialog.finished.connect(answered)
+        dialog.open()
+
+    def _run_retention(self) -> None:
+        """Remove incident clips and records older than the periods the school chose (0 = keep)."""
+        if getattr(self, "_closing", False) or self.settings.connection_mode != "local":
+            return
+        footage_days = self.settings.footage_retention_days
+        incident_days = self.settings.incident_retention_days
+        if footage_days <= 0 and incident_days <= 0:
+            return
+        if getattr(self, "_retention_worker", None) is not None:
+            return
+        from campusguard.data_retention import apply_retention
+        from campusguard.ui.workers import Worker
+
+        worker = Worker(lambda: apply_retention(self.repository, footage_days, incident_days), self)
+        self._retention_worker = worker
+
+        def done(result: object) -> None:
+            if isinstance(result, dict) and (result.get("clips_removed") or result.get("incidents_removed")):
+                self._refresh_pages()
+
+        worker.succeeded.connect(done)
+        worker.failed.connect(lambda _error: None)  # retention is best-effort and retried every few hours
+        worker.finished.connect(lambda: (setattr(self, "_retention_worker", None), worker.deleteLater()))
+        worker.start()
+
     def _stop_cloud_sync(self) -> None:
         sync = getattr(self, "_cloud_sync", None)
         self._cloud_sync = None
@@ -2280,7 +2341,7 @@ class MainWindow(QMainWindow):
         self._in_app_overlay.release_event_filter()
         self._dispatcher.cancel_all()
         self._stop_cloud_sync()
-        for timer_name in ("_camera_engine_poll", "_refresh_timer"):
+        for timer_name in ("_camera_engine_poll", "_refresh_timer", "_retention_timer"):
             timer = getattr(self, timer_name, None)
             if timer is not None:
                 timer.stop()

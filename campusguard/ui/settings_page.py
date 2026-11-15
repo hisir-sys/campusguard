@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QUrl, Signal
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -13,11 +14,13 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSpinBox,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
+from campusguard import auth_config
 from campusguard.settings import START_PAGES, AppSettings
 from campusguard.ui.common import make_page_title
 from campusguard.ui.v3widgets import Segmented
@@ -474,13 +477,60 @@ class SettingsPage(QWidget):
         update_section.body.addLayout(update_row)
         content_layout.addWidget(update_section)
 
+        privacy_section = SettingsSection(
+            "Privacy and data",
+            "Choose what this PC shares with your website account and how long it keeps incident clips and records.",
+        )
+        privacy_form = QFormLayout()
+        privacy_form.setHorizontalSpacing(24)
+        privacy_form.setVerticalSpacing(14)
+        self._cloud_sync_value = settings.cloud_sync
+        self.cloud_sync_toggle = QCheckBox("Show this PC's summary on my CampusGuard website account")
+        self.cloud_sync_toggle.setChecked(settings.cloud_sync == "on")
+        self.cloud_sync_toggle.toggled.connect(self._cloud_sync_toggled)
+        self.cloud_sync_note = QLabel(
+            "Sends the PC name, camera counts and incident details (camera, time, label, confidence, "
+            "severity, status). Never video, images, file locations or anyone's identity."
+        )
+        self.cloud_sync_note.setProperty("muted", True)
+        self.cloud_sync_note.setWordWrap(True)
+        self.footage_retention_input = self._retention_combo(
+            settings.footage_retention_days,
+            ((0, "Until I delete them"), (7, "7 days"), (30, "30 days"), (60, "60 days"), (90, "90 days"),
+             (180, "180 days"), (365, "1 year")),
+            "incident clips",
+        )
+        self.incident_retention_input = self._retention_combo(
+            settings.incident_retention_days,
+            ((0, "Until I delete them"), (90, "90 days"), (180, "180 days"), (365, "1 year"), (730, "2 years")),
+            "incident records",
+        )
+        self.retention_note = QLabel(
+            "Older items are removed automatically, checked at start-up and every few hours. "
+            "Keep them only as long as your school needs them."
+        )
+        self.retention_note.setProperty("muted", True)
+        self.retention_note.setWordWrap(True)
+        self.privacy_policy_button = QPushButton("Read the Privacy Policy ↗")
+        self.privacy_policy_button.clicked.connect(
+            lambda: QDesktopServices.openUrl(QUrl(auth_config.WEBSITE_URL + "/privacy"))
+        )
+        privacy_form.addRow("Account sync", self.cloud_sync_toggle)
+        privacy_form.addRow("", self.cloud_sync_note)
+        privacy_form.addRow("Keep incident clips", self.footage_retention_input)
+        privacy_form.addRow("Keep incident records", self.incident_retention_input)
+        privacy_form.addRow("", self.retention_note)
+        privacy_form.addRow("", self.privacy_policy_button)
+        privacy_section.body.addLayout(privacy_form)
+        content_layout.addWidget(privacy_section)
+
         content_layout.addStretch(1)
         self._tab_sections = {
             "General": [workspace_section],
             "Appearance": [appearance_section],
             "Detection": [ai_section, status_section],
             "Alerts": [phone_section],
-            "Storage": [health_section],
+            "Storage": [health_section, privacy_section],
             "Connection": [connection_section],
             "Help": [update_section],
         }
@@ -575,6 +625,55 @@ class SettingsPage(QWidget):
             self.scroll.ensureWidgetVisible(widget, 40, 80)
             widget.setFocus()
 
+    def _retention_combo(self, current: int, options: tuple, what: str) -> QComboBox:
+        combo = QComboBox()
+        for days, label in options:
+            combo.addItem(label, days)
+        if combo.findData(int(current)) < 0:  # a value set outside the usual list stays visible
+            combo.addItem(f"{int(current)} days", int(current))
+        combo.setCurrentIndex(max(0, combo.findData(int(current))))
+        combo.setProperty("applied", int(current))
+        combo.currentIndexChanged.connect(lambda _i, c=combo, w=what: self._retention_changed(c, w))
+        return combo
+
+    def _retention_changed(self, combo: QComboBox, what: str) -> None:
+        if self._updating:
+            return
+        new = int(combo.currentData())
+        old = int(combo.property("applied") or 0)
+        if new > 0 and (old == 0 or new < old):
+            answer = QMessageBox.question(
+                self,
+                "Delete older items?",
+                f"CampusGuard will permanently delete {what} older than {combo.currentText().lower()}. "
+                "This cannot be undone.\n\nContinue?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                self._updating = True
+                try:
+                    combo.setCurrentIndex(max(0, combo.findData(old)))
+                finally:
+                    self._updating = False
+                return
+        combo.setProperty("applied", new)
+        self._emit_settings()
+
+    def _cloud_sync_toggled(self, checked: bool) -> None:
+        if self._updating:
+            return
+        self._cloud_sync_value = "on" if checked else "off"
+        self._emit_settings()
+
+    def set_cloud_sync_choice(self, value: str) -> None:
+        """Record the answer to the first-run notice, so saving stays in one place."""
+        self._cloud_sync_value = "on" if value == "on" else "off"
+        self.cloud_sync_toggle.blockSignals(True)
+        self.cloud_sync_toggle.setChecked(self._cloud_sync_value == "on")
+        self.cloud_sync_toggle.blockSignals(False)
+        self._emit_settings()
+
     def _reset_defaults(self) -> None:
         defaults = AppSettings(theme=self.theme_input.currentData())
         self._updating = True
@@ -630,6 +729,9 @@ class SettingsPage(QWidget):
             auto_open_whatsapp=self.auto_open_whatsapp_toggle.isChecked(),
             alert_confirm_predictions=int(self.confirm_input.currentData()),
             gpu_video_decode=self.gpu_decode_toggle.isChecked(),
+            cloud_sync=self._cloud_sync_value,
+            footage_retention_days=int(self.footage_retention_input.currentData()),
+            incident_retention_days=int(self.incident_retention_input.currentData()),
         )
 
         self._refresh_status_cards()

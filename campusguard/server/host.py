@@ -561,18 +561,22 @@ def run_server(host_override: str | None = None, port_override: int | None = Non
     host.peer_sync = PeerSync(repository, host.sync, lambda: config.peers, vault.load_peer_token,
                               on_new_alert=on_new_remote_alert)
     host.peer_sync.start()
-    # Summary + incident metadata (never video) to the school's website account.
-    from campusguard import auth as _auth
-    from campusguard.cloud_sync import CloudSync
-    from campusguard.storage import application_data_dir as _data_dir
+    # Summary + incident metadata (never video) to the school's website account, only if an
+    # administrator turned it on ("cloud_sync": true in server.json).
+    if config.cloud_sync:
+        from campusguard import auth as _auth
+        from campusguard.cloud_sync import CloudSync
+        from campusguard.storage import application_data_dir as _data_dir
 
-    def live_counts() -> dict:
-        snapshot = host.health.snapshot()
-        return {"online": sum(1 for item in snapshot.values() if item.get("status") == "LIVE")}
+        def live_counts() -> dict:
+            snapshot = host.health.snapshot()
+            return {"online": sum(1 for item in snapshot.values() if item.get("status") == "LIVE")}
 
-    host.cloud_sync = CloudSync(repository, host.sync.server_id, host.sync.server_name, VERSION,
-                                _auth.fresh_access_token, _data_dir() / "cloud_sync.json", live_counts=live_counts)
-    host.cloud_sync.start()
+        host.cloud_sync = CloudSync(repository, host.sync.server_id, host.sync.server_name, VERSION,
+                                    _auth.fresh_access_token, _data_dir() / "cloud_sync.json", live_counts=live_counts)
+        host.cloud_sync.start()
+    else:
+        log.info("account sync is off; set \"cloud_sync\": true in server.json to show this server on your account")
     log.info("server id %s (%s), school %s, %d peer(s)", host.sync.server_id, host.sync.server_name,
              host.sync.school_id, len(config.peers))
 

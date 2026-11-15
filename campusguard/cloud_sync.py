@@ -29,6 +29,14 @@ TIMEOUT_SECONDS = 15.0
 _USER_AGENT = "CampusGuard-Sync/1.0"
 
 
+def consent_action(choice: str) -> str:
+    """What the app may do with the user's sync choice: "start", "ask" (show the notice) or "skip".
+
+    Sending even a summary to the website needs a clear yes, so only an explicit "on" starts it.
+    """
+    return "start" if choice == "on" else "ask" if choice == "ask" else "skip"
+
+
 def enabled() -> bool:
     return os.environ.get("CAMPUSGUARD_CLOUD_SYNC", "1").strip().lower() not in {"0", "false", "no", "off"}
 

@@ -16,6 +16,18 @@ def effective_threshold(base: float, offset: float) -> float:
     return min(0.99, max(0.05, float(base) + float(offset)))
 
 
+CLOUD_SYNC_CHOICES = ("ask", "on", "off")
+
+
+def _retention_days(value: Any, maximum: int) -> int:
+    """0 keeps everything; otherwise a whole number of days inside a sane range."""
+    try:
+        days = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return 0 if days <= 0 else min(maximum, days)
+
+
 START_PAGES = ("dashboard", "cameras", "incidents", "alerts")
 
 
@@ -55,6 +67,12 @@ class AppSettings:
     # How many consecutive "fight" readings (about 0.5 s apart) raise an incident.
     alert_confirm_predictions: int = 2
     gpu_video_decode: bool = False
+    # Privacy and data. Sending a summary to the website account needs a clear yes: "ask" means
+    # the user has not decided yet, and nothing is sent until they choose "on".
+    cloud_sync: str = "ask"
+    # How long this PC keeps incident clips / incident records. 0 = until deleted by hand.
+    footage_retention_days: int = 0
+    incident_retention_days: int = 0
 
     @classmethod
     def from_dict(cls, values: dict[str, Any]) -> "AppSettings":
@@ -94,6 +112,9 @@ class AppSettings:
             auto_open_whatsapp=bool(candidate.auto_open_whatsapp),
             alert_confirm_predictions=min(6, max(2, int(candidate.alert_confirm_predictions))),
             gpu_video_decode=bool(candidate.gpu_video_decode),
+            cloud_sync=candidate.cloud_sync if candidate.cloud_sync in CLOUD_SYNC_CHOICES else "ask",
+            footage_retention_days=_retention_days(candidate.footage_retention_days, 3650),
+            incident_retention_days=_retention_days(candidate.incident_retention_days, 36500),
         )
 
     def to_dict(self) -> dict[str, Any]:

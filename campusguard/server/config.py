@@ -26,6 +26,9 @@ class ServerConfig:
     server_name: str = ""             # shown to operators, e.g. "Server One"
     school_id: str = ""               # shared by every server of the school; empty = derive from the account
     peers: list = field(default_factory=list)   # [{"name", "address", "ca_file"}]; tokens live in Credential Manager
+    # Send a summary + incident metadata (never video) to the school's website account.
+    # Off until an administrator turns it on: sending anything needs a deliberate yes.
+    cloud_sync: bool = False
 
 
 def _clamp_int(value, low, high, default):
@@ -64,6 +67,14 @@ def normalise_peers(raw) -> list[dict]:
     return peers
 
 
+def _as_bool(value, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return default
+
+
 def normalise(values: dict) -> ServerConfig:
     base = ServerConfig()
     return ServerConfig(
@@ -81,6 +92,7 @@ def normalise(values: dict) -> ServerConfig:
         server_name=str(values.get("server_name", "")).strip()[:60],
         school_id=str(values.get("school_id", "")).strip()[:80],
         peers=normalise_peers(values.get("peers")),
+        cloud_sync=_as_bool(values.get("cloud_sync"), base.cloud_sync),
     )
 
 
