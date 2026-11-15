@@ -339,22 +339,28 @@ def test_run_server_full_start_serve_and_clean_stop(tmp_path, monkeypatch):
         try:
             while time.monotonic() < deadline:
                 connection = http.client.HTTPConnection("127.0.0.1", port, timeout=1)
+                payload = b""
                 try:
                     connection.request("GET", "/api/v1/status", headers={"Authorization": f"Bearer {TOKEN}"})
                     response = connection.getresponse()
                     status_code, payload = response.status, response.read()
                     if status_code != 200:
                         raise RuntimeError(f"Authenticated status request returned HTTP {status_code}.")
-                    results["status"], results["body"] = status_code, json.loads(payload)
+                    body = json.loads(payload)  # a half-started server can answer with an empty body
                     connection.request("GET", "/api/v1/status")
-                    results["anon"] = connection.getresponse().status
+                    anon = connection.getresponse().status
+                    # Publish only once every request succeeded: a half-filled dict was what
+                    # turned a transient hiccup into an unhelpful KeyError in CI.
+                    results.update(status=status_code, body=body, anon=anon)
                     return
-                except (OSError, http.client.HTTPException, RuntimeError) as error:
-                    last_error = str(error)
+                except (OSError, http.client.HTTPException, RuntimeError, ValueError) as error:
+                    last_error = f"{type(error).__name__}: {error} (body={payload[:120]!r})"
                     time.sleep(0.1)
                 finally:
                     connection.close()
             results["client_error"] = last_error
+        except BaseException as error:  # never end silently: the assertion below must say why
+            results["client_error"] = f"{type(error).__name__}: {error}"
         finally:
             QMetaObject.invokeMethod(app, "quit", Qt.ConnectionType.QueuedConnection)
 
@@ -362,6 +368,7 @@ def test_run_server_full_start_serve_and_clean_stop(tmp_path, monkeypatch):
     code = host_module.run_server()
     assert code == 0
     assert "client_error" not in results, results.get("client_error")
+    assert "status" in results, "the helper client finished without recording a result"
     assert results["status"] == 200 and results["body"]["cameras"]["total"] == 0 and results["anon"] == 401
     assert (tmp_path / "logs" / "server.log").is_file()
     for name in ("campusguard.camera_runtime", "campusguard.ai_pipeline", "campusguard.model_registry",
