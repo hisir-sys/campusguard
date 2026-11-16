@@ -1,5 +1,14 @@
 # CampusGuard Desktop — Update Notes
 
+## Camera setup: any address, and network scan
+
+- **Any IP address or host name works.** A camera can be on the local network or reachable over the internet: public and private IPv4, IPv6 and host names are all accepted, and a bad address now says what is wrong (for example "999.1.1.1 is not a valid IP address") instead of failing generically. Typing a public address shows a reminder that the camera's port must be forwarded on its router and that it needs a strong password.
+- **Scan network** (new, in the camera form): looks for ONVIF cameras and open RTSP ports (554 and 8554) on the network this PC is on, in the background with a Stop button. Each camera found gets its own username, password and stream path; **Add** unlocks only after that camera passes **Test**, and changing anything afterwards asks for a new test. It scans only this PC's own private /24 network, so use it on networks you have permission to scan. Some networks block discovery; typing the address still works.
+- Passwords are still never placed inside the camera address; they are passed separately and encoded.
+- Fixed: disabled primary buttons looked enabled, and table headers were a pale bar with faint text in dark mode.
+- Added checks that every name one file imports from another exists (`scripts/check_cross_references.py`, also run by the tests).
+- **Not tested here:** discovery against real cameras and a real school network (tested with a local socket, a faked ONVIF reply and the dialog driven offscreen).
+
 ## Floor map, notifications and launch
 
 - **Floor map** (new page under Home): import floor-plan images, drag cameras onto the plan or click a camera and then the plan, move or remove pins. Pins show camera status and pulse coral while the camera has a new incident. Plans and pins are saved on this PC.

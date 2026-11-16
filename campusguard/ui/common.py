@@ -26,6 +26,12 @@ from campusguard.settings import SENSITIVITY_LEVELS, CameraConfig, CameraCredent
 from campusguard.ui.icons import IconLabel, set_icon_theme
 from campusguard.ui.theme import build_qss, get_palette, rgba, set_current
 
+INTERNET_CAMERA_NOTE = (
+    "This address looks like it is on the internet, not on your local network. For the app to "
+    "reach it, the camera's port must be opened (forwarded) on its router, and the camera needs "
+    "a strong, unique password because anyone can try to log in to an exposed camera."
+)
+
 if TYPE_CHECKING:
     from campusguard.camera_runtime import CameraTestThread
 
@@ -308,8 +314,8 @@ class CameraFormDialog(QDialog):
 
         root = QVBoxLayout(self)
         intro = QLabel(
-            "Connect an external USB, RTSP, HTTP/MJPEG, or IP camera. "
-            "No camera is selected automatically."
+            "Connect an external USB, RTSP, HTTP/MJPEG, or IP camera. The camera can be on your "
+            "local network or reachable over the internet. No camera is selected automatically."
         )
         intro.setWordWrap(True)
         intro.setProperty("muted", True)
@@ -356,14 +362,37 @@ class CameraFormDialog(QDialog):
         detected_layout.addWidget(self.refresh_cameras_button)
         form.addRow("Detected cameras", self.detected_widget)
 
+        self.scan_widget = QWidget()
+        scan_layout = QHBoxLayout(self.scan_widget)
+        scan_layout.setContentsMargins(0, 0, 0, 0)
+        scan_layout.setSpacing(8)
+        self.scan_network_button = QPushButton("Scan network…")
+        self.scan_network_button.setToolTip(
+            "Look for cameras on the network this computer is connected to"
+        )
+        self.scan_network_button.clicked.connect(self._open_network_scan)
+        scan_hint = QLabel("Find cameras on this network automatically")
+        scan_hint.setProperty("muted", True)
+        scan_layout.addWidget(self.scan_network_button)
+        scan_layout.addWidget(scan_hint, 1)
+        form.addRow("Find a camera", self.scan_widget)
+
         form.addRow("Source address", self.address_input)
         form.addRow("Username", self.username_input)
         form.addRow("Password", self.password_input)
         root.addLayout(form)
 
+        self.network_note = QLabel(INTERNET_CAMERA_NOTE)
+        self.network_note.setProperty("tone", "warn")
+        self.network_note.setWordWrap(True)
+        self.network_note.hide()
+        root.addWidget(self.network_note)
+
         self.detected_input.currentIndexChanged.connect(
             self._select_detected_camera
         )
+        self.address_input.textChanged.connect(self._update_network_note)
+        self.type_input.currentTextChanged.connect(self._update_network_note)
 
         self.test_status = QLabel("Connection has not been tested.")
         self.test_status.setProperty("muted", True)
@@ -419,13 +448,41 @@ class CameraFormDialog(QDialog):
             "RTSP": "rtsp://camera-address/stream",
             "HTTP": "http://camera-address/video",
             "MJPEG": "http://camera-address/mjpeg",
-            "IP": "192.168.1.50:8080/video or a full URL",
+            "IP": "192.168.1.50:8080/video, a public IP or host name, or a full URL",
         }
         self.address_input.setPlaceholderText(placeholders.get(source_type, ""))
         self._update_usb_controls(source_type)
 
+    def _update_network_note(self, *_args: object) -> None:
+        """Remind the user what a camera reached over the internet needs."""
+        from campusguard.sources import address_host, is_internet_address
+
+        host = address_host(self.type_input.currentText(), self.address_input.text())
+        self.network_note.setVisible(bool(host) and is_internet_address(host))
+
+    def _open_network_scan(self) -> None:
+        from campusguard.sources import build_rtsp_url
+        from campusguard.ui.camera_scan import CameraScanDialog
+
+        dialog = CameraScanDialog(self)
+        if dialog.exec() != QDialog.DialogCode.Accepted or not dialog.selected:
+            return
+        chosen = dialog.selected
+        self.type_input.setCurrentText("RTSP")
+        self.address_input.setText(
+            build_rtsp_url(str(chosen["host"]), int(chosen["port"]), "", "", str(chosen["path"]))
+        )
+        self.username_input.setText(str(chosen["username"]))
+        self.password_input.setText(str(chosen["password"]))
+        if not self.name_input.text().strip():
+            self.name_input.setText(f"Camera {chosen['host']}")
+        self.validation_status.hide()
+        self._show_test_result(True, str(chosen["message"]) or "Connection successful")
+
     def _update_usb_controls(self, source_type: str) -> None:
         is_usb = source_type.upper() == "USB"
+        self.scan_widget.setVisible(not is_usb)
+        self._form.setRowVisible(self.scan_widget, not is_usb)
         self.detected_widget.setVisible(is_usb)
         self._form.setRowVisible(self.detected_widget, is_usb)
         if is_usb:

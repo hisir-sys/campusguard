@@ -249,6 +249,9 @@ QPushButton[primary="true"] {
 QPushButton[primary="true"]:hover {
   background: @accent_hover@; border-color: @accent_hover@;
 }
+QPushButton[primary="true"]:disabled {
+  background: @veil@; border-color: @line@; color: @muted@;
+}
 QPushButton[danger="true"] { color: @bad@; border-color: @bad_line@; }
 QPushButton[link="true"] {
   background: transparent; border: none; color: @ink@;
@@ -307,6 +310,7 @@ QTableWidget {
 QTableWidget::item { padding: 7px; }
 QTableWidget::item:selected { background: @select@; color: @text@; }
 QTableCornerButton::section { background: transparent; border: none; }
+QHeaderView { background: transparent; }
 QHeaderView::section {
   background: @veil@; color: @text_dim@; border: none;
   border-bottom: 1px solid @line@;

@@ -655,6 +655,41 @@ class FrameAnalysisThread(QThread):
             self.footage_saved.emit(str(finished_footage))
 
 
+def probe_source(
+    source_type: str,
+    source_address: str,
+    credentials: CameraCredentials,
+) -> tuple[bool, str]:
+    """Open a camera once and report whether it really delivers a frame.
+
+    Used by "Test Connection" and by the network scan. Opening is bounded by the short
+    open/read timeouts in ``_open_capture``, so an address that goes nowhere fails in seconds.
+    An address that is not valid is reported with the reason instead of a generic error.
+    """
+    try:
+        source = build_capture_source(source_type, source_address, credentials)
+    except ValueError as error:
+        return False, str(error)
+    capture = None
+    try:
+        capture = _open_capture(source)
+        if capture is None or not capture.isOpened():
+            return False, "Connection failed. Check the source address and camera credentials."
+        ok, frame = capture.read()
+        if not ok or frame is None or frame.size == 0:
+            return False, "Connected, but the source returned no frame."
+        height, width = frame.shape[:2]
+        return True, f"Connection successful — {width}x{height}"
+    except Exception:
+        return (
+            False,
+            "Connection test encountered an error. Check the source, credentials, and video backend.",
+        )
+    finally:
+        if capture is not None:
+            capture.release()
+
+
 class CameraTestThread(QThread):
     result_ready = Signal(bool, str)
 
@@ -670,34 +705,10 @@ class CameraTestThread(QThread):
         self.credentials = credentials
 
     def run(self) -> None:
-        capture = None
-        try:
-            source = build_capture_source(
-                self.source_type,
-                self.source_address,
-                self.credentials,
-            )
-            capture = _open_capture(source)
-            if capture is None or not capture.isOpened():
-                self.result_ready.emit(
-                    False,
-                    "Connection failed. Check the source address and camera credentials.",
-                )
-                return
-            ok, frame = capture.read()
-            if not ok or frame is None or frame.size == 0:
-                self.result_ready.emit(False, "Connected, but the source returned no frame.")
-                return
-            height, width = frame.shape[:2]
-            self.result_ready.emit(True, f"Connection successful — {width}x{height}")
-        except Exception:
-            self.result_ready.emit(
-                False,
-                "Connection test encountered an error. Check the source, credentials, and video backend.",
-            )
-        finally:
-            if capture is not None:
-                capture.release()
+        success, message = probe_source(
+            self.source_type, self.source_address, self.credentials
+        )
+        self.result_ready.emit(success, message)
 
 
 class LocalVideoTestThread(QThread):
