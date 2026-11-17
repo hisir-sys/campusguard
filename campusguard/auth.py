@@ -127,17 +127,24 @@ def check_access(access_token: str) -> None:
     )
     if status == 200:
         decision = body.get("status")
-        if decision == "approved":
+        login, payment = body.get("login_status"), body.get("payment_status")
+        # Both approvals (website login and payment/app access) are needed. Never trust "approved" alone
+        # if the server says access is not granted.
+        if decision == "approved" and body.get("access_granted") is not False and login in (None, "approved") and payment in (None, "approved"):
             return
-        if decision == "pending":
+        if "rejected" in (decision, login, payment):
+            which = "login" if login == "rejected" else "payment" if payment == "rejected" else "application"
             raise AuthError(
-                "Your application is still pending review. You can sign in after the CampusGuard team approves it.",
-                kind="pending",
-            )
-        if decision == "rejected":
-            raise AuthError(
-                "Your application has not been approved. Please contact the CampusGuard team if you need help.",
+                f"Your {which} approval was not granted. Please contact the CampusGuard team if you need help.",
                 kind="rejected",
+            )
+        if decision in ("pending", "approved"):
+            waiting = [name for name, value in (("login", login), ("payment", payment)) if value == "pending"]
+            detail = f" Waiting for: {' and '.join(waiting)} approval." if waiting else ""
+            raise AuthError(
+                "Your application is still pending review. You can sign in to the app once both approvals are complete."
+                + detail,
+                kind="pending",
             )
         raise AuthError("We could not verify your access status. Please try again.")
     if status == 403 and body.get("status") == "missing":
