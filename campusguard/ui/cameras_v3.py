@@ -301,6 +301,7 @@ class CameraCard(QWidget):
 class CamerasPage(QWidget):
     open_requested = Signal(str)
     add_requested = Signal(dict)
+    import_requested = Signal(list)
     edit_requested = Signal(str, dict)
     local_test_requested = Signal()
     remove_requested = Signal(str)
@@ -336,6 +337,10 @@ class CamerasPage(QWidget):
         local.setToolTip("Test a local video file with the production AI pipeline. It is not added as a camera.")
         local.clicked.connect(self.local_test_requested.emit)
         header.addWidget(local)
+        bulk = GhostButton("Import CSV")
+        bulk.setToolTip("Add many cameras at once from a spreadsheet saved as CSV")
+        bulk.clicked.connect(self._import_csv)
+        header.addWidget(bulk)
         add = GhostButton("Add camera", primary=True)
         add.clicked.connect(self._add_camera)
         header.addWidget(add)
@@ -378,6 +383,9 @@ class CamerasPage(QWidget):
         layout.addWidget(title)
         layout.addWidget(text)
         layout.addWidget(button, 0, Qt.AlignmentFlag.AlignCenter)
+        bulk = GhostButton("Import many from a CSV file")
+        bulk.clicked.connect(self._import_csv)
+        layout.addWidget(bulk, 0, Qt.AlignmentFlag.AlignCenter)
         return card
 
     # ------------------------------------------------------------------ data
@@ -498,6 +506,14 @@ class CamerasPage(QWidget):
         dialog = CameraFormDialog(self, groups=self._groups())
         if dialog.exec() == CameraFormDialog.DialogCode.Accepted and dialog.form_data:
             self.add_requested.emit(dialog.form_data)
+
+    def _import_csv(self) -> None:
+        from campusguard.ui.camera_import_dialog import CameraImportDialog
+
+        existing = [(c.camera.name, c.camera.source_type, c.camera.source_address) for c in self._cards.values()]
+        dialog = CameraImportDialog(self, existing=existing)
+        if dialog.exec() == CameraImportDialog.DialogCode.Accepted and dialog.rows_to_import:
+            self.import_requested.emit(dialog.rows_to_import)
 
     def _edit_camera(self, camera_id: str) -> None:
         card = self._cards.get(camera_id)

@@ -29,6 +29,8 @@ from PySide6.QtWidgets import (
 )
 
 from campusguard import system_health
+from campusguard.camera_notices import describe_problems, is_problem
+
 from campusguard.footage import clear_footage
 from campusguard.credentials import CredentialVault
 from campusguard.notify import AlertDispatcher, AlertInfo, AlertPlan, parse_numbers, whatsapp_link, format_message
@@ -61,6 +63,10 @@ from campusguard.ui.floor_map import FloorMapPage
 from campusguard.ui.notify import ToastStack
 from campusguard.ui.severity_alert import FightAlert
 from campusguard.ui.theme import get_palette, rgba
+
+
+class CredentialVaultUnavailable(Exception):
+    """The operating-system credential vault could not store a camera's credentials."""
 
 
 class InAppOverlay(QFrame):
@@ -509,6 +515,14 @@ class MainWindow(QMainWindow):
         }
         self.model_statuses: dict[str, dict[str, str]] = {}
         self._previous_camera_status: dict[str, str] = {}
+        # One combined notice for camera problems (see campusguard/camera_notices.py): cameras that
+        # currently have a problem, and the ones not announced yet. Retries never re-announce.
+        self._camera_problems: dict[str, str] = {}
+        self._camera_unannounced: set[str] = set()
+        self._camera_notice_timer = QTimer(self)
+        self._camera_notice_timer.setSingleShot(True)
+        self._camera_notice_timer.setInterval(900)
+        self._camera_notice_timer.timeout.connect(self._announce_camera_problems)
         self._camera_view_camera_id: str | None = None
         self.operator_name: str | None = account_email or None
         self._pending_footage_incidents: dict[str, str] = {}
@@ -1118,6 +1132,7 @@ class MainWindow(QMainWindow):
         self.dashboard.status_change_requested.connect(self._set_incident_status)
         self.camera_page.open_requested.connect(self.open_camera)
         self.camera_page.add_requested.connect(self._add_camera)
+        self.camera_page.import_requested.connect(self._import_cameras)
         self.camera_page.local_test_requested.connect(self._open_local_file_test)
         self.camera_page.remove_requested.connect(self._remove_camera)
         self.camera_page.reconnect_requested.connect(self._reconnect_camera)
@@ -1298,23 +1313,22 @@ class MainWindow(QMainWindow):
         dialog.show()
         dialog.raise_()
 
-    def _add_camera(self, values: dict) -> None:
+    def _store_camera(self, values: dict) -> CameraConfig:
+        """Save a camera and its credentials and register it. It is not started here.
+
+        Raises CredentialVaultUnavailable (and saves nothing) when the credentials cannot be stored."""
         camera = self.repository.add_camera(
             values["name"],
             values["source_type"],
             values["source_address"],
+            bool(values.get("ai_enabled", True)),
         )
-        credentials = CameraCredentials(values["username"], values["password"])
+        credentials = CameraCredentials(values.get("username", ""), values.get("password", ""))
         try:
             self.vault.save(camera.camera_id, credentials)
-        except Exception:
+        except Exception as error:
             self.repository.remove_camera(camera.camera_id)
-            self._in_app_overlay.show_notice(
-                "Credential vault unavailable",
-                "CampusGuard could not store the camera credentials securely, so the camera was not saved.\n\n"
-                "Check that the Windows credential service is available and try again.",
-            )
-            return
+            raise CredentialVaultUnavailable from error
 
         group = " ".join(str(values.get("group_name", "")).split())[:40]
         offset = float(values.get("threshold_offset", 0.0) or 0.0)
@@ -1326,6 +1340,28 @@ class MainWindow(QMainWindow):
         self.cameras[camera.camera_id] = camera
         self.camera_stats[camera.camera_id] = CameraStats()
         self._previous_camera_status[camera.camera_id] = "CONNECTING"
+        return camera
+
+    def _show_vault_unavailable(self, saved: int = 0, left: int = 0) -> None:
+        if saved or left:
+            body = (
+                f"CampusGuard could not store camera credentials securely. {saved} camera(s) were imported "
+                f"before that; the other {left} were not.\n\n"
+                "Check that the Windows credential service is available, then import the rest again."
+            )
+        else:
+            body = (
+                "CampusGuard could not store the camera credentials securely, so the camera was not saved.\n\n"
+                "Check that the Windows credential service is available and try again."
+            )
+        self._in_app_overlay.show_notice("Credential vault unavailable", body)
+
+    def _add_camera(self, values: dict) -> None:
+        try:
+            camera = self._store_camera(values)
+        except CredentialVaultUnavailable:
+            self._show_vault_unavailable()
+            return
         if self.camera_manager is None:
             self._toast("Camera engine is still initializing; please try again in a moment.", 3000)
             return
@@ -1339,6 +1375,48 @@ class MainWindow(QMainWindow):
         )
         self._sync_cameras()
         self._toast(f"Added {camera.name}; connecting to the configured source.", 6000)
+
+    def _import_cameras(self, items: list) -> None:
+        """Add many cameras at once (CSV import) and report with ONE notice, not one per camera."""
+        added: list[CameraConfig] = []
+        failed = 0
+        vault_down = False
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            for position, values in enumerate(items):
+                try:
+                    added.append(self._store_camera(values))
+                except CredentialVaultUnavailable:
+                    vault_down = True  # it will fail for every camera, so stop here
+                    left = len(items) - position
+                    break
+                except Exception:
+                    failed += 1
+            if self.camera_manager is not None:
+                for camera in added:
+                    try:
+                        self.camera_manager.start_camera(camera)
+                    except Exception as error:
+                        self._set_camera_status(camera.camera_id, "ERROR", str(error))
+            if added:
+                self.repository.add_notification(
+                    "camera_added", f"{len(added)} camera(s) imported from a CSV file."
+                )
+            self._sync_cameras()
+        finally:
+            QApplication.restoreOverrideCursor()
+        if vault_down:
+            self._show_vault_unavailable(len(added), left)
+            return
+        count = f"{len(added)} camera{'s' if len(added) != 1 else ''}"
+        message = f"Imported {count}."
+        if failed:
+            message = f"Imported {count}; {failed} could not be saved."
+        elif self.camera_manager is None:
+            message += " They will connect once the AI engine has started."
+        else:
+            message += " Connecting now."
+        self._toast(message, 6000)
 
     def _load_camera_credentials(self, camera_id: str):
         try:
@@ -1381,6 +1459,7 @@ class MainWindow(QMainWindow):
             self.camera_manager.set_camera_threshold_offset(camera_id, offset)
             # Credentials or address may have changed, so restart the stream on the new settings.
             if connection_changed or credentials != previous_credentials:
+                self._forget_camera_problem(camera_id)
                 self.camera_stats[camera_id] = CameraStats(status="CONNECTING")
                 self.camera_manager.reconnect(camera_id, updated)
         self._sync_cameras()
@@ -1413,6 +1492,7 @@ class MainWindow(QMainWindow):
         self.cameras.pop(camera_id, None)
         self.camera_stats.pop(camera_id, None)
         self._previous_camera_status.pop(camera_id, None)
+        self._forget_camera_problem(camera_id)
         self.model_statuses.pop(camera_id, None)
         if self._camera_view_camera_id == camera_id:
             self._camera_view_camera_id = None
@@ -1425,6 +1505,7 @@ class MainWindow(QMainWindow):
         if camera is None:
             return
         self.camera_stats[camera_id] = CameraStats(status="CONNECTING")
+        self._forget_camera_problem(camera_id)  # the operator asked, so a repeat failure is worth one new notice
         if self.camera_manager is None:
             self._toast("Camera engine is still initializing; please try again in a moment.", 3000)
             return
@@ -1883,8 +1964,34 @@ class MainWindow(QMainWindow):
         self.floor_map_page.update_camera_stats(camera_id, self.camera_stats[camera_id])
         if self._camera_view_camera_id == camera_id:
             self._in_app_overlay.set_camera_stats(self.camera_stats[camera_id])
-        if message:
-            self._toast(f"{camera_id}: {message}", 8000)
+        self._track_camera_problem(camera_id, status, message)
+
+    def _track_camera_problem(self, camera_id: str, status: str, message: str) -> None:
+        """A camera that keeps failing is announced once, together with any others that fail at the same time."""
+        if is_problem(status, message):
+            if camera_id not in self._camera_problems:
+                self._camera_unannounced.add(camera_id)
+                if not self._camera_notice_timer.isActive():
+                    self._camera_notice_timer.start()
+            self._camera_problems[camera_id] = message
+        elif status == "LIVE":
+            self._forget_camera_problem(camera_id)
+
+    def _forget_camera_problem(self, camera_id: str) -> None:
+        self._camera_problems.pop(camera_id, None)
+        self._camera_unannounced.discard(camera_id)
+
+    def _announce_camera_problems(self) -> None:
+        fresh = [camera_id for camera_id in self._camera_unannounced if camera_id in self.cameras]
+        self._camera_unannounced.clear()
+        current = [
+            (self.cameras[camera_id].name, message)
+            for camera_id, message in self._camera_problems.items()
+            if camera_id in self.cameras
+        ]
+        if not fresh or not current:
+            return
+        self._toasts.show_toast(describe_problems(current), tone="bad", ms=8000, key="camera-problems")
 
     def _on_camera_stats(self, camera_id: str, fps: float, resolution: str) -> None:
         if camera_id not in self.cameras:

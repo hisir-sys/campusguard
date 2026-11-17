@@ -1,5 +1,12 @@
 # CampusGuard Desktop — Update Notes
 
+## Import cameras from CSV, and fewer popups
+
+- **Import CSV** (new, on the Cameras page): add many cameras in one go. Columns: `name`, `type` (RTSP, HTTP, MJPEG, IP, USB) and `address` are required; `port`, `path`, `username`, `password`, `group`, `sensitivity` (Sensitive, Default, Cautious, Strict) and `ai` (yes/no) are optional. Column names are matched loosely (for example "Camera Name", "IP Address", "Zone"), and Excel's "CSV (Comma delimited)" files, semicolon files and UTF-8 files all work. **Download template** gives a ready file; rows starting with `#` are ignored.
+- You see a **preview first**: every row is checked with the same rules as the Add camera form (bad IPs, missing names or types, wrong sensitivity, credentials inside a URL, USB with a password), cameras already added or repeated in the file are skipped, and only the ready rows are imported. Usernames and passwords go to the Windows credential vault as before; passwords are never shown in the preview. Up to 500 cameras per file.
+- **One notice instead of a pile.** A camera that cannot connect used to show a new popup on every retry. Now a problem is announced once, and several cameras failing together share one message ("5 cameras need attention: …"), which updates in place. Identical popups no longer stack, and an import shows a single summary.
+- **Not tested here:** import on a real Windows PC with the credential vault and live cameras (tested with fakes and the dialog driven offscreen).
+
 ## Camera setup: any address, and network scan
 
 - **Any IP address or host name works.** A camera can be on the local network or reachable over the internet: public and private IPv4, IPv6 and host names are all accepted, and a bad address now says what is wrong (for example "999.1.1.1 is not a valid IP address") instead of failing generically. Typing a public address shows a reminder that the camera's port must be forwarded on its router and that it needs a strong password.

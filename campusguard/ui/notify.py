@@ -20,19 +20,18 @@ class Toast(QFrame):
         row = QHBoxLayout(self)
         row.setContentsMargins(16, 10, 12 if undo else 16, 10)
         row.setSpacing(12)
+        self._dot: QLabel | None = None
         if tone:
-            dot = QLabel()
-            dot.setObjectName("toastDot")
-            dot.setProperty("tone", tone)
-            dot.setFixedSize(8, 8)
-            row.addWidget(dot, 0, Qt.AlignmentFlag.AlignVCenter)
+            self._dot = QLabel()
+            self._dot.setObjectName("toastDot")
+            self._dot.setProperty("tone", tone)
+            self._dot.setFixedSize(8, 8)
+            row.addWidget(self._dot, 0, Qt.AlignmentFlag.AlignVCenter)
         self.label = QLabel(message)
         self.label.setObjectName("toastText")
         self.restyle()
         self.label.ensurePolished()
-        if self.label.fontMetrics().horizontalAdvance(message) > 340:
-            self.label.setWordWrap(True)
-            self.label.setFixedSize(340, self.label.heightForWidth(340))
+        self._fit_label(message)
         row.setSizeConstraint(QHBoxLayout.SizeConstraint.SetFixedSize)
         row.addWidget(self.label, 1)
         if undo is not None:
@@ -51,6 +50,34 @@ class Toast(QFrame):
         self._slide.setStartValue(0.0)
         self._slide.setEndValue(1.0)
         self._slide.valueChanged.connect(self._on_slide)
+        self._lifetime = QTimer(self)
+        self._lifetime.setSingleShot(True)
+        self._lifetime.timeout.connect(self.close_now)
+
+    def _fit_label(self, message: str) -> None:
+        """Long messages wrap at 340px; short ones stay on one line."""
+        wrap = self.label.fontMetrics().horizontalAdvance(message) > 340
+        self.label.setWordWrap(wrap)
+        if wrap:
+            self.label.setFixedSize(340, self.label.heightForWidth(340))
+        else:
+            self.label.setMinimumSize(0, 0)
+            self.label.setMaximumSize(16777215, 16777215)
+            self.label.adjustSize()
+
+    def update_message(self, message: str, tone: str = "") -> None:
+        """Replace the text of a toast that is already on screen (no second toast)."""
+        self.label.setText(message)
+        self._fit_label(message)
+        if self._dot is not None:
+            self._dot.setProperty("tone", tone)
+            self._dot.style().unpolish(self._dot)
+            self._dot.style().polish(self._dot)
+        self.adjustSize()
+
+    def keep_for(self, ms: int) -> None:
+        """(Re)start the countdown after which the toast closes itself."""
+        self._lifetime.start(ms)
 
     def restyle(self) -> None:
         p = get_palette()
@@ -78,6 +105,7 @@ class Toast(QFrame):
         if self._gone:
             return
         self._gone = True
+        self._lifetime.stop()
         self._slide.stop()
         self.hide()
         self.setParent(None)
@@ -96,17 +124,30 @@ class ToastStack(QWidget):
         self._layout.setContentsMargins(0, 0, 0, 0)
         self._layout.setSpacing(8)
         self._toasts: list[Toast] = []
+        self._keys: dict[Toast, str] = {}
         self.hide()
 
-    def show_toast(self, message: str, undo=None, tone: str = "", ms: int = 4000) -> Toast:
+    def show_toast(self, message: str, undo=None, tone: str = "", ms: int = 4000, key: str | None = None) -> Toast:
+        """Show a toast. The same `key` (or, without one, the same text) never stacks: the toast that is
+        already on screen is updated and kept a little longer, so repeats don't pile up."""
         if undo is not None:
             ms = max(ms, 6000)
+        identity = key if key is not None else (message if undo is None else None)
+        if identity is not None:
+            for existing in self._toasts:
+                if self._keys.get(existing) == identity:
+                    existing.update_message(message, tone)
+                    existing.keep_for(ms)
+                    self._reposition()
+                    return existing
         while len(self._toasts) >= MAX_TOASTS:
             self._toasts[0].close_now()
         toast = Toast(self, message, undo, tone, self._forget)
         self._toasts.append(toast)
+        if identity is not None:
+            self._keys[toast] = identity
         self._layout.addWidget(toast, 0, Qt.AlignmentFlag.AlignRight)
-        QTimer.singleShot(ms, toast.close_now)
+        toast.keep_for(ms)
         self.show()
         self._reposition()
         self.raise_()
@@ -117,6 +158,7 @@ class ToastStack(QWidget):
     def _forget(self, toast: Toast) -> None:
         if toast in self._toasts:
             self._toasts.remove(toast)
+        self._keys.pop(toast, None)
         self._layout.removeWidget(toast)
         if not self._toasts:
             self.hide()

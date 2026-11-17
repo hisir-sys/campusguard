@@ -9,6 +9,7 @@ from PySide6.QtCore import QObject, QThread, QTimer, Signal
 from PySide6.QtGui import QImage
 
 from campusguard.ai_pipeline import VisionPipeline
+from campusguard.camera_notices import OPERATOR_STOP_MESSAGE
 from campusguard.engine.gate import CameraScheduler
 from campusguard.engine.hardware import (
     detect_hardware,
@@ -416,7 +417,7 @@ class CameraCaptureThread(QThread):
                 capture.release()
             self.mailbox.close()
             if previously_connected and self.isInterruptionRequested():
-                self.status_changed.emit("OFFLINE", "Camera stopped by operator.")
+                self.status_changed.emit("OFFLINE", OPERATOR_STOP_MESSAGE)
 
     def _interruptible_sleep(self, seconds: int) -> None:
         remaining_ms = seconds * 1000
