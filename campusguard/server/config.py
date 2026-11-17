@@ -29,6 +29,12 @@ class ServerConfig:
     # Send a summary + incident metadata (never video) to the school's website account.
     # Off until an administrator turns it on: sending anything needs a deliberate yes.
     cloud_sync: bool = False
+    # Most cameras this server will accept. 150 or 250 suits one server per building,
+    # 1000 suits one strong GPU server for the whole campus. Adding more is refused.
+    max_cameras: int = 250
+
+
+CAMERA_CAPACITY_PRESETS = (150, 250, 1000)
 
 
 def _clamp_int(value, low, high, default):
@@ -93,6 +99,7 @@ def normalise(values: dict) -> ServerConfig:
         school_id=str(values.get("school_id", "")).strip()[:80],
         peers=normalise_peers(values.get("peers")),
         cloud_sync=_as_bool(values.get("cloud_sync"), base.cloud_sync),
+        max_cameras=_clamp_int(values.get("max_cameras"), 1, 2000, base.max_cameras),
     )
 
 

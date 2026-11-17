@@ -26,7 +26,7 @@ def test_the_template_is_a_valid_file_whose_examples_are_ignored_until_uncomment
     lines = template_csv().splitlines()
     uncommented = "\r\n".join([lines[0]] + [line.replace("# ", "", 1) for line in lines[2:]])  # drop the instructions row
     plan = parse_camera_csv(uncommented)
-    assert [row.name for row in plan.rows] == ["Main Gate", "Library Corridor", "Parking", "Office webcam"]
+    assert [row.name for row in plan.rows] == ["Main Gate", "Library Corridor", "Playground", "Gym (used at night)"]
     assert all(row.ready for row in plan.rows), [row.status for row in plan.rows]
 
 
@@ -46,6 +46,10 @@ def test_a_full_row_becomes_the_values_the_add_camera_form_produces():
         "group_name": "Entrances",
         "threshold_offset": -0.10,
         "ai_enabled": False,
+        "quiet_start": "",
+        "quiet_end": "",
+        "pre_roll_seconds": 0.0,
+        "post_roll_seconds": 0.0,
     }
 
 

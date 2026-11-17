@@ -344,6 +344,33 @@ class CameraFormDialog(QDialog):
         for label, offset in SENSITIVITY_LEVELS:
             self.sensitivity_input.addItem(label, offset)
         form.addRow("Alert sensitivity", self.sensitivity_input)
+        quiet_widget = QWidget()
+        quiet_layout = QHBoxLayout(quiet_widget)
+        quiet_layout.setContentsMargins(0, 0, 0, 0)
+        quiet_layout.setSpacing(8)
+        self.quiet_start_input = QLineEdit()
+        self.quiet_start_input.setPlaceholderText("22:00")
+        self.quiet_start_input.setMaximumWidth(80)
+        self.quiet_end_input = QLineEdit()
+        self.quiet_end_input.setPlaceholderText("06:00")
+        self.quiet_end_input.setMaximumWidth(80)
+        quiet_hint = QLabel("AI paused between these times (24-hour). Leave empty to watch all day.")
+        quiet_hint.setProperty("muted", True)
+        quiet_layout.addWidget(self.quiet_start_input)
+        quiet_layout.addWidget(QLabel("to"))
+        quiet_layout.addWidget(self.quiet_end_input)
+        quiet_layout.addWidget(quiet_hint, 1)
+        form.addRow("Quiet hours", quiet_widget)
+        self.pre_roll_input = QComboBox()
+        self.post_roll_input = QComboBox()
+        self.pre_roll_input.addItem("School default", 0.0)
+        self.post_roll_input.addItem("School default", 0.0)
+        for seconds in (3, 5, 8, 10, 15):
+            self.pre_roll_input.addItem(f"{seconds} seconds before", float(seconds))
+        for seconds in (5, 8, 12, 20, 30):
+            self.post_roll_input.addItem(f"{seconds} seconds after", float(seconds))
+        form.addRow("Clip starts", self.pre_roll_input)
+        form.addRow("Clip ends", self.post_roll_input)
         form.addRow("Source type", self.type_input)
 
         self.detected_widget = QWidget()
@@ -431,6 +458,10 @@ class CameraFormDialog(QDialog):
             key=lambda i: abs(float(self.sensitivity_input.itemData(i)) - float(camera.threshold_offset)),
         )
         self.sensitivity_input.setCurrentIndex(index)
+        self.quiet_start_input.setText(camera.quiet_start)
+        self.quiet_end_input.setText(camera.quiet_end)
+        for combo, value in ((self.pre_roll_input, camera.pre_roll_seconds), (self.post_roll_input, camera.post_roll_seconds)):
+            combo.setCurrentIndex(min(range(combo.count()), key=lambda i: abs(float(combo.itemData(i)) - float(value))))
         self.type_input.setCurrentText(camera.source_type.upper())
         self.address_input.setText(camera.source_address)
         if credentials is not None and camera.source_type.upper() != "USB":
@@ -559,6 +590,10 @@ class CameraFormDialog(QDialog):
             "password": self.password_input.text(),
             "group_name": " ".join(self.group_input.currentText().split())[:40],
             "threshold_offset": float(self.sensitivity_input.currentData() or 0.0),
+            "quiet_start": self.quiet_start_input.text().strip(),
+            "quiet_end": self.quiet_end_input.text().strip(),
+            "pre_roll_seconds": float(self.pre_roll_input.currentData() or 0.0),
+            "post_roll_seconds": float(self.post_roll_input.currentData() or 0.0),
         }
 
     def _test_connection(self) -> None:
@@ -607,6 +642,16 @@ class CameraFormDialog(QDialog):
             self.validation_status.setText("Source address required — enter a camera source address.")
             self.validation_status.show()
             return
+        from campusguard.tuning import normalise_quiet_window
+
+        start, end = normalise_quiet_window(values["quiet_start"], values["quiet_end"])
+        if (values["quiet_start"] or values["quiet_end"]) and not start:
+            self.validation_status.setText(
+                "Quiet hours need two different times in 24-hour form, for example 22:00 to 06:00."
+            )
+            self.validation_status.show()
+            return
+        values["quiet_start"], values["quiet_end"] = start, end
         from campusguard.camera_runtime import build_capture_source
 
         try:

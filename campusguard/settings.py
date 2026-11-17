@@ -28,6 +28,17 @@ def _retention_days(value: Any, maximum: int) -> int:
     return 0 if days <= 0 else min(maximum, days)
 
 
+def _seconds(value: Any, default: float, low: float, high: float) -> float:
+    """A number inside [low, high]; anything unusable falls back to the default."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return float(default)
+    if number != number:          # NaN
+        return float(default)
+    return max(low, min(high, number))
+
+
 START_PAGES = ("dashboard", "cameras", "incidents", "alerts")
 
 
@@ -73,6 +84,20 @@ class AppSettings:
     # How long this PC keeps incident clips / incident records. 0 = until deleted by hand.
     footage_retention_days: int = 0
     incident_retention_days: int = 0
+    # Incident clips: a few seconds before the detection and after it calms down, at a steady,
+    # smooth frame rate (see campusguard/evidence.py). A camera can override the two lengths.
+    default_pre_roll_seconds: float = 5.0
+    default_post_roll_seconds: float = 8.0
+    clip_fps: int = 20
+    clip_width: int = 1280
+    # Who gets the alert. `alert_numbers` is the head of the school and receives every alert.
+    # `building_numbers` adds people per building (the camera's zone/group), one line each:
+    #   Main Building: 98765 43210, 91234 56789
+    building_numbers: str = ""
+    # IT contacts told when a camera or the disk has a problem (not fights).
+    health_numbers: str = ""
+    health_offline_minutes: int = 5
+    health_min_disk_gb: int = 20
 
     @classmethod
     def from_dict(cls, values: dict[str, Any]) -> "AppSettings":
@@ -115,6 +140,14 @@ class AppSettings:
             cloud_sync=candidate.cloud_sync if candidate.cloud_sync in CLOUD_SYNC_CHOICES else "ask",
             footage_retention_days=_retention_days(candidate.footage_retention_days, 3650),
             incident_retention_days=_retention_days(candidate.incident_retention_days, 36500),
+            default_pre_roll_seconds=_seconds(candidate.default_pre_roll_seconds, 5.0, 1.0, 15.0),
+            default_post_roll_seconds=_seconds(candidate.default_post_roll_seconds, 8.0, 1.0, 30.0),
+            clip_fps=int(_seconds(candidate.clip_fps, 20, 8, 30)),
+            clip_width=int(_seconds(candidate.clip_width, 1280, 480, 1920)),
+            building_numbers=str(candidate.building_numbers)[:4000],
+            health_numbers=str(candidate.health_numbers)[:600],
+            health_offline_minutes=int(_seconds(candidate.health_offline_minutes, 5, 1, 120)),
+            health_min_disk_gb=int(_seconds(candidate.health_min_disk_gb, 20, 1, 100000)),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -129,7 +162,13 @@ class CameraConfig:
     ai_enabled: bool
     created_at: str
     threshold_offset: float = 0.0
-    group_name: str = ""
+    group_name: str = ""          # the zone/building; alerts are routed by it
+    # Per-camera tuning. Quiet hours pause the AI (for example a gym used at night).
+    # 0 for a roll length means "use the school-wide default".
+    quiet_start: str = ""
+    quiet_end: str = ""
+    pre_roll_seconds: float = 0.0
+    post_roll_seconds: float = 0.0
 
 @dataclass(frozen=True)
 class CameraCredentials:

@@ -50,6 +50,33 @@ def parse_numbers(text: str, country_code: str = "91") -> list[str]:
     return seen[:MAX_NUMBERS]
 
 
+def _group_key(name: str) -> str:
+    return " ".join(str(name or "").casefold().split())
+
+
+def parse_building_numbers(text: str, country_code: str = "91") -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """'Main Building: 98765 43210, 91234 56789' (one building per line) -> (("main building", (...)),).
+
+    The building name is matched against a camera's zone/group, ignoring case and extra spaces.
+    A line without a name or without a valid number is ignored.
+    """
+    routes: dict[str, list[str]] = {}
+    for line in re.split(r"[\n\r]+", text or ""):
+        if ":" in line:
+            name, _, numbers = line.partition(":")
+        elif "=" in line:
+            name, _, numbers = line.partition("=")
+        else:
+            continue
+        key = _group_key(name)
+        valid = parse_numbers(numbers, country_code)
+        if not key or not valid:
+            continue
+        merged = routes.setdefault(key, [])
+        merged.extend(number for number in valid if number not in merged)
+    return tuple((key, tuple(numbers[:MAX_NUMBERS])) for key, numbers in routes.items())
+
+
 def severity_passes(severity: str, minimum: str) -> bool:
     return SEVERITY_ORDER.get(str(severity).upper(), 0) >= SEVERITY_ORDER.get(str(minimum).upper(), 1)
 
@@ -63,6 +90,7 @@ class AlertInfo:
     severity: str
     when: datetime
     clip_path: str | None = None
+    group_name: str = ""     # the camera's zone / building; picks the extra recipients
 
     @property
     def percent(self) -> float:
@@ -73,7 +101,7 @@ def format_message(info: AlertInfo, escalated: bool = False) -> str:
     lines = [
         "CampusGuard ESCALATED ALERT - not yet acknowledged" if escalated else "CampusGuard ALERT",
         f"Possible fight: {info.percent:.0f}% confidence ({info.severity.title()})",
-        f"Place: {info.camera_name} ({info.camera_id})",
+        f"Place: {info.camera_name} ({info.camera_id})" + (f", {info.group_name}" if info.group_name else ""),
         f"Time: {info.when.strftime('%d %b %Y, %H:%M')}",
         f"Incident: {info.incident_id}",
     ]
@@ -144,6 +172,26 @@ def send_ntfy(server: str, topic: str, info: AlertInfo, message: str, attach_cli
     return 200 <= status < 300, f"ntfy {status}" if not 200 <= status < 300 else "ntfy ok"
 
 
+def send_ntfy_text(server: str, topic: str, title: str, text: str) -> tuple[bool, str]:
+    topic = re.sub(r"[^A-Za-z0-9_-]", "", topic or "")
+    if not topic:
+        return False, "ntfy topic is empty"
+    base = (server or "https://ntfy.sh").rstrip("/")
+    headers = {"Title": title[:120], "Priority": "3", "Tags": "warning"}
+    status, _ = _http(f"{base}/{topic}", text.encode("utf-8"), headers)
+    return 200 <= status < 300, "ntfy ok" if 200 <= status < 300 else f"ntfy {status}"
+
+
+def send_whatsapp_text(phone_id: str, token: str, number: str, text: str) -> tuple[bool, str]:
+    """Plain WhatsApp text. WhatsApp only delivers this inside 24 hours of the person writing to
+    the business number; for anything else use a Meta-approved template."""
+    if not (phone_id and token):
+        return False, "WhatsApp Cloud API phone number ID or token is missing"
+    body = {"messaging_product": "whatsapp", "to": number, "type": "text", "text": {"body": text[:1500]}}
+    status, detail = _http(f"{GRAPH_URL}/{urllib.parse.quote(phone_id)}/messages", json.dumps(body).encode(), _graph_headers(token))
+    return 200 <= status < 300, "whatsapp ok" if 200 <= status < 300 else f"WhatsApp {status}: {detail[:120]}"
+
+
 def _graph_headers(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
@@ -206,10 +254,29 @@ class AlertPlan:
     ntfy_topic: str = ""
     ntfy_server: str = "https://ntfy.sh"
     ntfy_attach_clip: bool = False
+    # Extra recipients per building (zone), on top of `numbers` (the head of the school, who
+    # gets every alert). See parse_building_numbers.
+    building_numbers: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    health_numbers: tuple[str, ...] = ()      # IT contacts for camera / disk problems
 
     @property
     def active(self) -> bool:
-        return bool((self.numbers and self.whatsapp_mode != "off") or self.ntfy_topic)
+        has_people = bool(self.numbers or self.building_numbers)
+        return bool((has_people and self.whatsapp_mode != "off") or self.ntfy_topic)
+
+    def recipients(self, info: AlertInfo, escalated: bool = False) -> tuple[str, ...]:
+        """Head of school first, then the building's people; nobody twice.
+
+        An escalation (nobody acknowledged) goes to the escalation list when there is one.
+        """
+        if escalated and self.escalation_numbers:
+            return self.escalation_numbers
+        key = _group_key(info.group_name)
+        chosen: list[str] = list(self.numbers)
+        for name, numbers in self.building_numbers:
+            if key and name == key:
+                chosen.extend(number for number in numbers if number not in chosen)
+        return tuple(chosen)
 
 
 class AlertDispatcher:
@@ -273,7 +340,7 @@ class AlertDispatcher:
 
     def _send_all(self, plan: AlertPlan, info: AlertInfo, escalated: bool, clip_only: bool = False) -> None:
         message = format_message(info, escalated)
-        targets = plan.escalation_numbers if escalated and plan.escalation_numbers else plan.numbers
+        targets = plan.recipients(info, escalated)
         results: list[tuple[bool, str]] = []
         if plan.ntfy_topic and not (clip_only and not plan.ntfy_attach_clip):
             results.append(send_ntfy(plan.ntfy_server, plan.ntfy_topic, info, message, plan.ntfy_attach_clip and bool(info.clip_path)))
@@ -288,6 +355,29 @@ class AlertDispatcher:
         for ok, detail in results:
             if not ok:
                 self._log("phone_alert_failed", f"Phone alert for {info.incident_id} failed: {detail}")
+
+    def send_notice(self, title: str, text: str) -> None:
+        """A plain heads-up for the IT contacts (camera offline, disk nearly full). Never raises."""
+        plan = self.plan
+        def work() -> None:
+            results: list[tuple[bool, str]] = []
+            try:
+                if plan.ntfy_topic:
+                    results.append(send_ntfy_text(plan.ntfy_server, plan.ntfy_topic, title, text))
+                if plan.whatsapp_mode == "cloud":
+                    for number in plan.health_numbers:
+                        results.append(send_whatsapp_text(plan.phone_id, plan.token, number, f"{title}\n{text}"))
+            except Exception as error:      # a failed notice must never stop the server
+                results.append((False, str(error)))
+            for ok, detail in results:
+                if not ok:
+                    self._log("health_notice_failed", f"Health notice '{title}' failed: {detail}")
+        threading.Thread(target=work, daemon=True).start()
+
+    @property
+    def can_send_notices(self) -> bool:
+        plan = self.plan
+        return bool(plan.ntfy_topic or (plan.whatsapp_mode == "cloud" and plan.health_numbers))
 
     @staticmethod
     def _video_only(plan: AlertPlan, number: str, info: AlertInfo) -> tuple[bool, str]:

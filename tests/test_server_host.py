@@ -48,6 +48,7 @@ class FakeManager(QObject):
     def set_camera_snapshot(self, camera_id, enabled): self.snapshot_enabled[camera_id] = enabled
     def set_camera_snapshot_rate(self, camera_id, fps): self.snapshot_rates = getattr(self, "snapshot_rates", {}); self.snapshot_rates[camera_id] = fps
     def reconnect(self, camera_id, camera=None): self.reconnected.append(camera_id)
+    def set_camera_tuning(self, camera_id, *values): self.tuning = getattr(self, "tuning", {}); self.tuning[camera_id] = values
     def stop_all(self): self.stopped.append("ALL")
 
 
@@ -374,3 +375,72 @@ def test_run_server_full_start_serve_and_clean_stop(tmp_path, monkeypatch):
     for name in ("campusguard.camera_runtime", "campusguard.ai_pipeline", "campusguard.model_registry",
                  "campusguard.model_adapters"):
         sys.modules.pop(name, None)
+
+
+def test_server_refuses_cameras_beyond_its_limit(env):
+    env.host.config.max_cameras = 2
+    assert env.call("POST", "/cameras", {"name": "A", "address": "rtsp://10.0.1.1/s"})[0] == 201
+    assert env.call("POST", "/cameras", {"name": "B", "address": "rtsp://10.0.1.2/s"})[0] == 201
+    status, body = env.call("POST", "/cameras", {"name": "C", "address": "rtsp://10.0.1.3/s"})
+    assert status == 409 and "full (2 cameras)" in body["error"]
+    status, body = env.call("GET", "/status")
+    assert body["camera_capacity"] == 2 and body["camera_slots_free"] == 0
+    rows = "name,address\nD,rtsp://10.0.1.4/s\n"
+    status, body = env.call("POST", "/cameras/import", raw=rows.encode())
+    assert body["added"] == 0 and body["errors"]
+
+
+def test_camera_tuning_and_building_via_api(env):
+    env.call("POST", "/cameras", {"name": "Gym", "address": "rtsp://10.0.2.1/s"})
+    status, body = env.call("POST", "/cameras/CAM-001/tuning",
+                            {"quiet_start": "22:00", "quiet_end": "06:00", "pre_roll_seconds": 6, "post_roll_seconds": 15, "group": "Sports Block"})
+    assert status == 200 and body["quiet_start"] == "22:00" and body["group"] == "Sports Block"
+    assert env.manager.tuning["CAM-001"] == ("22:00", "06:00", 6.0, 15.0)
+    saved = env.repo.list_cameras()[0]
+    assert (saved.quiet_start, saved.pre_roll_seconds, saved.group_name) == ("22:00", 6.0, "Sports Block")
+    assert env.call("POST", "/cameras/CAM-001/tuning", {"pre_roll_seconds": 99})[0] == 400
+    assert env.call("POST", "/cameras/CAM-001/tuning", {})[0] == 400
+    assert env.call("POST", "/cameras/CAM-404/tuning", {"group": "x"})[0] == 404
+
+
+def test_server_sends_the_phone_alert_to_head_and_building(env, monkeypatch):
+    from campusguard.settings import AppSettings
+    env.call("POST", "/cameras", {"name": "Corridor", "address": "rtsp://10.0.3.1/s"})
+    env.call("POST", "/cameras/CAM-001/tuning", {"group": "Block B"})
+    settings = env.repo.get_settings()
+    env.repo.save_settings(AppSettings.from_dict({**settings.to_dict(), "alert_numbers": "98000 00001",
+                                                  "building_numbers": "Block B: 98000 00002", "whatsapp_mode": "cloud",
+                                                  "whatsapp_phone_id": "123"}))
+    env.host.refresh_alert_plan()
+    seen = []
+    monkeypatch.setattr(env.host.dispatcher, "dispatch", lambda info, acknowledged: seen.append(info))
+    env.manager.event_detected.emit("CAM-001", "FIGHT DETECTED", 0.93, "HIGH")
+    pump(env.app, 0.2)
+    assert len(seen) == 1 and seen[0].group_name == "Block B" and seen[0].camera_name == "Corridor"
+    assert env.host.dispatcher.plan.recipients(seen[0]) == ("919800000001", "919800000002")
+    # the saved clip is sent afterwards
+    clips = []
+    monkeypatch.setattr(env.host.dispatcher, "send_clip_later", lambda info: clips.append(info))
+    clip = env.tmp / "clip.mp4"
+    clip.write_bytes(b"x")
+    env.manager.footage_saved.emit("CAM-001", str(clip))
+    pump(env.app, 0.2)
+    assert len(clips) == 1 and clips[0].clip_path == str(clip)
+
+
+def test_health_check_tells_it_once_and_waits_for_startup(env, monkeypatch):
+    env.call("POST", "/cameras", {"name": "Gate", "address": "rtsp://10.0.4.1/s"})
+    notices = []
+    monkeypatch.setattr(env.host.dispatcher, "send_notice", lambda title, text: notices.append((title, text)))
+    monkeypatch.setattr(type(env.host.dispatcher), "can_send_notices", property(lambda self: True))
+    env.host.health_watch.configure(60, 1)
+    env.host.health.snapshot = lambda: {"CAM-001": {"health": "offline"}}
+    env.host.started_at = time.time()                      # just started: stay quiet
+    env.host.check_health()
+    assert notices == []
+    env.host.started_at = time.time() - 1000
+    env.host.check_health()                                # the offline clock starts now
+    monkeypatch.setattr(time, "monotonic", lambda real=time.monotonic: real() + 400)
+    env.host.check_health()
+    env.host.check_health()
+    assert len(notices) == 1 and "Gate" in notices[0][1]

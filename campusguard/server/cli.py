@@ -243,6 +243,13 @@ def configure_server(argv: list[str]) -> int:
             if not math.isfinite(parsed_limit) or not 1.0 <= parsed_limit <= 100000.0:
                 raise ValueError("Footage size limit must be between 1 and 100000 GB.")
             config.max_footage_gb = parsed_limit
+        max_cameras = _option(argv, "--max-cameras")
+        if max_cameras is not None:
+            parsed_max = int(max_cameras)
+            if not 1 <= parsed_max <= 2000:
+                raise ValueError("The camera limit must be between 1 and 2000 (usual choices: 150, 250 or 1000).")
+            config.max_cameras = parsed_max
+        _apply_alert_options(argv)
         server_name = _option(argv, "--server-name")
         if server_name is not None:
             config.server_name = server_name.strip()[:60] or config.server_name
@@ -281,6 +288,44 @@ def configure_server(argv: list[str]) -> int:
         if sys.stdout is not None:
             print(f"Could not save server settings: {error}")
         return 1
+
+
+ALERT_OPTIONS = {
+    "--alert-numbers": "alert_numbers",            # head of the school: gets every alert
+    "--building-numbers": "building_numbers",      # "Main: 98.., 97..; Block B: 99.." (; or new line between buildings)
+    "--escalation-numbers": "escalation_numbers",
+    "--health-numbers": "health_numbers",
+    "--whatsapp-mode": "whatsapp_mode",
+    "--whatsapp-phone-id": "whatsapp_phone_id",
+    "--whatsapp-template": "whatsapp_template",
+    "--ntfy-topic": "ntfy_topic",
+    "--country-code": "country_code",
+    "--min-severity": "alert_min_severity",
+}
+
+
+def _apply_alert_options(argv: list[str]) -> None:
+    """Save phone-alert settings for the headless server (the server has no settings screen)."""
+    from campusguard.settings import AppSettings
+    from campusguard.storage import Repository
+
+    changes: dict[str, str] = {}
+    for flag, key in ALERT_OPTIONS.items():
+        value = _option(argv, flag)
+        if value is None:
+            continue
+        if key == "building_numbers":
+            value = value.replace(";", "\n")
+        changes[key] = value
+    token = _option(argv, "--whatsapp-token")
+    if not changes and not token:
+        return
+    repository = Repository()
+    if changes:
+        merged = {**repository.get_settings().to_dict(), **changes}
+        repository.save_settings(AppSettings.from_dict(merged))
+    if token:
+        _peer_vault().save_whatsapp_token(token.strip())
 
 
 def _peer_vault():

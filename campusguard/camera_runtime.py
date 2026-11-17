@@ -18,8 +18,10 @@ from campusguard.engine.hardware import (
     smart_analysis_enabled,
 )
 from campusguard.engine.registry import ACTIVE_CAMERAS
+from campusguard.evidence import EvidenceRecorder, EvidenceRing
 from campusguard.footage import FightFootageRecorder
 from campusguard.storage import application_data_dir
+from campusguard.tuning import clamp_post_roll, clamp_pre_roll, in_quiet_hours
 from campusguard.credentials import CredentialVault
 
 from campusguard.settings import AppSettings, CameraConfig, CameraCredentials, effective_threshold
@@ -207,11 +209,26 @@ def _replace_threshold(settings: AppSettings, threshold: float) -> AppSettings:
 
 
 class RuntimeOptions:
-    def __init__(self, settings: AppSettings, ai_enabled: bool, threshold_offset: float = 0.0) -> None:
+    def __init__(
+        self,
+        settings: AppSettings,
+        ai_enabled: bool,
+        threshold_offset: float = 0.0,
+        quiet_start: str = "",
+        quiet_end: str = "",
+        pre_roll_seconds: float = 0.0,
+        post_roll_seconds: float = 0.0,
+    ) -> None:
         self._lock = threading.RLock()
         self._settings = settings
         self._ai_enabled = ai_enabled
         self._threshold_offset = float(threshold_offset)
+        self._quiet = (quiet_start, quiet_end)
+        self._pre_roll = float(pre_roll_seconds)
+        self._post_roll = float(post_roll_seconds)
+        # Every frame the camera delivers goes here, so saved clips are smooth even when the AI
+        # only looks at some of them.
+        self.ring = EvidenceRing(fps=settings.clip_fps, width=settings.clip_width)
         self._adjusted: tuple[AppSettings, float, AppSettings] | None = None
         self._source_fps = 30.0
         self._preview_enabled = True
@@ -220,7 +237,22 @@ class RuntimeOptions:
 
     def snapshot(self) -> tuple[AppSettings, bool]:
         with self._lock:
-            return self._effective_settings(), self._ai_enabled
+            ai = self._ai_enabled and not in_quiet_hours(*self._quiet)
+            return self._effective_settings(), ai
+
+    def update_tuning(self, quiet_start: str, quiet_end: str, pre_roll_seconds: float, post_roll_seconds: float) -> None:
+        with self._lock:
+            self._quiet = (quiet_start, quiet_end)
+            self._pre_roll = float(pre_roll_seconds)
+            self._post_roll = float(post_roll_seconds)
+
+    def roll_seconds(self) -> tuple[float, float]:
+        """(pre, post) for this camera: its own value, else the school-wide default."""
+        with self._lock:
+            return (
+                clamp_pre_roll(self._pre_roll, self._settings.default_pre_roll_seconds),
+                clamp_post_roll(self._post_roll, self._settings.default_post_roll_seconds),
+            )
 
     def _effective_settings(self) -> AppSettings:
         """The global settings with this camera's sensitivity offset applied (cached)."""
@@ -243,6 +275,7 @@ class RuntimeOptions:
     def update_settings(self, settings: AppSettings) -> None:
         with self._lock:
             self._settings = settings
+        self.ring.configure(fps=settings.clip_fps, width=settings.clip_width)
 
     def update_ai_enabled(self, enabled: bool) -> None:
         with self._lock:
@@ -381,6 +414,10 @@ class CameraCaptureThread(QThread):
                     consecutive_read_failures = 0
                     height, width = frame.shape[:2]
                     self.mailbox.publish(frame)
+                    try:
+                        self.options.ring.push(frame)
+                    except Exception:
+                        pass      # a clip problem must never take the live camera down
                     frame_count += 1
                     elapsed = time.monotonic() - stats_started
                     if elapsed >= 1.0:
@@ -446,9 +483,10 @@ class FrameAnalysisThread(QThread):
         super().__init__()
         self.mailbox = mailbox
         self.options = options
-        self.footage_recorder = FightFootageRecorder(
-            footage_dir or (application_data_dir() / "footage")
+        self.footage_recorder = EvidenceRecorder(
+            footage_dir or (application_data_dir() / "footage"), options.ring
         )
+
     def run(self) -> None:
         ACTIVE_CAMERAS.enter()
         try:
@@ -507,7 +545,10 @@ class FrameAnalysisThread(QThread):
                     preview_interval = (
                         1.0 / profile.preview_max_fps if profile.preview_max_fps > 0 else 0.0
                     )
-                    self.footage_recorder.max_prebuffer_bytes = profile.prebuffer_bytes
+                    # The evidence buffer holds compressed frames, so it needs far less than raw frames.
+                    self.options.ring.set_max_bytes(
+                        min(40 * 1024 * 1024, profile.prebuffer_bytes) if profile.prebuffer_bytes else None
+                    )
                     if pipeline is not None:
                         pipeline.batch_detector = profile.batch_detector
 
@@ -617,11 +658,10 @@ class FrameAnalysisThread(QThread):
                     if encoded_ok and encoded.nbytes <= 512 * 1024:
                         self.snapshot_ready.emit(encoded.tobytes())
 
+                self.footage_recorder.set_roll(*self.options.roll_seconds())
                 finished_footage = self.footage_recorder.update(
-                    frame,
                     state,
                     event_started=event is not None,
-                    source_fps=self.options.source_fps,
                 )
                 if finished_footage is not None:
                     self.footage_saved.emit(str(finished_footage))
@@ -874,7 +914,10 @@ class CameraManager(QObject):
             )
             return
         mailbox = LatestFrameMailbox()
-        options = RuntimeOptions(self._settings, camera.ai_enabled, camera.threshold_offset)
+        options = RuntimeOptions(
+            self._settings, camera.ai_enabled, camera.threshold_offset,
+            camera.quiet_start, camera.quiet_end, camera.pre_roll_seconds, camera.post_roll_seconds,
+        )
         options.set_preview_enabled(self.default_preview)
         capture = CameraCaptureThread(camera, credentials, mailbox, options)
         analysis = FrameAnalysisThread(mailbox, options, self.footage_dir)
@@ -947,6 +990,13 @@ class CameraManager(QObject):
         session = self._sessions.get(camera_id)
         if session is not None:
             session.options.update_threshold_offset(offset)
+
+    def set_camera_tuning(
+        self, camera_id: str, quiet_start: str, quiet_end: str, pre_roll_seconds: float, post_roll_seconds: float
+    ) -> None:
+        session = self._sessions.get(camera_id)
+        if session is not None:
+            session.options.update_tuning(quiet_start, quiet_end, pre_roll_seconds, post_roll_seconds)
 
     def reconnect(self, camera_id: str, camera: CameraConfig | None = None) -> None:
         if self._shutting_down:

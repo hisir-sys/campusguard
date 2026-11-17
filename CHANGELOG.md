@@ -1,5 +1,15 @@
 # CampusGuard Desktop — Update Notes
 
+## Built for schools with several buildings (server mode)
+
+- **Smoother incident clips, with a lead-in and a follow-on.** Clips used to be cut from the frames the AI happened to look at, so they could look choppy when the AI ran behind. A separate short buffer now keeps *every* camera frame (compressed, a few seconds per camera, never a 24/7 recording). A clip starts **5 s before** the detection and ends **8 s after** things calm down (both changeable per school and per camera), saved at about **20 fps** (settings: `clip_fps` 8-30, `clip_width` 480-1920). Not tested on real cameras.
+- **Per-camera tuning:** quiet hours (the AI is paused between two times, e.g. a gym at night 22:00-06:00), clip start/end seconds, sensitivity and building. Set in the camera form (app), in the CSV (`quiet_start`, `quiet_end`, `pre_roll`, `post_roll`, `group`, `sensitivity`) or over the server API (`POST /cameras/<id>/tuning`).
+- **The headless server now sends the phone alerts itself.** Before, only the desktop app did. The head of the school (`alert_numbers`) gets every alert; people for a building (`building_numbers`, one line per building such as `Main Building: 98... , 97...`) are added when the camera's group matches. Nobody gets the same alert twice. Configure with `--alert-numbers`, `--building-numbers`, `--escalation-numbers`, `--health-numbers`, `--whatsapp-mode`, `--whatsapp-phone-id`, `--whatsapp-token`, `--ntfy-topic`.
+- **Health monitoring:** the server tells the IT contacts when a camera has had no picture for 5 minutes (changeable), when it is back, and when the disk running the clips is low. One message per outage; many cameras dropping together (a switch or the recorder) is a single message.
+- **Camera limit per server:** `--max-cameras 150 | 250 | 1000` (default 250). A full server refuses more cameras and says so; `/status` reports `camera_capacity` and `camera_slots_free`.
+- **CSV import takes up to 1000 cameras per file**, plus the new columns above.
+- **Not tested here:** a real WhatsApp send, real cameras, GPU load at 150-250 cameras per server. Benchmark on the school's own hardware first.
+
 ## Import cameras from CSV, and fewer popups
 
 - **Import CSV** (new, on the Cameras page): add many cameras in one go. Columns: `name`, `type` (RTSP, HTTP, MJPEG, IP, USB) and `address` are required; `port`, `path`, `username`, `password`, `group`, `sensitivity` (Sensitive, Default, Cautious, Strict) and `ai` (yes/no) are optional. Column names are matched loosely (for example "Camera Name", "IP Address", "Zone"), and Excel's "CSV (Comma delimited)" files, semicolon files and UTF-8 files all work. **Download template** gives a ready file; rows starting with `#` are ignored.

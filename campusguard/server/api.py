@@ -58,6 +58,7 @@ _ROUTES: list[tuple[str, re.Pattern, str]] = [
     ("DELETE", re.compile(r"^/cameras/(?P<camera_id>[A-Za-z0-9_-]+)$"), "remove_camera"),
     ("POST", re.compile(r"^/cameras/(?P<camera_id>[A-Za-z0-9_-]+)/ai$"), "set_camera_ai"),
     ("POST", re.compile(r"^/cameras/(?P<camera_id>[A-Za-z0-9_-]+)/sensitivity$"), "set_camera_sensitivity"),
+    ("POST", re.compile(r"^/cameras/(?P<camera_id>[A-Za-z0-9_-]+)/tuning$"), "set_camera_tuning"),
     ("POST", re.compile(r"^/cameras/(?P<camera_id>[A-Za-z0-9_-]+)/reconnect$"), "reconnect_camera"),
     ("GET", re.compile(r"^/incidents$"), "list_incidents"),
     ("GET", re.compile(r"^/alerts$"), "list_alerts"),
@@ -295,6 +296,24 @@ class _Handler(BaseHTTPRequestHandler):
             raise ApiError(HTTPStatus.BAD_REQUEST, "'offset' must be a number between -0.25 and 0.25.")
         self.backend.set_camera_sensitivity(camera_id, float(offset))
         self._send_json(HTTPStatus.OK, {"camera_id": camera_id, "offset": float(offset)})
+
+    def _route_set_camera_tuning(self, query, camera_id: str) -> None:
+        data = self._read_json()
+        spec: dict = {}
+        for key in ("quiet_start", "quiet_end", "group"):
+            if key in data:
+                if not isinstance(data[key], str) or len(data[key]) > 40:
+                    raise ApiError(HTTPStatus.BAD_REQUEST, f"'{key}' must be text.")
+                spec[key] = data[key]
+        for key, maximum in (("pre_roll_seconds", 15), ("post_roll_seconds", 30)):
+            if key in data:
+                value = data[key]
+                if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= float(value) <= maximum:
+                    raise ApiError(HTTPStatus.BAD_REQUEST, f"'{key}' must be a number from 0 to {maximum}.")
+                spec[key] = float(value)
+        if not spec:
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Nothing to change.")
+        self._send_json(HTTPStatus.OK, self.backend.set_camera_tuning(camera_id, spec))
 
     def _route_reconnect_camera(self, query, camera_id: str) -> None:
         self.backend.reconnect_camera(camera_id)

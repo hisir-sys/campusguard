@@ -160,6 +160,14 @@ class Repository:
                 connection.execute("ALTER TABLE cameras ADD COLUMN group_name TEXT NOT NULL DEFAULT ''")
             if "threshold_offset" not in camera_columns:
                 connection.execute("ALTER TABLE cameras ADD COLUMN threshold_offset REAL NOT NULL DEFAULT 0")
+            for column, ddl in (
+                ("quiet_start", "TEXT NOT NULL DEFAULT ''"),
+                ("quiet_end", "TEXT NOT NULL DEFAULT ''"),
+                ("pre_roll_seconds", "REAL NOT NULL DEFAULT 0"),
+                ("post_roll_seconds", "REAL NOT NULL DEFAULT 0"),
+            ):
+                if column not in camera_columns:
+                    connection.execute(f"ALTER TABLE cameras ADD COLUMN {column} {ddl}")
             if "footage_sha256" not in columns:
                 connection.execute("ALTER TABLE incidents ADD COLUMN footage_sha256 TEXT")
             if "footage_path" not in columns:
@@ -195,6 +203,10 @@ class Repository:
                 created_at=row["created_at"],
                 threshold_offset=float(row["threshold_offset"] or 0.0),
                 group_name=str(row["group_name"] or ""),
+                quiet_start=str(row["quiet_start"] or ""),
+                quiet_end=str(row["quiet_end"] or ""),
+                pre_roll_seconds=float(row["pre_roll_seconds"] or 0.0),
+                post_roll_seconds=float(row["post_roll_seconds"] or 0.0),
             )
             for row in rows
         ]
@@ -247,6 +259,25 @@ class Repository:
                 "UPDATE cameras SET threshold_offset = ? WHERE camera_id = ?", (offset, camera_id)
             )
         self.log_audit("camera_sensitivity", camera_id, f"offset {offset:+.2f}")
+
+    def set_camera_tuning(
+        self, camera_id: str, quiet_start: str, quiet_end: str, pre_roll_seconds: float, post_roll_seconds: float
+    ) -> tuple[str, str, float, float]:
+        """Store a camera's quiet hours and clip lengths. Returns the cleaned values."""
+        from campusguard.tuning import normalise_quiet_window
+
+        start, end = normalise_quiet_window(quiet_start, quiet_end)
+        pre = 0.0 if not pre_roll_seconds or float(pre_roll_seconds) <= 0 else max(1.0, min(15.0, float(pre_roll_seconds)))
+        post = 0.0 if not post_roll_seconds or float(post_roll_seconds) <= 0 else max(1.0, min(30.0, float(post_roll_seconds)))
+        with self._lock, self._connection() as connection:
+            connection.execute(
+                "UPDATE cameras SET quiet_start = ?, quiet_end = ?, pre_roll_seconds = ?, post_roll_seconds = ? "
+                "WHERE camera_id = ?",
+                (start, end, pre, post, camera_id),
+            )
+        window = f"quiet {start}-{end}" if start else "no quiet hours"
+        self.log_audit("camera_tuning", camera_id, f"{window}, pre {pre:g}s, post {post:g}s")
+        return start, end, pre, post
 
     def set_camera_group(self, camera_id: str, group_name: str) -> None:
         group_name = " ".join(str(group_name).split())[:40]

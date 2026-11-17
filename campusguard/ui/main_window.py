@@ -33,7 +33,15 @@ from campusguard.camera_notices import describe_problems, is_problem
 
 from campusguard.footage import clear_footage
 from campusguard.credentials import CredentialVault
-from campusguard.notify import AlertDispatcher, AlertInfo, AlertPlan, parse_numbers, whatsapp_link, format_message
+from campusguard.notify import (
+    AlertDispatcher,
+    AlertInfo,
+    AlertPlan,
+    format_message,
+    parse_building_numbers,
+    parse_numbers,
+    whatsapp_link,
+)
 from campusguard.settings import (
     AppSettings,
     CameraConfig,
@@ -1336,7 +1344,14 @@ class MainWindow(QMainWindow):
             self.repository.set_camera_group(camera.camera_id, group)
         if offset:
             self.repository.set_camera_threshold_offset(camera.camera_id, offset)
-        camera = replace(camera, group_name=group, threshold_offset=offset)
+        quiet_start, quiet_end, pre, post = self.repository.set_camera_tuning(
+            camera.camera_id, str(values.get("quiet_start", "")), str(values.get("quiet_end", "")),
+            float(values.get("pre_roll_seconds", 0.0) or 0.0), float(values.get("post_roll_seconds", 0.0) or 0.0),
+        )
+        camera = replace(
+            camera, group_name=group, threshold_offset=offset,
+            quiet_start=quiet_start, quiet_end=quiet_end, pre_roll_seconds=pre, post_roll_seconds=post,
+        )
         self.cameras[camera.camera_id] = camera
         self.camera_stats[camera.camera_id] = CameraStats()
         self._previous_camera_status[camera.camera_id] = "CONNECTING"
@@ -1446,6 +1461,10 @@ class MainWindow(QMainWindow):
         self.repository.update_camera(camera_id, values["name"], values["source_type"], values["source_address"])
         self.repository.set_camera_group(camera_id, group)
         self.repository.set_camera_threshold_offset(camera_id, offset)
+        quiet_start, quiet_end, pre, post = self.repository.set_camera_tuning(
+            camera_id, str(values.get("quiet_start", "")), str(values.get("quiet_end", "")),
+            float(values.get("pre_roll_seconds", 0.0) or 0.0), float(values.get("post_roll_seconds", 0.0) or 0.0),
+        )
         updated = replace(
             camera,
             name=values["name"],
@@ -1453,10 +1472,12 @@ class MainWindow(QMainWindow):
             source_address=values["source_address"],
             group_name=group,
             threshold_offset=offset,
+            quiet_start=quiet_start, quiet_end=quiet_end, pre_roll_seconds=pre, post_roll_seconds=post,
         )
         self.cameras[camera_id] = updated
         if self.camera_manager is not None:
             self.camera_manager.set_camera_threshold_offset(camera_id, offset)
+            self.camera_manager.set_camera_tuning(camera_id, quiet_start, quiet_end, pre, post)
             # Credentials or address may have changed, so restart the stream on the new settings.
             if connection_changed or credentials != previous_credentials:
                 self._forget_camera_problem(camera_id)
@@ -1825,10 +1846,13 @@ class MainWindow(QMainWindow):
             ntfy_topic=s.ntfy_topic,
             ntfy_server=s.ntfy_server,
             ntfy_attach_clip=s.ntfy_attach_clip,
+            building_numbers=parse_building_numbers(s.building_numbers, s.country_code),
+            health_numbers=tuple(parse_numbers(s.health_numbers, s.country_code)),
         )
 
     def _send_phone_alert(self, camera, public_id: str, confidence: float, severity: str) -> None:
-        info = AlertInfo(public_id, camera.name, camera.camera_id, confidence, severity, datetime.now())
+        info = AlertInfo(public_id, camera.name, camera.camera_id, confidence, severity, datetime.now(),
+                         None, camera.group_name)
         self._alert_infos[public_id] = info
 
         def acknowledged() -> bool:
@@ -1854,8 +1878,9 @@ class MainWindow(QMainWindow):
             camera = next((c for c in self.repository.list_cameras() if c.camera_id == row.get("camera_id")), None)
             info = AlertInfo(public_id, camera.name if camera else str(row.get("camera_id", "")),
                              str(row.get("camera_id", "")), float(row.get("confidence", 0.0)),
-                             str(row.get("severity", "MEDIUM")), datetime.now(), row.get("footage_path"))
-        numbers = parse_numbers(self.settings.alert_numbers, self.settings.country_code)
+                             str(row.get("severity", "MEDIUM")), datetime.now(), row.get("footage_path"),
+                             camera.group_name if camera else "")
+        numbers = list(self._build_alert_plan().recipients(info))
         if not numbers:
             self._toast("Add a phone number in Settings, Phone alerts first.", 6000)
             return

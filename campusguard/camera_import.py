@@ -14,9 +14,10 @@ from urllib.parse import urlsplit
 
 from campusguard.settings import SENSITIVITY_LEVELS, CameraCredentials
 from campusguard.sources import build_capture_source, build_rtsp_url
+from campusguard.tuning import normalise_quiet_window
 
 MAX_FILE_BYTES = 1_000_000
-MAX_ROWS = 500
+MAX_ROWS = 1000     # a whole school's list in one file (700-1000 cameras)
 MAX_NAME_LENGTH = 80
 MAX_GROUP_LENGTH = 40
 DEFAULT_RTSP_PORT = 554
@@ -38,6 +39,10 @@ _ALIASES = {
     "group": ("group", "zone", "zone group", "location", "area", "block", "group name"),
     "sensitivity": ("sensitivity", "alert sensitivity", "threshold"),
     "ai": ("ai", "ai enabled", "enabled", "detection", "ai detection"),
+    "quiet_start": ("quiet start", "quiet from", "quiet hours start", "pause from"),
+    "quiet_end": ("quiet end", "quiet to", "quiet until", "quiet hours end", "pause until"),
+    "pre_roll": ("pre roll", "pre roll seconds", "clip before", "seconds before"),
+    "post_roll": ("post roll", "post roll seconds", "clip after", "seconds after"),
 }
 _ALIAS_TO_FIELD = {alias: field_name for field_name, names in _ALIASES.items() for alias in names}
 
@@ -59,14 +64,19 @@ _SENSITIVITY_WORDS = {
 _TRUE_WORDS = {"yes", "y", "true", "1", "on", "enabled", "enable"}
 _FALSE_WORDS = {"no", "n", "false", "0", "off", "disabled", "disable"}
 
-TEMPLATE_HEADER = ["name", "type", "address", "port", "path", "username", "password", "group", "sensitivity", "ai"]
+TEMPLATE_HEADER = [
+    "name", "type", "address", "port", "path", "username", "password", "group", "sensitivity", "ai",
+    "quiet_start", "quiet_end", "pre_roll", "post_roll",
+]
 TEMPLATE_ROWS = [
     ["# One camera per row. Required: name, type and address. Everything else is optional. "
-     "Rows that start with # are ignored, so delete these examples or remove the #."],
-    ["# Main Gate", "RTSP", "192.168.1.64", "554", "Streaming/Channels/101", "admin", "change-me", "Entrances", "Default", "yes"],
-    ["# Library Corridor", "RTSP", "rtsp://192.168.1.65:554/stream1", "", "", "admin", "change-me", "Block A", "Sensitive", "yes"],
-    ["# Parking", "IP", "192.168.1.70:8080/video", "", "", "", "", "Outdoors", "Cautious", "yes"],
-    ["# Office webcam", "USB", "0", "", "", "", "", "Offices", "Default", "yes"],
+     "Rows that start with # are ignored, so delete these examples or remove the #. "
+     "group = the building (alerts are sent to that building's numbers). "
+     "quiet_start/quiet_end = HH:MM, AI paused in between. pre_roll/post_roll = seconds of video kept before/after a fight."],
+    ["# Main Gate", "RTSP", "192.168.1.64", "554", "Streaming/Channels/102", "admin", "change-me", "Main Building", "Default", "yes", "", "", "", ""],
+    ["# Library Corridor", "RTSP", "rtsp://192.168.1.65:554/stream1", "", "", "admin", "change-me", "Block A", "Sensitive", "yes", "", "", "5", "10"],
+    ["# Playground", "IP", "192.168.1.70:8080/video", "", "", "", "", "Outdoors", "Cautious", "yes", "", "", "", ""],
+    ["# Gym (used at night)", "USB", "0", "", "", "", "", "Sports Block", "Default", "yes", "22:00", "06:00", "", ""],
 ]
 
 
@@ -95,6 +105,10 @@ class ImportRow:
     group_name: str = ""
     threshold_offset: float = 0.0
     ai_enabled: bool = True
+    quiet_start: str = ""
+    quiet_end: str = ""
+    pre_roll_seconds: float = 0.0
+    post_roll_seconds: float = 0.0
     problems: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     skip_reason: str = ""  # a valid row that is not imported because the camera already exists
@@ -122,6 +136,10 @@ class ImportRow:
             "group_name": self.group_name,
             "threshold_offset": self.threshold_offset,
             "ai_enabled": self.ai_enabled,
+            "quiet_start": self.quiet_start,
+            "quiet_end": self.quiet_end,
+            "pre_roll_seconds": self.pre_roll_seconds,
+            "post_roll_seconds": self.post_roll_seconds,
         }
 
 
@@ -427,6 +445,26 @@ def parse_camera_csv(
             row.ai_enabled = parse_flag(cell(cells, "ai"))
         except ValueError as error:
             row.problems.append(str(error))
+        raw_start, raw_end = cell(cells, "quiet_start"), cell(cells, "quiet_end")
+        if raw_start or raw_end:
+            row.quiet_start, row.quiet_end = normalise_quiet_window(raw_start, raw_end)
+            if not row.quiet_start:
+                row.problems.append("Quiet hours need two different times like 22:00 and 06:00.")
+        for key, label, maximum in (("pre_roll", "pre_roll", 15.0), ("post_roll", "post_roll", 30.0)):
+            raw_seconds = cell(cells, key)
+            if not raw_seconds:
+                continue
+            try:
+                seconds = float(raw_seconds)
+                if not 0 <= seconds <= maximum:
+                    raise ValueError
+            except ValueError:
+                row.problems.append(f"{label} must be a number of seconds from 0 to {maximum:g}.")
+                continue
+            if key == "pre_roll":
+                row.pre_roll_seconds = seconds
+            else:
+                row.post_roll_seconds = seconds
 
         if raw_address and row.source_type:
             try:

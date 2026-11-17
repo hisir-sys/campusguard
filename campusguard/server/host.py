@@ -14,8 +14,12 @@ from pathlib import Path
 
 from PySide6.QtCore import QCoreApplication, QTimer
 
+from datetime import datetime
+
 from campusguard import auth
 from campusguard.build_info import BUILD_VERSION as VERSION
+from campusguard.health_watch import HealthWatch
+from campusguard.notify import AlertDispatcher, AlertInfo, AlertPlan, parse_building_numbers, parse_numbers
 from campusguard.credentials import CredentialVault
 from campusguard.engine.hardware import detect_hardware, read_engine_override, resolve_profile
 from campusguard.server.api import ApiError, ApiServer
@@ -34,6 +38,8 @@ log = logging.getLogger("campusguard.server")
 
 START_BATCH = 4              # cameras opened per tick, so 120 RTSP handshakes don't pile up
 START_INTERVAL_MS = 600
+HEALTH_INTERVAL_MS = 30 * 1000
+STARTUP_GRACE_SECONDS = 180.0    # cameras are still connecting after a restart: no "offline" notices yet
 RETENTION_INTERVAL_MS = 60 * 60 * 1000
 EXIT_NOT_SIGNED_IN = 2
 EXIT_ACCESS_LOST = 3
@@ -71,6 +77,16 @@ class ServerHost:
         self.invoker = invoker
         self.health = HealthTracker()
         self.recorder = IncidentRecorder(repository)
+        # Phone alerts come from the server itself: the app on the school's GPU machine is
+        # the one that sees the fight, so it must be the one that tells the headmistress.
+        self.dispatcher = AlertDispatcher(log=lambda kind, message: log.warning("%s: %s", kind, message))
+        self.health_watch = HealthWatch(label=config.server_name or "")
+        self._alert_infos: dict[str, AlertInfo] = {}
+        self._health_timer = QTimer()
+        self._health_timer.setInterval(HEALTH_INTERVAL_MS)
+        self._health_timer.timeout.connect(self.check_health)
+        self._health_timer.start()
+        self.refresh_alert_plan()
         self.cameras: dict[str, CameraConfig] = {}
         self._start_queue: deque[CameraConfig] = deque()
         self._start_timer = QTimer()
@@ -192,11 +208,85 @@ class ServerHost:
         incident = self.recorder.record_event(camera, event, confidence, cooldown)
         if incident is not None:
             log.info("incident %s: %s on %s (%.0f%%)", incident["public_id"], event, camera.name, confidence * 100)
+            self._send_phone_alert(camera, incident, confidence)
 
     def _on_footage(self, camera_id: str, path: str) -> None:
         public_id = self.recorder.attach_footage(camera_id, path)
         if public_id:
             log.info("footage saved for %s", public_id)
+            info = self._alert_infos.get(public_id)
+            if info is not None:
+                self.dispatcher.send_clip_later(replace(info, clip_path=path))
+
+    # -- phone alerts and health notices ---------------------------------------
+    def refresh_alert_plan(self) -> None:
+        """Rebuild who gets alerts from the saved settings (cheap; also done every health tick)."""
+        try:
+            settings = self.repository.get_settings()
+            try:
+                token = self.vault.load_whatsapp_token()
+            except Exception:
+                token = ""
+            self.dispatcher.set_plan(AlertPlan(
+                numbers=tuple(parse_numbers(settings.alert_numbers, settings.country_code)),
+                escalation_numbers=tuple(parse_numbers(settings.escalation_numbers, settings.country_code)),
+                escalate_minutes=settings.escalate_minutes,
+                min_severity=settings.alert_min_severity,
+                whatsapp_mode=settings.whatsapp_mode,
+                phone_id=settings.whatsapp_phone_id,
+                template=settings.whatsapp_template,
+                token=token,
+                ntfy_topic=settings.ntfy_topic,
+                ntfy_server=settings.ntfy_server,
+                ntfy_attach_clip=settings.ntfy_attach_clip,
+                building_numbers=parse_building_numbers(settings.building_numbers, settings.country_code),
+                health_numbers=tuple(parse_numbers(settings.health_numbers, settings.country_code)),
+            ))
+            self.health_watch.configure(settings.health_offline_minutes * 60.0, settings.health_min_disk_gb)
+        except Exception as error:      # alerts must never stop detection
+            log.warning("could not refresh the alert plan: %s", error)
+
+    def _send_phone_alert(self, camera: CameraConfig, incident: dict, confidence: float) -> None:
+        try:
+            public_id = str(incident["public_id"])
+            info = AlertInfo(public_id, camera.name, camera.camera_id, confidence,
+                             str(incident.get("severity", "MEDIUM")), datetime.now(), None, camera.group_name)
+            self._alert_infos[public_id] = info
+            if len(self._alert_infos) > 500:
+                for stale in list(self._alert_infos)[:100]:
+                    self._alert_infos.pop(stale, None)
+
+            def acknowledged() -> bool:
+                row = self.repository.get_incident(public_id)
+                return row is None or str(row.get("status", "NEW")) != "NEW"
+
+            self.dispatcher.dispatch(info, acknowledged)
+        except Exception as error:
+            log.warning("phone alert failed for %s: %s", camera.name, error)
+
+    def check_health(self) -> None:
+        """Every 30 s: refresh settings, then tell IT about cameras that stay offline or a full disk."""
+        self.refresh_alert_plan()
+        if time.time() - self.started_at < STARTUP_GRACE_SECONDS:
+            return
+        try:
+            free_gb = shutil.disk_usage(self.repository.footage_dir).free / 1024 ** 3
+        except OSError:
+            free_gb = None
+        names = {camera_id: camera.name for camera_id, camera in self.cameras.items()}
+        for notice in self.health_watch.evaluate(self.health.snapshot(), names, free_gb, time.monotonic()):
+            log.warning("%s: %s", notice.title, notice.text)
+            self.repository.add_notification(notice.kind, notice.text)
+            if self.dispatcher.can_send_notices:
+                self.dispatcher.send_notice(notice.title, notice.text)
+
+    # -- capacity ----------------------------------------------------------
+    @property
+    def camera_capacity(self) -> int:
+        return int(self.config.max_cameras)
+
+    def free_slots(self) -> int:
+        return max(0, self.camera_capacity - len(self.cameras))
 
     # -- camera lifecycle --------------------------------------------------
     def load_saved_cameras(self) -> None:
@@ -223,7 +313,24 @@ class ServerHost:
                 self.manager.start_camera(camera)
 
     def _create_camera(self, new: NewCamera) -> CameraConfig:
+        if self.free_slots() <= 0:
+            raise ApiError(
+                409,
+                f"This server is full ({self.camera_capacity} cameras). Add another CampusGuard server for "
+                f"more cameras, or raise the limit with --max-cameras if the machine can take it.",
+            )
         camera = self.repository.add_camera(new.name, new.source_type, new.address, new.ai_enabled)
+        if new.group_name:
+            self.repository.set_camera_group(camera.camera_id, new.group_name)
+        if new.threshold_offset:
+            self.repository.set_camera_threshold_offset(camera.camera_id, new.threshold_offset)
+        quiet_start, quiet_end, pre, post = self.repository.set_camera_tuning(
+            camera.camera_id, new.quiet_start, new.quiet_end, new.pre_roll_seconds, new.post_roll_seconds
+        )
+        camera = replace(
+            camera, group_name=new.group_name, threshold_offset=float(new.threshold_offset),
+            quiet_start=quiet_start, quiet_end=quiet_end, pre_roll_seconds=pre, post_roll_seconds=post,
+        )
         try:
             self.vault.save(camera.camera_id, new.credentials)
         except Exception as error:
@@ -243,6 +350,9 @@ class ServerHost:
         return {
             "camera_id": camera.camera_id, "name": camera.name, "type": camera.source_type,
             "address": camera.source_address, "ai_enabled": camera.ai_enabled,
+            "group": camera.group_name, "sensitivity": camera.threshold_offset,
+            "quiet_start": camera.quiet_start, "quiet_end": camera.quiet_end,
+            "pre_roll_seconds": camera.pre_roll_seconds, "post_roll_seconds": camera.post_roll_seconds,
             "created_at": camera.created_at, **{k: health.get(k) for k in
             ("status", "health", "message", "fps", "resolution", "seconds_since_frame", "ai")},
         }
@@ -265,7 +375,9 @@ class ServerHost:
         if self.cloud_sync is not None:
             self.cloud_sync.stop()
         self._start_timer.stop()
+        self._health_timer.stop()
         self._snapshot_watchdog.stop()
+        self.dispatcher.cancel_all()
         self.manager.stop_all()
 
 
@@ -294,6 +406,8 @@ class HostBackend:
             "hardware": {"cpu_count": hardware.cpu_count, "ram_gb": hardware.ram_gb, "cuda": hardware.cuda,
                          "gpu": hardware.gpu_name, "gpu_memory_gb": hardware.gpu_memory_gb},
             "cameras": host.health.summary(),
+            "camera_capacity": host.camera_capacity,
+            "camera_slots_free": host.free_slots(),
             "open_incidents": host.repository.open_incident_count(),
             "footage_disk_free_gb": free_gb,
             "last_retention": host.last_retention,
@@ -479,6 +593,27 @@ class HostBackend:
             self.host.cameras[camera_id] = replace(camera, threshold_offset=float(offset))
             self.host.manager.set_camera_threshold_offset(camera_id, float(offset))
         self._on_qt(work)
+
+    def set_camera_tuning(self, camera_id: str, spec: dict) -> dict:
+        """Quiet hours, clip lead-in/follow-on seconds and zone for one camera."""
+        def work() -> dict:
+            camera = self._require(camera_id)
+            start, end, pre, post = self.host.repository.set_camera_tuning(
+                camera_id,
+                spec.get("quiet_start", camera.quiet_start), spec.get("quiet_end", camera.quiet_end),
+                spec.get("pre_roll_seconds", camera.pre_roll_seconds),
+                spec.get("post_roll_seconds", camera.post_roll_seconds),
+            )
+            group = camera.group_name
+            if "group" in spec:
+                group = " ".join(str(spec["group"]).split())[:40]
+                self.host.repository.set_camera_group(camera_id, group)
+            updated = replace(camera, quiet_start=start, quiet_end=end, pre_roll_seconds=pre,
+                              post_roll_seconds=post, group_name=group)
+            self.host.cameras[camera_id] = updated
+            self.host.manager.set_camera_tuning(camera_id, start, end, pre, post)
+            return self.host._camera_dict(updated)
+        return self._on_qt(work)
 
     def reconnect_camera(self, camera_id: str) -> None:
         def work() -> None:
