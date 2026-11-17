@@ -16,11 +16,11 @@ is detected.
 
 For per-building servers, give every server the same head number and its own building's numbers:
 
-    campusguard-server configure --server-name "Building A" --max-cameras 150 ^
+    CampusGuard.exe --configure-server --server-name "Building A" --max-cameras 150 ^
       --alert-numbers "98xxxxxxxx" --building-numbers "Building A: 97xxxxxxxx, 96xxxxxxxx" ^
       --health-numbers "95xxxxxxxx" --whatsapp-mode cloud --whatsapp-phone-id ... --whatsapp-token ...
 
-Set each camera's `group` to the building name exactly as written in `--building-numbers`.
+Then start it with `CampusGuard.exe --server`. Set each camera's `group` to the building name exactly as written in `--building-numbers`.
 
 ## Camera streams
 
