@@ -7,10 +7,11 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-PROFILE_NAMES = ("lite", "standard", "server")
+PROFILE_NAMES = ("lite", "standard", "crowd", "server")
 # Above this many simultaneously running cameras a CUDA machine switches to the
 # server profile when the operator left the profile on "auto".
 SERVER_CAMERA_THRESHOLD = 16
+CROWD_CAMERA_THRESHOLD = 12   # a PC with no GPU watching more than this many cameras
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,12 @@ PROFILES: dict[str, EngineProfile] = {
     "standard": EngineProfile(
         name="standard", smart_analysis=True, motion_hangover_s=5.0, gate_hz=10.0,
         max_analysis_width=None, preview_max_fps=0.0, prebuffer_bytes=None,
+        batch_detector=False,
+    ),
+    # Many cameras on an ordinary PC (no GPU): look at smaller pictures and draw the live previews slowly.
+    "crowd": EngineProfile(
+        name="crowd", smart_analysis=True, motion_hangover_s=4.0, gate_hz=5.0,
+        max_analysis_width=640, preview_max_fps=3.0, prebuffer_bytes=None,
         batch_detector=False,
     ),
     "server": EngineProfile(
@@ -130,5 +137,19 @@ def resolve_profile(override: str, hardware: HardwareInfo, camera_count: int) ->
         return PROFILES[override]
     if hardware.cuda:
         return PROFILES["server"] if camera_count > SERVER_CAMERA_THRESHOLD else PROFILES["standard"]
+    if camera_count > CROWD_CAMERA_THRESHOLD:
+        return PROFILES["crowd"]
     weak = hardware.cpu_count <= 4 or (hardware.ram_gb is not None and hardware.ram_gb < 7.5)
     return PROFILES["lite" if weak else "standard"]
+
+
+def recommended_camera_limit(hardware: HardwareInfo) -> int:
+    """A cautious guess at how many cameras this PC can watch. An estimate, not a promise:
+    it assumes the motion gate keeps most cameras idle and uses small analysis pictures.
+    Only a real test on the school's PC settles it (docs/LOAD_TEST_GUIDE.md)."""
+    if hardware.cuda:
+        return 150
+    limit = max(4, hardware.cpu_count * 4)
+    if hardware.ram_gb is not None:
+        limit = min(limit, int(hardware.ram_gb * 6))
+    return max(4, min(limit, 120))

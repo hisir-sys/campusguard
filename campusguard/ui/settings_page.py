@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import dataclasses
 
-from PySide6.QtCore import Qt, QUrl, Signal
+
+from PySide6.QtCore import QEvent, Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -14,6 +16,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSpinBox,
     QLineEdit,
+    QPlainTextEdit,
     QMessageBox,
     QPushButton,
     QVBoxLayout,
@@ -277,6 +280,17 @@ class SettingsPage(QWidget):
         self.alert_numbers_input.setPlaceholderText("98765 43210, 98765 00000  (up to 10 numbers)")
         self.escalation_numbers_input = QLineEdit(settings.escalation_numbers)
         self.escalation_numbers_input.setPlaceholderText("Backup people, alerted only if nobody responds")
+        self.building_numbers_input = QPlainTextEdit(settings.building_numbers)
+        self.building_numbers_input.setPlaceholderText(
+            "One building per line, matching the camera's Group:\nScience Block: 98765 43210\nJunior Wing: 98765 00000, 98765 11111"
+        )
+        self.building_numbers_input.setFixedHeight(84)
+        self.health_numbers_input = QLineEdit(settings.health_numbers)
+        self.health_numbers_input.setPlaceholderText("IT / admin people told when cameras go offline or the disk is nearly full")
+        self.health_offline_input = QSpinBox()
+        self.health_offline_input.setRange(1, 120)
+        self.health_offline_input.setSuffix(" min offline")
+        self.health_offline_input.setValue(settings.health_offline_minutes)
         self.escalate_input = QSpinBox()
         self.escalate_input.setRange(0, 60)
         self.escalate_input.setSuffix(" min  (0 = never)")
@@ -309,6 +323,9 @@ class SettingsPage(QWidget):
         self.test_alert_button = QPushButton("Send a test alert")
         for label, widget in (
             ("Alert numbers", self.alert_numbers_input),
+            ("Building numbers", self.building_numbers_input),
+            ("IT / health numbers", self.health_numbers_input),
+            ("Camera offline after", self.health_offline_input),
             ("Backup numbers", self.escalation_numbers_input),
             ("Escalate after", self.escalate_input),
             ("Send alerts for", self.min_severity_input),
@@ -326,9 +343,12 @@ class SettingsPage(QWidget):
         phone_section.body.addLayout(phone_form)
         content_layout.addWidget(phone_section)
         for line in (self.alert_numbers_input, self.escalation_numbers_input, self.country_code_input,
-                     self.whatsapp_phone_id_input, self.whatsapp_template_input, self.ntfy_topic_input):
+                     self.whatsapp_phone_id_input, self.whatsapp_template_input, self.ntfy_topic_input,
+                     self.health_numbers_input):
             line.editingFinished.connect(self._emit_settings)
+        self.building_numbers_input.installEventFilter(self)
         self.escalate_input.editingFinished.connect(self._emit_settings)
+        self.health_offline_input.editingFinished.connect(self._emit_settings)
         for combo in (self.min_severity_input, self.whatsapp_mode_input):
             combo.currentIndexChanged.connect(self._emit_settings)
         for box in (self.auto_open_whatsapp_toggle, self.ntfy_attach_toggle):
@@ -692,11 +712,18 @@ class SettingsPage(QWidget):
             self._updating = False
         self._emit_settings()
 
+    def eventFilter(self, watched, event):  # noqa: N802 (Qt API)
+        # A multi-line box has no editingFinished: save when the user leaves it.
+        if watched is getattr(self, "building_numbers_input", None) and event.type() == QEvent.Type.FocusOut:
+            self._emit_settings()
+        return super().eventFilter(watched, event)
+
     def _emit_settings(self, *_args) -> None:
         if self._updating:
             return
 
-        settings = AppSettings(
+        settings = dataclasses.replace(
+            self._initial_settings,
             confidence_threshold=self.threshold_input.value(),
             detection_enabled=self.detection_toggle.isChecked(),
             tracking_enabled=self.tracking_toggle.isChecked(),
@@ -716,6 +743,9 @@ class SettingsPage(QWidget):
             start_page=str(self.start_page_input.currentData()),
             sidebar_hover_open=self.sidebar_hover_toggle.isChecked(),
             alert_numbers=self.alert_numbers_input.text().strip(),
+            building_numbers=self.building_numbers_input.toPlainText().strip(),
+            health_numbers=self.health_numbers_input.text().strip(),
+            health_offline_minutes=self.health_offline_input.value(),
             escalation_numbers=self.escalation_numbers_input.text().strip(),
             escalate_minutes=self.escalate_input.value(),
             alert_min_severity=str(self.min_severity_input.currentData()),
@@ -734,6 +764,7 @@ class SettingsPage(QWidget):
             incident_retention_days=int(self.incident_retention_input.currentData()),
         )
 
+        self._initial_settings = settings
         self._refresh_status_cards()
         self.settings_changed.emit(settings)
 

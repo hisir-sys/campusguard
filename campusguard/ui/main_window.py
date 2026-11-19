@@ -29,10 +29,12 @@ from PySide6.QtWidgets import (
 )
 
 from campusguard import system_health
-from campusguard.camera_notices import describe_problems, is_problem
+from campusguard.camera_notices import OPERATOR_STOP_MESSAGE, describe_problems, is_problem
 
 from campusguard.footage import clear_footage
 from campusguard.credentials import CredentialVault
+from campusguard.engine.hardware import detect_hardware, recommended_camera_limit
+from campusguard.health_watch import HealthWatch
 from campusguard.notify import (
     AlertDispatcher,
     AlertInfo,
@@ -572,6 +574,11 @@ class MainWindow(QMainWindow):
 
         # System health: disk space, GPU and camera problems, checked every minute.
         self._health_notified: dict[str, float] = {}
+        self._health_watch = HealthWatch(
+            offline_after_seconds=self.settings.health_offline_minutes * 60.0,
+            min_free_gb=self.settings.health_min_disk_gb,
+        )
+        self._started_at = time.time()
         self._health_timer = QTimer(self)
         self._health_timer.setInterval(60_000)
         self._health_timer.timeout.connect(self._check_system_health)
@@ -1552,6 +1559,26 @@ class MainWindow(QMainWindow):
             self.repository.add_notification("system_health", message)
             self._toast(message, 10000)
             self.dashboard.refresh_summary()
+        self._phone_health_notices(report)
+
+    def _phone_health_notices(self, report) -> None:
+        """Tell the IT contacts (phone / ntfy) when cameras stay offline or the disk runs low."""
+        if self.settings.connection_mode != "local" or time.time() - self._started_at < 120:
+            return
+        self._health_watch.configure(self.settings.health_offline_minutes * 60.0, self.settings.health_min_disk_gb)
+        snapshot: dict[str, dict] = {}
+        stopped: set[str] = set()
+        for camera_id, stats in self.camera_stats.items():
+            if stats.message == OPERATOR_STOP_MESSAGE:
+                stopped.add(camera_id)
+            live = stats.status not in ("OFFLINE", "ERROR", "CONNECTING")
+            snapshot[camera_id] = {"health": "ok" if live else "offline"}
+        names = {camera_id: camera.name for camera_id, camera in self.cameras.items()}
+        free_gb = report.disk_free / 1024 ** 3 if report.disk_total else None
+        for notice in self._health_watch.evaluate(snapshot, names, free_gb, time.monotonic(), stopped):
+            self.repository.add_notification(notice.kind, notice.text)
+            if self._dispatcher.can_send_notices:
+                self._dispatcher.send_notice(notice.title, notice.text)
 
     def _export_report(self) -> None:
         stamp = datetime.now().strftime("%Y%m%d-%H%M")
@@ -2374,6 +2401,21 @@ class MainWindow(QMainWindow):
         self.floor_map_page.sync_cameras(cameras, self.camera_stats)
         self.top_bar.set_cameras(cameras)
         self.dashboard.refresh_summary()
+        self._warn_if_over_capacity(len(cameras))
+
+    def _warn_if_over_capacity(self, count: int) -> None:
+        """One gentle heads-up when this PC has more cameras than it can safely watch (an estimate)."""
+        if self.settings.connection_mode != "local":
+            return
+        limit = recommended_camera_limit(detect_hardware())
+        if count <= limit or getattr(self, "_capacity_warned_at", 0) >= limit:
+            return
+        self._capacity_warned_at = limit
+        self._toast(
+            f"{count} cameras is more than this PC is likely to keep up with (about {limit}). "
+            "Detection may lag or miss moments. Move some cameras to a stronger PC, or run the load test first.",
+            12000,
+        )
 
     def _refresh_pages(self) -> None:
         self.dashboard.refresh_summary()

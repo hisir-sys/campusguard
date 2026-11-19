@@ -149,7 +149,9 @@ def test_resolve_profile_rules():
     low_ram = HardwareInfo(8, 4.0, False)
     assert resolve_profile("auto", gpu, 3).name == "standard"
     assert resolve_profile("auto", gpu, 100).name == "server"
-    assert resolve_profile("auto", cpu_strong, 50).name == "standard"
+    assert resolve_profile("auto", cpu_strong, 10).name == "standard"
+    assert resolve_profile("auto", cpu_strong, 50).name == "crowd"
+    assert resolve_profile("auto", cpu_weak, 50).name == "crowd"
     assert resolve_profile("auto", cpu_weak, 1).name == "lite"
     assert resolve_profile("auto", low_ram, 1).name == "lite"
     assert resolve_profile("server", cpu_weak, 1).name == "server"   # explicit wins
@@ -331,3 +333,13 @@ def test_batch_runner_close_reports_a_worker_that_exceeds_deadline():
     assert not caller.is_alive()
     assert result["value"] == 7
     assert not runner.worker_alive
+
+
+def test_recommended_camera_limit_is_cautious_and_bounded():
+    from campusguard.engine.hardware import recommended_camera_limit
+
+    assert recommended_camera_limit(HardwareInfo(4, 8.0, False)) == 16
+    assert recommended_camera_limit(HardwareInfo(16, 16.0, False)) == 64
+    assert recommended_camera_limit(HardwareInfo(64, 256.0, False)) == 120
+    assert recommended_camera_limit(HardwareInfo(2, 2.0, False)) == 8
+    assert recommended_camera_limit(HardwareInfo(8, 16.0, True, "RTX", 12.0)) == 150

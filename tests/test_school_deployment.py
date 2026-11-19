@@ -313,3 +313,24 @@ def test_camera_tuning_is_saved_and_reloaded(tmp_path: Path):
     assert (loaded.quiet_start, loaded.quiet_end, loaded.pre_roll_seconds, loaded.post_roll_seconds) == ("22:00", "06:00", 6.0, 15.0)
     assert repository.set_camera_tuning(camera.camera_id, "22:00", "", 0, 0) == ("", "", 0.0, 0.0)   # half a window is dropped
     assert isinstance(loaded, CameraConfig)
+
+
+def test_settings_page_keeps_hidden_settings_and_saves_new_numbers():
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+    from campusguard.settings import AppSettings
+    from campusguard.ui.settings_page import SettingsPage
+
+    QApplication.instance() or QApplication([])
+    page = SettingsPage(AppSettings(clip_fps=12, default_pre_roll_seconds=7, health_min_disk_gb=33))
+    got = []
+    page.settings_changed.connect(got.append)
+    page.building_numbers_input.setPlainText("Science: 9876543210")
+    page.health_numbers_input.setText("9876500000")
+    page.health_offline_input.setValue(9)
+    page._emit_settings()
+    s = got[-1]
+    assert (s.clip_fps, s.default_pre_roll_seconds, s.health_min_disk_gb) == (12, 7, 33)
+    assert s.building_numbers == "Science: 9876543210" and s.health_numbers == "9876500000"
+    assert s.health_offline_minutes == 9

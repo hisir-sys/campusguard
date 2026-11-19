@@ -1,5 +1,13 @@
 # CampusGuard Desktop — Update Notes
 
+## One office PC watching 40-60 cameras
+
+- **Settings page now has Building numbers, IT / health numbers and "Camera offline after"** (before, these could only be set on the server). Fixed a bug where changing any setting silently reset the settings that have no box on the page (clip frame rate, lead-in/follow-on seconds, disk limit, ...).
+- **The desktop app now sends health notices too:** when a camera has had no picture for the chosen minutes (default 5), when it is back, and when the clip disk is low, to the IT numbers / ntfy. One message per outage; many cameras dropping together is one message. Cameras you stopped yourself are not reported.
+- **New "crowd" engine profile** for a PC with no GPU watching more than 12 cameras: analyses at most 640 px wide, runs the motion check less often, and draws live previews at 3 fps instead of full speed. Saved clips are unchanged (they come from the full-quality buffer).
+- **Camera-limit heads-up:** if there are more cameras than this PC is estimated to handle (about 4 per CPU core and 6 per GB of RAM, at most 120; 150 with a GPU), a notice appears once. This is a cautious estimate, not a measurement; run the load test on the school's PC.
+- Tested with fakes only; not yet on a real school laptop.
+
 ## Built for schools with several buildings (server mode)
 
 - **Smoother incident clips, with a lead-in and a follow-on.** Clips used to be cut from the frames the AI happened to look at, so they could look choppy when the AI ran behind. A separate short buffer now keeps *every* camera frame (compressed, a few seconds per camera, never a 24/7 recording). A clip starts **5 s before** the detection and ends **8 s after** things calm down (both changeable per school and per camera), saved at about **20 fps** (settings: `clip_fps` 8-30, `clip_width` 480-1920). Not tested on real cameras.
