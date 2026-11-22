@@ -83,6 +83,12 @@ class VideoClassifier:
     CLIP_LENGTH = 16
     INFERENCE_STRIDE = 8
     INPUT_SIZE = (112, 112)
+    # The 16 frames of one check should cover about one second of real time (a camera at 15 fps).
+    # If the analyser is too busy to keep up, the same 16 frames stretch over many seconds, ordinary
+    # movement then looks like fast fighting and the model reports "fight" on calm scenes (measured
+    # on a classroom clip: 4 of 35 checks above 65% at 15 fps, 13 of 17 at 7.5 fps, 3 of 3 at 1.9 fps).
+    # A check whose frames span more than this is skipped and reported as "analyser behind".
+    MAX_CLIP_SECONDS = 1.6
 
     def __init__(
         self,
@@ -104,7 +110,10 @@ class VideoClassifier:
         self.model: nn.Module | torch.jit.ScriptModule | None = None
         self.class_count = 0
         self.frames: list[np.ndarray] = []
+        self.frame_times: list[float] = []
         self.frame_count = 0
+        self.skipped_slow = 0
+        self.behind = False
         self.last_probability = 0.0
         self.last_state = "MODEL NOT LOADED"
         self._load()
@@ -301,6 +310,8 @@ class VideoClassifier:
 
     def reset(self) -> None:
         self.frames.clear()
+        self.frame_times.clear()
+        self.behind = False
         self.frame_count = 0
         self.last_probability = 0.0
         self.last_state = "NORMAL" if self.ready else "MODEL NOT LOADED"
@@ -356,19 +367,31 @@ class VideoClassifier:
         self.last_probability, self.last_state = confidence, state
         return state, confidence
 
-    def add_frame(self, frame: np.ndarray) -> tuple[str, float] | None:
-        """Keep a legacy/global stream for callers that still need one."""
+    def add_frame(self, frame: np.ndarray, timestamp: float | None = None) -> tuple[str, float] | None:
+        """Keep a legacy/global stream for callers that still need one.
+
+        ``timestamp`` (seconds, any steady clock) lets the classifier refuse a clip whose frames are
+        too far apart in time; without it every full clip is classified as before.
+        """
         if self.model is None or self.fight_class is None:
             return None
         # Keep frames in their original BGR form. The model adapter owns
         # color conversion, resizing, and normalization so every model uses
         # one consistent preprocessing path.
         self.frames.append(frame.copy())
+        self.frame_times.append(float("nan") if timestamp is None else float(timestamp))
         if len(self.frames) > self.CLIP_LENGTH:
             self.frames.pop(0)
+            self.frame_times.pop(0)
         self.frame_count += 1
         if len(self.frames) < self.CLIP_LENGTH or self.frame_count % self.INFERENCE_STRIDE:
             return None
+        first, last = self.frame_times[0], self.frame_times[-1]
+        if first == first and last == last and last - first > self.MAX_CLIP_SECONDS:
+            self.skipped_slow += 1
+            self.behind = True
+            return None
+        self.behind = False
         return self._classify_clip(self.frames)
 
     def classify_clip(self, frames: list[np.ndarray]) -> tuple[str, float]:

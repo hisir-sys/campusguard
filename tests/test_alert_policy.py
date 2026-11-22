@@ -71,3 +71,39 @@ def test_keep_awake_is_safe_anywhere():
     assert keep_awake.is_active()
     keep_awake.set_active(False)
     assert not keep_awake.is_active()
+
+
+def _bare_classifier(monkeypatch):
+    """A VideoClassifier with no model file: only the frame bookkeeping is tested."""
+    import numpy as np
+    from campusguard.model_registry import VideoClassifier
+
+    clf = object.__new__(VideoClassifier)
+    clf.model, clf.fight_class = object(), 0
+    clf.frames, clf.frame_times = [], []
+    clf.frame_count, clf.skipped_slow, clf.behind = 0, 0, False
+    monkeypatch.setattr(VideoClassifier, "_classify_clip", lambda self, clip: ("NORMAL", 0.1))
+    return clf, np.zeros((8, 8, 3), dtype="uint8")
+
+
+def test_classifier_skips_clips_stretched_by_a_slow_analyser(monkeypatch):
+    clf, frame = _bare_classifier(monkeypatch)
+    results = [clf.add_frame(frame, timestamp=i / 15.0) for i in range(32)]      # 15 fps: keeps up
+    assert any(results) and not clf.behind and clf.skipped_slow == 0
+
+    clf, frame = _bare_classifier(monkeypatch)
+    results = [clf.add_frame(frame, timestamp=i * 0.5) for i in range(32)]       # 2 fps: far behind
+    assert not any(results) and clf.behind and clf.skipped_slow >= 1
+
+    clf, frame = _bare_classifier(monkeypatch)
+    results = [clf.add_frame(frame, timestamp=i / 15.0) for i in range(16)]
+    results += [clf.add_frame(frame, timestamp=1.07 + (i + 1) * 0.5) for i in range(16)]
+    assert clf.behind                                                              # then catches up:
+    results = [clf.add_frame(frame, timestamp=20 + i / 15.0) for i in range(16)]
+    assert any(results) and not clf.behind
+
+
+def test_classifier_without_timestamps_behaves_as_before(monkeypatch):
+    clf, frame = _bare_classifier(monkeypatch)
+    results = [clf.add_frame(frame) for _ in range(32)]
+    assert sum(r is not None for r in results) == 3 and not clf.behind   # frames 16, 24, 32

@@ -1,5 +1,12 @@
 # CampusGuard Desktop — Update Notes
 
+## False alarms when the PC is busy, and a tool to measure them
+
+- **Found by a 10-camera test on a 12-thread laptop with calm classroom footage:** the PC sat at 100% CPU and the app reported "fight" at 90-100% on ordinary teaching. Cause 1: when the PC cannot keep up, the 16 frames the fight model looks at are spread over many seconds, so normal movement looks like fast fighting. Measured offline on that clip: 4 of 35 checks above 65% at the true 15 fps, 13 of 17 at 7.5 fps, 3 of 3 at 1.9 fps.
+- **Fix:** a check whose 16 frames span more than 1.6 s is now skipped, not trusted. The camera shows "ANALYSER BEHIND" and an old fight is no longer left on screen. This stops fake fights under overload; it also means an overloaded PC watches less, so the camera count for a PC must be set where the analyser keeps up.
+- **Not fixed:** even at the true frame rate, this classroom clip still raised one alert (two checks of 91% and 95% in a row). That is the model, not the PC: it needs classroom and corridor footage with no fights as extra training examples. `scripts/score_video.py` scores any video at its true speed and prints alerts per threshold (and false alarms per hour with `--calm`).
+- One fight check costs hundreds of milliseconds of CPU, so many cameras with constant movement cannot fit on an ordinary laptop. Real corridors are mostly still (the motion gate skips them); a classroom is not.
+
 ## Silent test mode, relaxed hours and staying awake
 
 - **Silent test mode** (Settings > Phone alerts): the app detects and records everything but sends no pop-up, sound, phone alert or phone push. Run it for the first week or two at a school to see how many false alarms there would have been before anyone is bothered. **What did silent mode catch?** shows the count, the busiest cameras and hours, and how many you marked as false alarms.

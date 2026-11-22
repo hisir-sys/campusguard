@@ -324,6 +324,7 @@ class VisionPipeline:
         self.device = self._select_device(settings.device)
         self.classifiers: dict[str, VideoClassifier] = {}
         self.decision = FightDecision(settings.confidence_threshold, settings.alert_confirm_predictions)
+        self.analyser_behind = False
         self.interactions = InteractionEngine()
         self.display_ids: dict[int, int] = {}
         self.display_track_memory: dict[int, tuple[tuple[int, int, int, int], int]] = {}
@@ -533,8 +534,22 @@ class VisionPipeline:
                     # MC3 was trained and validated on full-scene temporal clips.
                     # Do not crop the scene to individual people: that removes the
                     # interaction context that the verified checkpoint relies on.
-                    prediction = model.add_frame(frame)
-                    if prediction is None:
+                    prediction = model.add_frame(frame, timestamp=perf_counter())
+                    behind = bool(getattr(model, "behind", False))
+                    if behind != self.analyser_behind:
+                        self.analyser_behind = behind
+                        self.status(
+                            "fight",
+                            "ANALYSER BEHIND — this PC cannot keep up with its cameras, so fight checks "
+                            "are paused (checking too-sparse frames gives false alarms)"
+                            if behind else "READY — analyser has caught up",
+                        )
+                    if prediction is None and behind:
+                        # Do not keep showing an old fight while checks are paused.
+                        state, confidence = "NORMAL", None
+                        self.decision.update(state, confidence)
+                        self.last_state, self.last_confidence = state, confidence
+                    elif prediction is None:
                         state, confidence = self.last_state, self.last_confidence
                     else:
                         state, confidence = prediction
