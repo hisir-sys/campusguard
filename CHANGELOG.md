@@ -1,5 +1,14 @@
 # CampusGuard Desktop — Update Notes
 
+## Silent test mode, relaxed hours and staying awake
+
+- **Silent test mode** (Settings > Phone alerts): the app detects and records everything but sends no pop-up, sound, phone alert or phone push. Run it for the first week or two at a school to see how many false alarms there would have been before anyone is bothered. **What did silent mode catch?** shows the count, the busiest cameras and hours, and how many you marked as false alarms.
+- **Relaxed hours per camera** (camera form): between two times (a gym during sports period, assembly, recess) a detection is still recorded with its clip but graded Low, and nobody is alerted. Also settable over the server API (`relaxed_start`, `relaxed_end`).
+- **Stays awake:** Windows is asked not to sleep while CampusGuard runs (setting "Stay awake", on by default). A laptop with the lid closed can still sleep depending on its power plan: set "When I close the lid: Do nothing".
+- **The account's alert numbers are now used.** Numbers saved on the website account are filled into "Alert numbers" when this PC has none, and updated when you save them in Your account.
+- The website no longer sends a phone push for an incident held back by silent mode or relaxed hours.
+- Tested with fakes only (rules, storage, sync payload); not yet on real cameras.
+
 ## Edit your account (shared with the website and phone app)
 
 - **Settings > General now has a "Your account" section:** change your name, school or college name, your phone number and the phone numbers that get alerts (up to 5). It saves to the same account profile the website and the phone app use, so a change in one place shows up in the others.

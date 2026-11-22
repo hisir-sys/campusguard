@@ -32,7 +32,7 @@ def test_payload_has_metadata_only(tmp_path):
     assert payload["server"]["cameras_total"] == 1 and payload["server"]["cameras_online"] == 1
     assert payload["incidents"][0]["has_footage"] is True
     assert set(payload["incidents"][0]) == {"incident_id", "camera_name", "happened_at", "event",
-                                            "confidence", "severity", "status", "has_footage", "seq"}
+                                            "confidence", "severity", "status", "has_footage", "seq", "suppressed"}
 
 
 def test_cursor_resumes_and_only_changes_are_sent(tmp_path):

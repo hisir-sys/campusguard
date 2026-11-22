@@ -107,7 +107,7 @@ def test_recorder_cooldown_and_footage_pairing():
     created = []
 
     class Repo:
-        def create_incident(self, camera, event, confidence, severity, cooldown):
+        def create_incident(self, camera, event, confidence, severity, cooldown, suppressed=""):
             if created and cooldown:
                 return None
             row = {"public_id": f"INC-{len(created) + 1:05d}", "severity": severity}

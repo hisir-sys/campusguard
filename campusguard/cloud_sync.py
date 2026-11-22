@@ -59,6 +59,7 @@ def build_payload(repository, server_id: str, server_name: str, version: str,
                 "happened_at": event["happened_at"], "event": event["event"],
                 "confidence": event["confidence"], "severity": event["severity"],
                 "status": event["status"], "has_footage": bool(event["has_footage"]), "seq": event["seq"],
+                "suppressed": str(event.get("suppressed", "")),
             }
             for event in events
         ],

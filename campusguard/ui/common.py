@@ -361,6 +361,24 @@ class CameraFormDialog(QDialog):
         quiet_layout.addWidget(self.quiet_end_input)
         quiet_layout.addWidget(quiet_hint, 1)
         form.addRow("Quiet hours", quiet_widget)
+        relaxed_widget = QWidget()
+        relaxed_layout = QHBoxLayout(relaxed_widget)
+        relaxed_layout.setContentsMargins(0, 0, 0, 0)
+        relaxed_layout.setSpacing(8)
+        self.relaxed_start_input = QLineEdit()
+        self.relaxed_start_input.setPlaceholderText("14:00")
+        self.relaxed_start_input.setMaximumWidth(80)
+        self.relaxed_end_input = QLineEdit()
+        self.relaxed_end_input.setPlaceholderText("15:00")
+        self.relaxed_end_input.setMaximumWidth(80)
+        relaxed_hint = QLabel("Sports period, assembly, recess: fights are still recorded but graded Low and nobody is alerted.")
+        relaxed_hint.setProperty("muted", True)
+        relaxed_hint.setWordWrap(True)
+        relaxed_layout.addWidget(self.relaxed_start_input)
+        relaxed_layout.addWidget(QLabel("to"))
+        relaxed_layout.addWidget(self.relaxed_end_input)
+        relaxed_layout.addWidget(relaxed_hint, 1)
+        form.addRow("Relaxed hours", relaxed_widget)
         self.pre_roll_input = QComboBox()
         self.post_roll_input = QComboBox()
         self.pre_roll_input.addItem("School default", 0.0)
@@ -460,6 +478,8 @@ class CameraFormDialog(QDialog):
         self.sensitivity_input.setCurrentIndex(index)
         self.quiet_start_input.setText(camera.quiet_start)
         self.quiet_end_input.setText(camera.quiet_end)
+        self.relaxed_start_input.setText(camera.relaxed_start)
+        self.relaxed_end_input.setText(camera.relaxed_end)
         for combo, value in ((self.pre_roll_input, camera.pre_roll_seconds), (self.post_roll_input, camera.post_roll_seconds)):
             combo.setCurrentIndex(min(range(combo.count()), key=lambda i: abs(float(combo.itemData(i)) - float(value))))
         self.type_input.setCurrentText(camera.source_type.upper())
@@ -592,6 +612,8 @@ class CameraFormDialog(QDialog):
             "threshold_offset": float(self.sensitivity_input.currentData() or 0.0),
             "quiet_start": self.quiet_start_input.text().strip(),
             "quiet_end": self.quiet_end_input.text().strip(),
+            "relaxed_start": self.relaxed_start_input.text().strip(),
+            "relaxed_end": self.relaxed_end_input.text().strip(),
             "pre_roll_seconds": float(self.pre_roll_input.currentData() or 0.0),
             "post_roll_seconds": float(self.post_roll_input.currentData() or 0.0),
         }
@@ -652,6 +674,14 @@ class CameraFormDialog(QDialog):
             self.validation_status.show()
             return
         values["quiet_start"], values["quiet_end"] = start, end
+        relaxed_start, relaxed_end = normalise_quiet_window(values["relaxed_start"], values["relaxed_end"])
+        if (values["relaxed_start"] or values["relaxed_end"]) and not relaxed_start:
+            self.validation_status.setText(
+                "Relaxed hours need two different times in 24-hour form, for example 14:00 to 15:00."
+            )
+            self.validation_status.show()
+            return
+        values["relaxed_start"], values["relaxed_end"] = relaxed_start, relaxed_end
         from campusguard.camera_runtime import build_capture_source
 
         try:

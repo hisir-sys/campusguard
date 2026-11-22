@@ -66,6 +66,7 @@ class SettingsPage(QWidget):
     trend_report_requested = Signal()
     set_pin_requested = Signal(str, str)
     test_alert_requested = Signal()
+    silent_report_requested = Signal()
     _profile_loaded = Signal(object, str)  # (profile dict or None, message)
 
     def __init__(self, settings: AppSettings, parent: QWidget | None = None) -> None:
@@ -323,7 +324,17 @@ class SettingsPage(QWidget):
         self.ntfy_attach_toggle = QCheckBox("Attach the video clip to push alerts (leave off on public ntfy.sh)")
         self.ntfy_attach_toggle.setChecked(settings.ntfy_attach_clip)
         self.test_alert_button = QPushButton("Send a test alert")
+        self.silent_mode_toggle = QCheckBox(
+            "Silent test mode: detect and record, but send no pop-up, sound, phone alert or push"
+        )
+        self.silent_mode_toggle.setChecked(settings.silent_mode)
+        self.silent_report_button = QPushButton("What did silent mode catch?")
+        self.keep_awake_toggle = QCheckBox("Keep this PC awake while CampusGuard runs (a sleeping PC watches nothing)")
+        self.keep_awake_toggle.setChecked(settings.keep_awake)
         for label, widget in (
+            ("Silent mode", self.silent_mode_toggle),
+            ("", self.silent_report_button),
+            ("Stay awake", self.keep_awake_toggle),
             ("Alert numbers", self.alert_numbers_input),
             ("Building numbers", self.building_numbers_input),
             ("IT / health numbers", self.health_numbers_input),
@@ -344,6 +355,9 @@ class SettingsPage(QWidget):
             phone_form.addRow(label, widget)
         phone_section.body.addLayout(phone_form)
         content_layout.addWidget(phone_section)
+        self.silent_mode_toggle.toggled.connect(self._emit_settings)
+        self.keep_awake_toggle.toggled.connect(self._emit_settings)
+        self.silent_report_button.clicked.connect(self.silent_report_requested.emit)
         for line in (self.alert_numbers_input, self.escalation_numbers_input, self.country_code_input,
                      self.whatsapp_phone_id_input, self.whatsapp_template_input, self.ntfy_topic_input,
                      self.health_numbers_input):
@@ -739,9 +753,16 @@ class SettingsPage(QWidget):
         self.profile_name.setText(str(data.get("full_name", "")))
         self.profile_school.setText(str(data.get("school_name", "")))
         self.profile_phone.setText(str(data.get("phone", "")))
-        self.profile_alerts.setPlainText("\n".join(data.get("alert_phones", [])))
+        phones = [str(number) for number in data.get("alert_phones", [])]
+        self.profile_alerts.setPlainText("\n".join(phones))
         self.profile_save.setEnabled(True)
         self.profile_status.setText(message)
+        # The account's alert numbers are the school's list of who gets alerts. Adopt them on this
+        # PC when it has none of its own, and keep them in step after the user saves a change.
+        saved = message.startswith("Saved")
+        if phones and (saved or (not message and not self.alert_numbers_input.text().strip())):
+            self.alert_numbers_input.setText(", ".join(phones))
+            self._emit_settings()
 
     def _save_profile(self) -> None:
         from campusguard import profile
@@ -840,6 +861,8 @@ class SettingsPage(QWidget):
             cloud_sync=self._cloud_sync_value,
             footage_retention_days=int(self.footage_retention_input.currentData()),
             incident_retention_days=int(self.incident_retention_input.currentData()),
+            silent_mode=self.silent_mode_toggle.isChecked(),
+            keep_awake=self.keep_awake_toggle.isChecked(),
         )
 
         self._initial_settings = settings

@@ -280,7 +280,7 @@ def test_footage_is_never_transmitted_and_remote_alert_has_no_clip_route(nodes):
     assert not list(two.repo.footage_dir.iterdir())            # nothing copied locally
     assert set(one.facade.events(0, 10)["events"][0]) == {
         "incident_id", "camera_id", "camera_name", "happened_at", "event", "confidence",
-        "severity", "status", "has_footage", "seq"}
+        "severity", "status", "has_footage", "seq", "suppressed"}
 
 
 def test_sync_thread_start_stop_and_isolation(nodes):

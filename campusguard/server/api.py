@@ -300,7 +300,7 @@ class _Handler(BaseHTTPRequestHandler):
     def _route_set_camera_tuning(self, query, camera_id: str) -> None:
         data = self._read_json()
         spec: dict = {}
-        for key in ("quiet_start", "quiet_end", "group"):
+        for key in ("quiet_start", "quiet_end", "relaxed_start", "relaxed_end", "group"):
             if key in data:
                 if not isinstance(data[key], str) or len(data[key]) > 40:
                     raise ApiError(HTTPStatus.BAD_REQUEST, f"'{key}' must be text.")

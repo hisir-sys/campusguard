@@ -98,6 +98,10 @@ class AppSettings:
     health_numbers: str = ""
     health_offline_minutes: int = 5
     health_min_disk_gb: int = 20
+    # Silent test mode: detect and record, but send no pop-up, sound, phone alert or push.
+    silent_mode: bool = False
+    # Ask Windows not to sleep while CampusGuard is running (a sleeping PC watches nothing).
+    keep_awake: bool = True
 
     @classmethod
     def from_dict(cls, values: dict[str, Any]) -> "AppSettings":
@@ -148,6 +152,8 @@ class AppSettings:
             health_numbers=str(candidate.health_numbers)[:600],
             health_offline_minutes=int(_seconds(candidate.health_offline_minutes, 5, 1, 120)),
             health_min_disk_gb=int(_seconds(candidate.health_min_disk_gb, 20, 1, 100000)),
+            silent_mode=bool(candidate.silent_mode),
+            keep_awake=bool(candidate.keep_awake),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -169,6 +175,10 @@ class CameraConfig:
     quiet_end: str = ""
     pre_roll_seconds: float = 0.0
     post_roll_seconds: float = 0.0
+    # Relaxed hours: fights are still recorded but graded LOW and announced to nobody
+    # (for example a gym during sports period).
+    relaxed_start: str = ""
+    relaxed_end: str = ""
 
 @dataclass(frozen=True)
 class CameraCredentials:

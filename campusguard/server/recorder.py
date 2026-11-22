@@ -8,13 +8,8 @@ from campusguard.settings import CameraConfig
 
 
 def severity_for(confidence: float) -> str:
-    score = confidence * 100.0 if confidence <= 1.0 else confidence
-    return (
-        "LOW" if score < 70.0
-        else "MEDIUM" if score < 85.0
-        else "HIGH" if score < 95.0
-        else "CRITICAL"
-    )
+    from campusguard.alert_policy import severity_for_score
+    return severity_for_score(confidence * 100.0 if confidence <= 1.0 else confidence)
 
 
 class IncidentRecorder:
@@ -26,10 +21,15 @@ class IncidentRecorder:
         self._pending_footage: dict[str, str] = {}
 
     def record_event(
-        self, camera: CameraConfig, event: str, confidence: float, cooldown_seconds: int
+        self, camera: CameraConfig, event: str, confidence: float, cooldown_seconds: int,
+        silent_mode: bool = False,
     ) -> dict[str, Any] | None:
+        from campusguard.alert_policy import decide
+
+        decision = decide(confidence, silent_mode=silent_mode,
+                          relaxed_start=getattr(camera, "relaxed_start", ""), relaxed_end=getattr(camera, "relaxed_end", ""))
         incident = self.repository.create_incident(
-            camera, event, confidence, severity_for(confidence), cooldown_seconds
+            camera, event, confidence, decision.severity, cooldown_seconds, decision.suppressed
         )
         if incident is None:
             return None
@@ -37,7 +37,7 @@ class IncidentRecorder:
             self._pending_footage[camera.camera_id] = str(incident["public_id"])
         return incident
 
-    def update_assessment(self, camera_id: str, confidence: float) -> str | None:
+    def update_assessment(self, camera_id: str, confidence: float, relaxed: bool = False) -> str | None:
         """Update the existing incident's peak confidence without creating a new row."""
         with self._lock:
             public_id = self._pending_footage.get(camera_id)
@@ -52,7 +52,7 @@ class IncidentRecorder:
         if score <= previous_score:
             return public_id
         self.repository.update_incident_assessment(
-            public_id, confidence, severity_for(confidence)
+            public_id, confidence, "LOW" if relaxed else severity_for(confidence)
         )
         return public_id
 

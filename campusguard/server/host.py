@@ -197,18 +197,24 @@ class ServerHost:
         if camera is None:
             return
         if event == "UPDATE":
-            public_id = self.recorder.update_assessment(camera_id, confidence)
+            from campusguard.tuning import in_quiet_hours
+            public_id = self.recorder.update_assessment(
+                camera_id, confidence, in_quiet_hours(camera.relaxed_start, camera.relaxed_end))
             if public_id:
                 log.info(
                     "incident %s peak confidence updated to %.0f%% on %s",
                     public_id, confidence * 100, camera.name,
                 )
             return
-        cooldown = self.repository.get_settings().alert_cooldown_seconds
-        incident = self.recorder.record_event(camera, event, confidence, cooldown)
+        settings = self.repository.get_settings()
+        incident = self.recorder.record_event(camera, event, confidence, settings.alert_cooldown_seconds,
+                                              settings.silent_mode)
         if incident is not None:
-            log.info("incident %s: %s on %s (%.0f%%)", incident["public_id"], event, camera.name, confidence * 100)
-            self._send_phone_alert(camera, incident, confidence)
+            held = str(incident.get("suppressed") or "")
+            log.info("incident %s: %s on %s (%.0f%%)%s", incident["public_id"], event, camera.name,
+                     confidence * 100, f" [{held}: not announced]" if held else "")
+            if not held:
+                self._send_phone_alert(camera, incident, confidence)
 
     def _on_footage(self, camera_id: str, path: str) -> None:
         public_id = self.recorder.attach_footage(camera_id, path)
@@ -223,6 +229,8 @@ class ServerHost:
         """Rebuild who gets alerts from the saved settings (cheap; also done every health tick)."""
         try:
             settings = self.repository.get_settings()
+            from campusguard import keep_awake
+            keep_awake.set_active(settings.keep_awake)
             try:
                 token = self.vault.load_whatsapp_token()
             except Exception:
@@ -352,6 +360,7 @@ class ServerHost:
             "address": camera.source_address, "ai_enabled": camera.ai_enabled,
             "group": camera.group_name, "sensitivity": camera.threshold_offset,
             "quiet_start": camera.quiet_start, "quiet_end": camera.quiet_end,
+            "relaxed_start": camera.relaxed_start, "relaxed_end": camera.relaxed_end,
             "pre_roll_seconds": camera.pre_roll_seconds, "post_roll_seconds": camera.post_roll_seconds,
             "created_at": camera.created_at, **{k: health.get(k) for k in
             ("status", "health", "message", "fps", "resolution", "seconds_since_frame", "ai")},
@@ -608,8 +617,13 @@ class HostBackend:
             if "group" in spec:
                 group = " ".join(str(spec["group"]).split())[:40]
                 self.host.repository.set_camera_group(camera_id, group)
+            relaxed_start, relaxed_end = camera.relaxed_start, camera.relaxed_end
+            if "relaxed_start" in spec or "relaxed_end" in spec:
+                relaxed_start, relaxed_end = self.host.repository.set_camera_relaxed(
+                    camera_id, spec.get("relaxed_start", camera.relaxed_start), spec.get("relaxed_end", camera.relaxed_end))
             updated = replace(camera, quiet_start=start, quiet_end=end, pre_roll_seconds=pre,
-                              post_roll_seconds=post, group_name=group)
+                              post_roll_seconds=post, group_name=group,
+                              relaxed_start=relaxed_start, relaxed_end=relaxed_end)
             self.host.cameras[camera_id] = updated
             self.host.manager.set_camera_tuning(camera_id, start, end, pre, post)
             return self.host._camera_dict(updated)

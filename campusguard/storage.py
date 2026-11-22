@@ -165,9 +165,13 @@ class Repository:
                 ("quiet_end", "TEXT NOT NULL DEFAULT ''"),
                 ("pre_roll_seconds", "REAL NOT NULL DEFAULT 0"),
                 ("post_roll_seconds", "REAL NOT NULL DEFAULT 0"),
+                ("relaxed_start", "TEXT NOT NULL DEFAULT ''"),
+                ("relaxed_end", "TEXT NOT NULL DEFAULT ''"),
             ):
                 if column not in camera_columns:
                     connection.execute(f"ALTER TABLE cameras ADD COLUMN {column} {ddl}")
+            if "suppressed" not in columns:
+                connection.execute("ALTER TABLE incidents ADD COLUMN suppressed TEXT NOT NULL DEFAULT ''")
             if "footage_sha256" not in columns:
                 connection.execute("ALTER TABLE incidents ADD COLUMN footage_sha256 TEXT")
             if "footage_path" not in columns:
@@ -207,6 +211,8 @@ class Repository:
                 quiet_end=str(row["quiet_end"] or ""),
                 pre_roll_seconds=float(row["pre_roll_seconds"] or 0.0),
                 post_roll_seconds=float(row["post_roll_seconds"] or 0.0),
+                relaxed_start=str(row["relaxed_start"] or ""),
+                relaxed_end=str(row["relaxed_end"] or ""),
             )
             for row in rows
         ]
@@ -278,6 +284,19 @@ class Repository:
         window = f"quiet {start}-{end}" if start else "no quiet hours"
         self.log_audit("camera_tuning", camera_id, f"{window}, pre {pre:g}s, post {post:g}s")
         return start, end, pre, post
+
+    def set_camera_relaxed(self, camera_id: str, relaxed_start: str, relaxed_end: str) -> tuple[str, str]:
+        """Store a camera's relaxed hours (fights are recorded but graded LOW and announced to nobody)."""
+        from campusguard.tuning import normalise_quiet_window
+
+        start, end = normalise_quiet_window(relaxed_start, relaxed_end)
+        with self._lock, self._connection() as connection:
+            connection.execute(
+                "UPDATE cameras SET relaxed_start = ?, relaxed_end = ? WHERE camera_id = ?",
+                (start, end, camera_id),
+            )
+        self.log_audit("camera_relaxed", camera_id, f"relaxed {start}-{end}" if start else "no relaxed hours")
+        return start, end
 
     def set_camera_group(self, camera_id: str, group_name: str) -> None:
         group_name = " ".join(str(group_name).split())[:40]
@@ -379,6 +398,7 @@ class Repository:
         confidence: float,
         severity: str,
         cooldown_seconds: int,
+        suppressed: str = "",
     ) -> dict[str, Any] | None:
         now = datetime.now(timezone.utc)
         happened_at = now.isoformat(timespec="seconds")
@@ -395,8 +415,8 @@ class Repository:
 
             cursor = connection.execute(
                 """INSERT INTO incidents
-                   (public_id, camera_id, camera_name, happened_at, event, confidence, severity)
-                   VALUES ('PENDING', ?, ?, ?, ?, ?, ?)""",
+                   (public_id, camera_id, camera_name, happened_at, event, confidence, severity, suppressed)
+                   VALUES ('PENDING', ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     camera.camera_id,
                     camera.name,
@@ -404,6 +424,7 @@ class Repository:
                     event,
                     float(confidence),
                     severity,
+                    suppressed if suppressed in ("silent", "relaxed") else "",
                 ),
             )
             row_id = int(cursor.lastrowid)
@@ -574,6 +595,32 @@ class Repository:
                 (float(confidence), severity, public_id),
             )
 
+    def silent_report(self, days: float = 14.0) -> dict[str, Any]:
+        """What silent mode caught: how many alerts it held back, and where and when."""
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds")
+        with self._lock, self._connection() as connection:
+            rows = connection.execute(
+                "SELECT camera_name, happened_at, severity, status FROM incidents "
+                "WHERE suppressed = 'silent' AND happened_at >= ? ORDER BY happened_at",
+                (cutoff,),
+            ).fetchall()
+        by_camera: dict[str, int] = {}
+        by_hour: dict[int, int] = {}
+        false_alarms = reviewed = 0
+        for row in rows:
+            by_camera[row["camera_name"]] = by_camera.get(row["camera_name"], 0) + 1
+            try:
+                hour = datetime.fromisoformat(row["happened_at"]).astimezone().hour
+                by_hour[hour] = by_hour.get(hour, 0) + 1
+            except ValueError:
+                pass
+            if row["status"] in ("CONFIRMED", "FALSE_ALARM", "DISMISSED"):
+                reviewed += 1
+                if row["status"] in ("FALSE_ALARM", "DISMISSED"):
+                    false_alarms += 1
+        return {"total": len(rows), "by_camera": by_camera, "by_hour": by_hour,
+                "reviewed": reviewed, "false_alarms": false_alarms, "days": days}
+
     def update_incident_status(self, public_id: str, status: str) -> None:
         allowed = {"NEW", "ACKNOWLEDGED", "RESOLVED", "CONFIRMED", "DISMISSED", "FALSE_ALARM"}
         if status not in allowed:
@@ -603,7 +650,7 @@ class Repository:
         with self._lock, self._connection() as connection:
             rows = connection.execute(
                 "SELECT public_id, camera_id, camera_name, happened_at, event, confidence, severity, "
-                "status, footage_path, sync_seq FROM incidents WHERE sync_seq > ? ORDER BY sync_seq ASC LIMIT ?",
+                "status, footage_path, sync_seq, suppressed FROM incidents WHERE sync_seq > ? ORDER BY sync_seq ASC LIMIT ?",
                 (max(0, int(since_seq)), max(1, int(limit))),
             ).fetchall()
             latest = connection.execute("SELECT value FROM sequences WHERE name = 'sync'").fetchone()
@@ -613,6 +660,7 @@ class Repository:
                 "happened_at": row["happened_at"], "event": row["event"], "confidence": row["confidence"],
                 "severity": row["severity"], "status": row["status"],
                 "has_footage": bool(row["footage_path"]), "seq": int(row["sync_seq"]),
+                "suppressed": str(row["suppressed"] or ""),
             }
             for row in rows
         ]

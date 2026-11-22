@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 )
 
 from campusguard import system_health
+from campusguard.alert_policy import decide
 from campusguard.camera_notices import OPERATOR_STOP_MESSAGE, describe_problems, is_problem
 
 from campusguard.footage import clear_footage
@@ -1168,6 +1169,7 @@ class MainWindow(QMainWindow):
         self.settings_page.settings_changed.connect(self._save_settings)
         self.settings_page.whatsapp_token_changed.connect(self._on_whatsapp_token)
         self.settings_page.test_alert_requested.connect(self._send_test_alert)
+        self.settings_page.silent_report_requested.connect(self._show_silent_report)
         self.settings_page.server_connection_test_requested.connect(self._test_server_connection)
         self.settings_page.server_token_changed.connect(self._save_server_token)
         self.settings_page.update_check_requested.connect(self.update_check_requested)
@@ -1355,9 +1357,12 @@ class MainWindow(QMainWindow):
             camera.camera_id, str(values.get("quiet_start", "")), str(values.get("quiet_end", "")),
             float(values.get("pre_roll_seconds", 0.0) or 0.0), float(values.get("post_roll_seconds", 0.0) or 0.0),
         )
+        relaxed_start, relaxed_end = self.repository.set_camera_relaxed(
+            camera.camera_id, str(values.get("relaxed_start", "")), str(values.get("relaxed_end", "")))
         camera = replace(
             camera, group_name=group, threshold_offset=offset,
             quiet_start=quiet_start, quiet_end=quiet_end, pre_roll_seconds=pre, post_roll_seconds=post,
+            relaxed_start=relaxed_start, relaxed_end=relaxed_end,
         )
         self.cameras[camera.camera_id] = camera
         self.camera_stats[camera.camera_id] = CameraStats()
@@ -1472,6 +1477,8 @@ class MainWindow(QMainWindow):
             camera_id, str(values.get("quiet_start", "")), str(values.get("quiet_end", "")),
             float(values.get("pre_roll_seconds", 0.0) or 0.0), float(values.get("post_roll_seconds", 0.0) or 0.0),
         )
+        relaxed_start, relaxed_end = self.repository.set_camera_relaxed(
+            camera_id, str(values.get("relaxed_start", "")), str(values.get("relaxed_end", "")))
         updated = replace(
             camera,
             name=values["name"],
@@ -1480,6 +1487,7 @@ class MainWindow(QMainWindow):
             group_name=group,
             threshold_offset=offset,
             quiet_start=quiet_start, quiet_end=quiet_end, pre_roll_seconds=pre, post_roll_seconds=post,
+            relaxed_start=relaxed_start, relaxed_end=relaxed_end,
         )
         self.cameras[camera_id] = updated
         if self.camera_manager is not None:
@@ -1844,6 +1852,11 @@ class MainWindow(QMainWindow):
         from campusguard import alarm_sound
         alarm_sound.set_enabled(self.settings.alert_sound_enabled)
         try:
+            from campusguard import keep_awake
+            keep_awake.set_active(self.settings.keep_awake)
+        except Exception:
+            pass
+        try:
             from campusguard import camera_runtime
             camera_runtime.set_gpu_decode(self.settings.gpu_video_decode)
         except Exception:
@@ -1922,6 +1935,26 @@ class MainWindow(QMainWindow):
             self._toast("WhatsApp token saved securely.", 5000)
         except Exception as error:
             self._toast(f"Could not save the token: {error}", 8000)
+
+    def _show_silent_report(self) -> None:
+        report = self.repository.silent_report(14)
+        if not report["total"]:
+            text = ("Nothing yet. In the last 14 days silent mode has not held back any alert."
+                    if self.settings.silent_mode else
+                    "Silent mode has not held back any alert in the last 14 days (it may be off).")
+        else:
+            cameras = sorted(report["by_camera"].items(), key=lambda item: -item[1])[:5]
+            hours = sorted(report["by_hour"].items(), key=lambda item: -item[1])[:3]
+            days = max(1.0, float(report["days"]))
+            text = (
+                f"In the last {int(days)} days, silent mode held back {report['total']} alert(s) "
+                f"that would have been sent.\n\n"
+                f"Busiest cameras: " + ", ".join(f"{name} ({count})" for name, count in cameras) + "\n"
+                f"Busiest hours: " + ", ".join(f"{hour:02d}:00 ({count})" for hour, count in hours) + "\n\n"
+                f"You marked {report['reviewed']} as reviewed, {report['false_alarms']} of them false alarms. "
+                "Open each one in Incidents and mark it Confirmed or False alarm to measure how often the AI is wrong."
+            )
+        QMessageBox.information(self, "Silent mode report", text)
 
     def _send_test_alert(self) -> None:
         from campusguard.notify import AlertInfo as _Info
@@ -2081,28 +2114,30 @@ class MainWindow(QMainWindow):
         severity: str,
     ) -> None:
         score = confidence * 100.0 if confidence <= 1.0 else confidence
-        severity = (
-            "LOW" if score < 70.0
-            else "MEDIUM" if score < 85.0
-            else "HIGH" if score < 95.0
-            else "CRITICAL"
+        # Silent mode and the camera's relaxed hours decide how loudly this is announced.
+        decision = decide(
+            confidence, silent_mode=self.settings.silent_mode,
+            relaxed_start=camera.relaxed_start, relaxed_end=camera.relaxed_end,
         )
+        severity = decision.severity
         incident = self.repository.create_incident(
             camera,
             event,
             confidence,
             severity,
             self.settings.alert_cooldown_seconds,
+            decision.suppressed,
         )
         if incident is None:
             return
         self._pending_footage_incidents["LOCAL-TEST"] = str(
             incident["public_id"]
         )
-        self._send_phone_alert(camera, str(incident["public_id"]), confidence, severity)
-        self._severity_alert.show_alert(
-            str(incident["public_id"]), event, camera.name, confidence
-        )
+        if decision.announce:
+            self._send_phone_alert(camera, str(incident["public_id"]), confidence, severity)
+            self._severity_alert.show_alert(
+                str(incident["public_id"]), event, camera.name, confidence
+            )
         self.incidents_page.refresh()
         self.alerts_page.refresh()
         self.dashboard.refresh_summary()
@@ -2144,9 +2179,10 @@ class MainWindow(QMainWindow):
                 self.repository.update_incident_assessment(
                     public_id, confidence, severity
                 )
-                self._severity_alert.update_alert(
-                    public_id, "FIGHT DETECTED", camera.name, confidence
-                )
+                if decision.announce:
+                    self._severity_alert.update_alert(
+                        public_id, "FIGHT DETECTED", camera.name, confidence
+                    )
                 self.incidents_page.refresh()
                 self.alerts_page.refresh()
                 self.dashboard.refresh_summary()
@@ -2178,9 +2214,10 @@ class MainWindow(QMainWindow):
                     self.repository.update_incident_assessment(
                         public_id, confidence, severity
                     )
-                self._severity_alert.show_alert(
-                    public_id, event, camera.name, confidence
-                )
+                if decision.announce:
+                    self._severity_alert.show_alert(
+                        public_id, event, camera.name, confidence
+                    )
             self.incidents_page.refresh()
             self.alerts_page.refresh()
             self.dashboard.refresh_summary()

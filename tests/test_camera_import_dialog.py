@@ -93,6 +93,9 @@ class _Repo:
     def set_camera_tuning(self, camera_id, quiet_start, quiet_end, pre, post):
         return quiet_start, quiet_end, float(pre or 0.0), float(post or 0.0)
 
+    def set_camera_relaxed(self, camera_id, start, end):
+        return start, end
+
     def remove_camera(self, camera_id):
         self.removed.append(camera_id)
 

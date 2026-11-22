@@ -6,6 +6,7 @@ import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 
 import pytest
 
@@ -434,6 +435,9 @@ def test_health_check_tells_it_once_and_waits_for_startup(env, monkeypatch):
     monkeypatch.setattr(env.host.dispatcher, "send_notice", lambda title, text: notices.append((title, text)))
     monkeypatch.setattr(type(env.host.dispatcher), "can_send_notices", property(lambda self: True))
     env.host.health_watch.configure(60, 1)
+    # Plenty of disk, whatever this machine has free: the test is about the offline notice.
+    monkeypatch.setattr("campusguard.server.host.shutil.disk_usage",
+                        lambda path: SimpleNamespace(total=1, used=0, free=500 * 1024 ** 3))
     env.host.health.snapshot = lambda: {"CAM-001": {"health": "offline"}}
     env.host.started_at = time.time()                      # just started: stay quiet
     env.host.check_health()
