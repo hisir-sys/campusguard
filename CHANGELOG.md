@@ -1,5 +1,12 @@
 # CampusGuard Desktop — Update Notes
 
+## Edit your account (shared with the website and phone app)
+
+- **Settings > General now has a "Your account" section:** change your name, school or college name, your phone number and the phone numbers that get alerts (up to 5). It saves to the same account profile the website and the phone app use, so a change in one place shows up in the others.
+- The sign-in email is shown but cannot be changed here.
+- **Not wired yet:** the alert numbers are stored with the account, but the desktop's own WhatsApp sending still uses the numbers in its alert settings.
+- Tested with fakes only (profile client and settings page); not yet against the live website API.
+
 ## One office PC watching 40-60 cameras
 
 - **Settings page now has Building numbers, IT / health numbers and "Camera offline after"** (before, these could only be set on the server). Fixed a bug where changing any setting silently reset the settings that have no box on the page (clip frame rate, lead-in/follow-on seconds, disk limit, ...).

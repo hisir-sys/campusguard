@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+import threading
 
 
 from PySide6.QtCore import QEvent, Qt, QUrl, Signal
@@ -65,6 +66,7 @@ class SettingsPage(QWidget):
     trend_report_requested = Signal()
     set_pin_requested = Signal(str, str)
     test_alert_requested = Signal()
+    _profile_loaded = Signal(object, str)  # (profile dict or None, message)
 
     def __init__(self, settings: AppSettings, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -544,9 +546,48 @@ class SettingsPage(QWidget):
         privacy_section.body.addLayout(privacy_form)
         content_layout.addWidget(privacy_section)
 
+        account_section = SettingsSection(
+            "Your account",
+            "Shared with the CampusGuard website and phone app: change it in any of them and it updates everywhere.",
+        )
+        account_form = QFormLayout()
+        account_form.setHorizontalSpacing(24)
+        account_form.setVerticalSpacing(14)
+        self.profile_email = QLabel("Loading your details…")
+        self.profile_email.setProperty("muted", True)
+        self.profile_name = QLineEdit()
+        self.profile_name.setMaxLength(80)
+        self.profile_name.setPlaceholderText("Your name")
+        self.profile_school = QLineEdit()
+        self.profile_school.setMaxLength(120)
+        self.profile_school.setPlaceholderText("School or college name")
+        self.profile_phone = QLineEdit()
+        self.profile_phone.setMaxLength(20)
+        self.profile_phone.setPlaceholderText("+91 70000 00000")
+        self.profile_alerts = QPlainTextEdit()
+        self.profile_alerts.setPlaceholderText("One number per line, up to 5")
+        self.profile_alerts.setFixedHeight(96)
+        self.profile_status = QLabel("")
+        self.profile_status.setProperty("muted", True)
+        self.profile_status.setWordWrap(True)
+        self.profile_save = QPushButton("Save my details")
+        self.profile_save.setEnabled(False)
+        self.profile_save.clicked.connect(self._save_profile)
+        account_form.addRow("Signed in as", self.profile_email)
+        account_form.addRow("Your name", self.profile_name)
+        account_form.addRow("School", self.profile_school)
+        account_form.addRow("Your phone", self.profile_phone)
+        account_form.addRow("Alert numbers", self.profile_alerts)
+        account_form.addRow("", self.profile_save)
+        account_form.addRow("", self.profile_status)
+        account_section.body.addLayout(account_form)
+        content_layout.addWidget(account_section)
+        self._profile_loaded.connect(self._apply_profile)
+        threading.Thread(target=self._load_profile, daemon=True).start()
+
         content_layout.addStretch(1)
         self._tab_sections = {
-            "General": [workspace_section],
+            "General": [account_section, workspace_section],
             "Appearance": [appearance_section],
             "Detection": [ai_section, status_section],
             "Alerts": [phone_section],
@@ -679,6 +720,43 @@ class SettingsPage(QWidget):
                 return
         combo.setProperty("applied", new)
         self._emit_settings()
+
+
+    # ------------------------------------------------------------------ account details
+    def _load_profile(self) -> None:
+        from campusguard import profile
+        try:
+            self._profile_loaded.emit(profile.fetch_profile(), "")
+        except profile.ProfileError as error:
+            self._profile_loaded.emit(None, str(error))
+
+    def _apply_profile(self, data, message: str) -> None:
+        if data is None:
+            self.profile_email.setText("Not available right now")
+            self.profile_status.setText(message)
+            return
+        self.profile_email.setText(str(data.get("email", "")))
+        self.profile_name.setText(str(data.get("full_name", "")))
+        self.profile_school.setText(str(data.get("school_name", "")))
+        self.profile_phone.setText(str(data.get("phone", "")))
+        self.profile_alerts.setPlainText("\n".join(data.get("alert_phones", [])))
+        self.profile_save.setEnabled(True)
+        self.profile_status.setText(message)
+
+    def _save_profile(self) -> None:
+        from campusguard import profile
+        self.profile_save.setEnabled(False)
+        self.profile_status.setText("Saving…")
+        values = (self.profile_name.text(), self.profile_school.text(), self.profile_phone.text(),
+                  self.profile_alerts.toPlainText().splitlines())
+
+        def work() -> None:
+            try:
+                self._profile_loaded.emit(profile.save_profile(*values), "Saved. The website and phone app show the same details.")
+            except profile.ProfileError as error:
+                self._profile_loaded.emit({"email": self.profile_email.text(), "full_name": values[0], "school_name": values[1],
+                                           "phone": values[2], "alert_phones": values[3]}, str(error))
+        threading.Thread(target=work, daemon=True).start()
 
     def _cloud_sync_toggled(self, checked: bool) -> None:
         if self._updating:
