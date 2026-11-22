@@ -14,4 +14,5 @@ CampusGuard uses the open-source and third-party components below. Each stays un
 ## Open items that need a decision before selling
 
 - **Ultralytics YOLO is AGPL-3.0.** Shipping it inside a closed-source paid product needs the Ultralytics Enterprise Licence, or the product must be replaced with a permissively licensed detector. The CampusGuard Proprietary Licence cannot override AGPL for that component.
-- **Spontim 1.0** (`models/model_16_m3_0.8888.pth`) is described as an MC3-18 model fine-tuned from the published FDSC work. The licence of that work, its pretrained weights and the training datasets must be confirmed. Many public fight datasets are research-only.
+- **Spontim 1.0** (`models/model_16_m3_0.8888.pth`) was trained entirely by the CampusGuard owner, so its weights are CampusGuard's own. Two things still need a written answer, because they decide what you can say to a school: (1) the licence of every dataset it was trained or fine-tuned on (your own footage is fine; many public fight datasets are research-only), and (2) whether training started from pretrained weights, such as the Kinetics-pretrained MC3-18 that ships with torchvision, and under what licence those come.
+- **Other models** (`yolo11n.pt`, `yolo11n-pose.pt`) are not in the repository and are not CampusGuard's. They are Ultralytics models under the AGPL point above.
