@@ -33,9 +33,15 @@ Defaults: 640x360 at 15 fps, no audio, like a camera sub-stream. Use `--size 960
 3. Check one: VLC -> Media -> Open Network Stream -> `rtsp://127.0.0.1:8554/cam_1`.
 
 ## 4. Prepare CampusGuard so the test is safe
-- **Turn phone alerts off**: clear the alert numbers and set WhatsApp mode to off (Settings), otherwise 50 fake
-  fights send real messages. Use a laptop that is not the school's live system.
-- Close other heavy programs, plug the laptop into power, set the power mode to "Best performance".
+- **Turn on Silent test mode** (Settings > Phone alerts > "Silent test mode"). The app still detects and records
+  everything, so the load is real, but it sends no pop-up, sound, phone alert or push. Also clear the alert numbers
+  if this PC has been used for real alerts. Use a laptop that is not the school's live system.
+- **Check the AI models are present.** Open the app's model status: it must not say MISSING. Without the models the
+  test only measures video reading, not the AI, and the numbers will look far too good. If they are missing, put
+  the model files in the `models` folder (see `docs/DEVELOPMENT.md`).
+- Leave "Stay awake" on (Settings), close other heavy programs, plug the laptop into power, set the power mode to
+  "Best performance", and set the lid action to "Do nothing" if you will close it.
+- Note the PC's model, CPU, RAM and whether it has a separate GPU. You will put this in the result table.
 
 ## 5. Add the cameras in steps (10, then 25, then 50)
 
@@ -71,7 +77,8 @@ Stop the feeds (Ctrl+C in the serve terminal) and restart with the fight clip:
 
 All 50 cameras now see movement at once, so the motion gate stays open on all of them. That is like break time at
 school, and it is the number that decides whether the PC is enough. Run `monitor_usage.py` again. You will get
-many incidents; delete the test cameras afterwards.
+many incidents; with silent mode on they are held back, and **What did silent mode catch?** shows the count.
+Delete the test cameras and incidents afterwards.
 
 ## 8. How to read the result (suggested limits, adjust after your first real pilot)
 - **Pass:** average PC CPU under about 70%, peaks under about 90%, RAM under about 75%, every camera stays
