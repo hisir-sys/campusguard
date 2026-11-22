@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """How many cameras can this machine read? Run it on the school's server before the pilot.
 
     python scripts/load_test_capture.py --streams 50 --fps 20 --size 1280x720

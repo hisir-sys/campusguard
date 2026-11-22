@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Alarm sounds for incident alerts: generated tones, louder and more urgent as severity rises.
 
 Sounds are synthesised in code (no audio files to ship). Each level is one WAV that is

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Log how much CPU and memory CampusGuard (and the whole PC) uses, every few seconds, to a CSV.
 
     pip install psutil

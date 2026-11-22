@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Smooth incident clips, independent of how fast the AI keeps up.
 
 The AI only looks at some frames (it skips quiet scenes and runs behind on a busy server), so

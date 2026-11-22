@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """One combined notice for camera problems.
 
 A camera that cannot connect retries every few seconds, and a school may have dozens of them. Showing a

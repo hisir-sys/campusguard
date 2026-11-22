@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Simple machine health checks used by the Settings page and the background monitor.
 
 No extra dependencies: disk use via ``shutil`` and an optional GPU read via torch.

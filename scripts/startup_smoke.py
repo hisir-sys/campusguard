@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Import every CampusGuard module and check that main.py can start headlessly."""
 from __future__ import annotations
 

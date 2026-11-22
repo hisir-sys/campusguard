@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Cameras (v3): a card grid with Edit, Disable/Enable, Reconnect and Remove on every camera."""
 from __future__ import annotations
 

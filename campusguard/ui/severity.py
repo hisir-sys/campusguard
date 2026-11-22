@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """One place for how a severity (LOW/MEDIUM/HIGH/CRITICAL) is named and coloured in the UI.
 
 Names match the pop-up alert: MEDIUM = ALERT, HIGH = CRITICAL ALERT, CRITICAL = DANGER.

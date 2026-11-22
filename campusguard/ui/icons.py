@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Small built-in SVG line-icon set, tinted to match the current theme.
 
 No image files are needed: every icon is a few lines of SVG drawn here.

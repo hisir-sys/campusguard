@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Per-camera tuning helpers: quiet hours and clip lead-in / follow-on lengths.
 
 Everything here is pure (no Qt, no camera access) so it is easy to test.

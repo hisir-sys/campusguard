@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Export the Spontim 1.0 classifier to ONNX (and optionally build a TensorRT engine).
 
 Usage:  python scripts/export_models.py --out models/spontim.onnx [--tensorrt]

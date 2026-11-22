@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Dashboard (v3): stat cards, incidents chart, detection engine, live cameras, recent incidents."""
 from __future__ import annotations
 

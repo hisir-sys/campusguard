@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Whole-app search: pages, settings and actions that the nav search box can run.
 
 Pure Python (no Qt), so ranking is easy to test. The main window builds the

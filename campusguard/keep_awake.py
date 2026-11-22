@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Stops Windows from going to sleep while CampusGuard is watching cameras.
 
 A sleeping PC watches nothing. On Windows this asks the system to stay awake (the screen may

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Dialog that runs a local video file through the production AI pipeline."""
 from __future__ import annotations
 

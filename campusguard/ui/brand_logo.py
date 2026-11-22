@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """CampusGuard logo: three rounded pills and a dot, drawn in code so it is sharp at any size.
 
 LogoMark   - the static mark for the app chrome.

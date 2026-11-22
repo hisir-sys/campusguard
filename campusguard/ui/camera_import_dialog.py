@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Import many cameras from a CSV file: pick the file, review every row, then add the ones that are ready."""
 from __future__ import annotations
 

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """CampusGuard navigation: single icon rail + hover-opened Home panel.
 
 Layout (copied from the "rail + panel" reference):

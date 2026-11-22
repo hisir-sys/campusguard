@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """How loudly an incident is announced: silent test mode and per-camera relaxed hours.
 
 Pure functions (no Qt, no network) so the rules are easy to test.

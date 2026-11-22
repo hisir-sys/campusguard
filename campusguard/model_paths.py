@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Model file aliases.
 
 ``models/model_16_m3_0.8888.pth`` and ``models/fight_mc3_18.pth`` are the same

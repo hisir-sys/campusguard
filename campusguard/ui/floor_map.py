@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Floor map: import a floor plan, drag cameras onto it, see at a glance which one is alerting."""
 from __future__ import annotations
 

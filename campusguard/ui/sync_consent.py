@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """One-time notice and choice before this PC sends anything to the CampusGuard website account."""
 
 from __future__ import annotations

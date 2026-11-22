@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Public connection settings for CampusGuard customer sign-in.
 
 The Supabase URL and *publishable* key are designed to be public: they only

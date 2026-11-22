@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Trend report: incidents per day, hour and camera, plus the false-alarm rate.
 
 Pure functions over incident rows, so the numbers can be tested without a UI.

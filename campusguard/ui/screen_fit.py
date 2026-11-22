@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Pick a window size, minimum size and base font that suit the user's screen.
 
 All numbers are in Qt's device-independent pixels, i.e. already divided by the

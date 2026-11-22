@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Detect the machine and choose an engine profile (Lite / Standard / Server)."""
 from __future__ import annotations
 

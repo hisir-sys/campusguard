@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Collect requests from camera threads into bounded, GPU-sized batches."""
 from __future__ import annotations
 

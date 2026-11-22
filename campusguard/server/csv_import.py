@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Bulk camera import from CSV (name,type,address,username,password,ai_enabled)."""
 from __future__ import annotations
 

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Turns detector events into incidents and attaches the saved footage."""
 from __future__ import annotations
 

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """One-way sync of school summary + incident metadata to the CampusGuard website.
 
 The website account that signs in to the app *is* the CampusGuard ID: pushed data is

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Read many cameras from a CSV file (a spreadsheet saved as CSV) and check every row before anything is added.
 
 This module has no Qt code, so the rules are easy to test. The dialog shows the result of `parse_camera_csv`

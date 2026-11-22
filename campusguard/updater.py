@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Self-update for the installed Windows build.
 
 The release workflow publishes ``CampusGuard-Setup.exe`` (an Inno Setup

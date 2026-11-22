@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Supervisor PIN: a second person's approval before evidence is destroyed.
 
 Only a salted scrypt hash is stored (in the OS credential vault). This is an

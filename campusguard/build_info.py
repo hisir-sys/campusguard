@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Build identity for CampusGuard.
 
 Local/source runs use "dev". The Windows release workflow injects a numeric

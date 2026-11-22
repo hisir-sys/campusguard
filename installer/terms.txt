@@ -3,7 +3,7 @@ CAMPUSGUARD SOFTWARE TERMS AND CONDITIONS
 Please read these terms carefully. By installing or using CampusGuard you agree to them. If you do not agree, do not install or use the software.
 
 1. LICENCE
-CampusGuard grants you a personal, non-exclusive, non-transferable licence to install and use the CampusGuard desktop application on computers you control, for the institution and term agreed with the CampusGuard team. You may not copy, sell, sub-license, reverse engineer or redistribute the software except where the law allows it.
+CampusGuard grants you a personal, non-exclusive, non-transferable licence to install and use the CampusGuard desktop application on computers you control, for the institution and term agreed with the CampusGuard team. The software, its AI models and its source code are confidential and owned by CampusGuard. You may not copy, sell, rent, sub-license, share installers or accounts outside your institution, reverse engineer, extract the AI models or protocol from, or use the software or its outputs to build or train a competing product, except where the law does not allow this to be prohibited. Any use outside these terms is infringement, and CampusGuard may seek an injunction, damages, costs and every other remedy available under Indian law, including the Copyright Act, 1957. These terms are governed by the laws of India and the courts at Kolkata have exclusive jurisdiction.
 
 2. YOUR ACCOUNT
 Use of the application requires an approved CampusGuard account. Keep your sign-in details confidential. You are responsible for all activity under your account. CampusGuard may suspend or end access if these terms are broken or an agreement ends.

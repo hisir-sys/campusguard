@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Themed window title bar (replaces the native Windows caption).
 
 Drag to move (Windows snap works through ``startSystemMove``), double-click to

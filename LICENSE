@@ -1,0 +1,49 @@
+CAMPUSGUARD PROPRIETARY LICENCE
+
+Copyright (c) 2026 CampusGuard (Soham). All rights reserved.
+
+This software, including its source code, compiled builds, AI model files, designs,
+documentation, text and images (the "Software"), is confidential and proprietary.
+It is NOT open source and NOT free software.
+
+1. NO LICENCE GRANTED
+   No permission is granted to use, copy, modify, merge, publish, distribute, sublicense,
+   sell, rent, host, run as a service, or make derivative works of the Software, in whole
+   or in part, except under a separate written agreement signed by the copyright holder
+   (for example a pilot or subscription agreement with a school). Being able to see this
+   repository, or to download a build, does not grant any of these rights.
+
+2. WHAT IS NOT ALLOWED WITHOUT WRITTEN PERMISSION
+   (a) copying, forking, mirroring or re-uploading the source code or any part of it;
+   (b) reverse engineering, decompiling or extracting the Software, its network protocol
+       or its AI models, except where the law says this cannot be prohibited;
+   (c) using the Software, its models or its outputs to build, train, improve or benchmark
+       a competing product or model;
+   (d) removing or changing copyright, licence or attribution notices;
+   (e) sharing accounts, installers, download links or access tokens with anyone outside
+       the institution named in your agreement;
+   (f) using the CampusGuard name, logo or design to suggest that another product is
+       CampusGuard or is approved by CampusGuard.
+
+3. REMEDIES
+   Any use outside this licence is unlicensed use and an infringement of the copyright
+   holder's rights. The copyright holder may seek an injunction, damages or an account of
+   profits, legal costs, and any other remedy available under the law, including the
+   Copyright Act, 1957 (India) and the Information Technology Act, 2000, and may report
+   the matter to the police and to hosting and platform providers for removal.
+
+4. THIRD-PARTY COMPONENTS
+   Some components are provided by others under their own licences (see
+   THIRD_PARTY_NOTICES.md where present). This licence does not change those licences.
+
+5. NO WARRANTY
+   The Software is provided "as is", without warranty of any kind. AI alerts can be wrong
+   or missed and do not replace human supervision. To the extent the law allows, the
+   copyright holder is not liable for any loss arising from its use.
+
+6. GOVERNING LAW
+   This licence is governed by the laws of India. The courts at Kolkata, West Bengal have
+   exclusive jurisdiction.
+
+Permission requests and licensing questions: campusguard43@gmail.com or WhatsApp
++91 70032 76998.

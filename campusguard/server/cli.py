@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Command-line entry points for server mode (used by main.py)."""
 from __future__ import annotations
 

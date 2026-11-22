@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Camera source address validation (no Qt / OpenCV / torch imports)."""
 from __future__ import annotations
 

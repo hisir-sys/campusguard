@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Check that every name one CampusGuard file takes from another really exists there.
 
 Catches the mistakes imports alone do not: a function renamed in one file but not in the file that

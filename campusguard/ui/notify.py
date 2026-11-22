@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """v3 toasts: small glass pills that slide up in the bottom-right corner, with an optional Undo."""
 from __future__ import annotations
 

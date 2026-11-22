@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Run a callable on the Qt main thread and wait for its result (for API threads)."""
 from __future__ import annotations
 

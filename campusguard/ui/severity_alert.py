@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """The v3 "Fight detected" modal: a scrim, a glass card that pops in, and two actions."""
 from __future__ import annotations
 

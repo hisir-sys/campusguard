@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Phone alerts: WhatsApp (free click-to-chat or Meta Cloud API) and ntfy push.
 
 Cost, honestly:

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """v3 shell pieces: the page header with its four actions, and the Ctrl K command palette."""
 from __future__ import annotations
 

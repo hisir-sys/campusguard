@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Decides when to tell the IT contacts about a problem (offline cameras, low disk).
 
 Pure logic, driven by the server's HealthTracker snapshot, so it can be tested with a fake clock.

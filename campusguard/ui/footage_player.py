@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Incident footage players: the full-screen viewer and the inline player of the side panel."""
 from __future__ import annotations
 

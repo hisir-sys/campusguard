@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Scan this computer's network for cameras and add one after it has been tested."""
 from __future__ import annotations
 

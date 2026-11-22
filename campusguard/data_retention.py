@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Automatic clean-up of old incident clips and records on a single PC (local mode).
 
 The school decides how long it needs them (Settings > Storage); 0 keeps everything until it is

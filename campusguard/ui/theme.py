@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """CampusGuard visual system (v3): graphite glass, coral signal, Inter / Outfit / JetBrains Mono."""
 
 from __future__ import annotations

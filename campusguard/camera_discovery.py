@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Find cameras on the school's own network (no Qt / OpenCV imports).
 
 Two methods are combined:

@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Phase 6: alert-only synchronisation between the servers of one school.
 
 Every server keeps detecting, recording and storing footage on its own. Servers

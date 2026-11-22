@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Thread-safe per-camera health, fed by the camera manager's signals."""
 from __future__ import annotations
 

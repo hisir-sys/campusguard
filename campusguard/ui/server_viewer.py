@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Remote school-server viewer. Network operations always run in QThread workers."""
 from __future__ import annotations
 

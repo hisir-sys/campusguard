@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Headless CampusGuard server: runs every camera, records incidents, serves the API."""
 from __future__ import annotations
 

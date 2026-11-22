@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """v3 building blocks: glass card with rim and cursor spotlight, pill controls, switch,
 segmented tabs, meter, bar chart and the detection-engine orb. Everything reads the live
 palette, so a theme change only needs ``update()``."""

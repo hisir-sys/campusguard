@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Process-wide count of running camera analysers (drives automatic profile choice)."""
 from __future__ import annotations
 

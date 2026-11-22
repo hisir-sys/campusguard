@@ -53,3 +53,7 @@ Questions or a pilot: WhatsApp +91 70032 76998.
 - [School deployment](docs/SCHOOL_DEPLOYMENT.md) and [load test guide](docs/LOAD_TEST_GUIDE.md)
 - [Developer guide](docs/DEVELOPMENT.md): running from source, cameras, models, troubleshooting
 - [Change log](CHANGELOG.md) and [more screenshots](docs/screenshots)
+
+## Licence
+
+Copyright (c) 2026 CampusGuard. All rights reserved. This is proprietary software, not open source. Seeing it here does not give anyone the right to use, copy or share it. See [LICENSE](LICENSE) and [third-party notices](THIRD_PARTY_NOTICES.md).

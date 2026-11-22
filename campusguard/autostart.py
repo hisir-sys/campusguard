@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Start CampusGuard when the user signs in to Windows (per-user Run key, no admin rights needed)."""
 from __future__ import annotations
 

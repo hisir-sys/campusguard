@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Render the remote viewer in test-fixture layouts for visual regression review.
 
 The generated screenshots are explicitly marked as synthetic UI fixtures, never live data.

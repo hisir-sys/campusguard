@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Pretend to be a school's camera system, so CampusGuard can be tested with 50 "cameras" on one PC.
 
 Three steps (see docs/LOAD_TEST_GUIDE.md for the full walk-through):

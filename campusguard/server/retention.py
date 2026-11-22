@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Keep disk use bounded: delete old clips and over-budget footage."""
 from __future__ import annotations
 

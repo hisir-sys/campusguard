@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Customer sign-in against the CampusGuard website's Supabase accounts.
 
 Flow (mirrors the website): sign in with email + password through Supabase

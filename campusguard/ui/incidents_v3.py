@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Incidents (v3): filterable list on the left, the selected incident on the right."""
 from __future__ import annotations
 

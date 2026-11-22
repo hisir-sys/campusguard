@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Cheap motion gate + per-camera scheduler.
 
 Stage 1 of the two-stage analysis. Every camera runs a tiny motion check

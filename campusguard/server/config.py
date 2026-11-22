@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Server settings stored in server.json inside the CampusGuard data folder."""
 from __future__ import annotations
 

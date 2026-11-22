@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Small, timeout-bounded client for the CampusGuard server API.
 
 All methods are synchronous by design; UI callers must run them in a worker thread.

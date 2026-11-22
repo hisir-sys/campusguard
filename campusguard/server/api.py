@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Token-protected JSON/HTTP API of the CampusGuard server (standard library only)."""
 from __future__ import annotations
 

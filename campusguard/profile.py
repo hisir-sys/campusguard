@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """The account details (name, school, phone, alert numbers) shared with the website and phone app.
 
 They are stored on the website account, so editing them in any of the three places changes all three.

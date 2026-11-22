@@ -1,3 +1,4 @@
+# Copyright (c) 2026 CampusGuard. All rights reserved. Proprietary and confidential; see LICENSE.
 """Window backdrop and the account button used by the navigation rail."""
 
 from __future__ import annotations
