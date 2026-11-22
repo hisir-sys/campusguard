@@ -1,261 +1,55 @@
 # CampusGuard
 
-**AI fight detection for school and college CCTV.** CampusGuard is a Windows desktop app (PySide6) that watches your existing cameras, detects physical fights in real time with the **Spontim 1.0** model, and alerts staff instantly. It also has a headless server mode for schools, and a website (`campusguardweb`) for account approval and synced summaries.
+**Your school's cameras, watching for fights so nobody has to.**
 
-![CampusGuard dashboard (dark)](docs/screenshots/dark-dashboard.png)
+![CampusGuard desktop app](docs/screenshots/dark-dashboard.png)
 
-## What it does
+*Demo data on a machine with no cameras attached.*
 
-- **Real-time detection.** Person detection (YOLO), tracking (ByteTrack), pose (YOLO Pose) and the **Spontim 1.0** MC3-18 temporal classifier run on every live camera. No new hardware: any USB, RTSP, HTTP/MJPEG or IP camera that OpenCV can open.
-- **Tiered alerts, not one alarm.** Incidents are graded LOW / MEDIUM / HIGH / CRITICAL by confidence (70% / 85% / 95%), with calm glass pop-ups and an optional alarm sound, so staff are not flooded by normal horseplay.
-- **Evidence for review.** Every incident saves a clip, timeline and confidence so an administrator can review it fairly afterwards. No facial recognition or identity matching.
-- **Smart search (Ctrl+K).** Type a camera name and press Enter to open it, or type a page, setting or action ("mute", "dark mode", "update"). If nothing matches, it searches incident history.
-- **Dark and light themes** in a graphite and silver glass design, with a hover navigation rail.
-- **School server mode.** One headless program runs all cameras, records incidents, and serves a token-protected API to viewers on the school network.
-- **Account sync.** Approved accounts, schools or individuals, sync summaries and incident metadata (never video) to the website.
-- **Runs on modest hardware.** Lite / Standard / Server engine profiles and a motion gate keep CPU and GPU use low.
+## The problem
 
-## Screenshots
+A school may have 40 to 60 CCTV cameras and one person who might glance at the screens between other jobs. Fights are over in seconds. By the time anyone notices, the moment has passed, staff arrive late, and afterwards nobody can say what happened or who was involved. Manual monitoring either misses incidents or drowns people in false alarms until they stop looking.
 
-| Dark | Light |
-|---|---|
-| ![Dashboard](docs/screenshots/dark-dashboard.png) | ![Dashboard](docs/screenshots/light-dashboard.png) |
-| ![Cameras](docs/screenshots/dark-cameras.png) | ![Cameras](docs/screenshots/light-cameras.png) |
-| ![Incidents](docs/screenshots/dark-incidents.png) | ![Incidents](docs/screenshots/light-incidents.png) |
-| ![Alerts](docs/screenshots/dark-alerts.png) | ![Alerts](docs/screenshots/light-alerts.png) |
-| ![Settings](docs/screenshots/dark-settings.png) | ![Settings](docs/screenshots/light-settings.png) |
-| ![Alert pop-up](docs/screenshots/dark-alert-toast.png) | ![Alert pop-up](docs/screenshots/light-alert-toast.png) |
-| ![School server](docs/screenshots/dark-server-viewer.png) | ![School server](docs/screenshots/light-server-viewer.png) |
+## What CampusGuard does
 
-More pages (Services, About, Tools, How it works) are in [`docs/screenshots`](docs/screenshots). Screenshots show demo data on a machine with no cameras attached.
+CampusGuard turns the cameras a school already owns into an always-on safety layer. It runs on an ordinary Windows PC, needs no new hardware, and works quietly in the background.
 
-## How detection works
+- **Notices a fight as it starts.** It watches every camera and scores how likely it is that people are really fighting, so normal sport and horseplay don't set it off.
+- **Tells the right person straight away.** Alerts are graded by seriousness and go to the head of the school's phone (WhatsApp or push), with the camera, the time and how sure it is. Serious ones sound an alarm on the office PC.
+- **Keeps the evidence.** Every incident saves a short clip and a timeline. Administrators review what happened calmly and fairly afterwards, instead of relying on memory or on the AI to blame anyone.
+- **Scales to a whole school.** One office PC can run dozens of cameras, with a floor map to see where things are happening and health notices when a camera goes dark.
+- **Stays private.** Video is analysed and stored on the school's own PC. No facial recognition, no identity matching, and footage is never uploaded.
 
-1. Each camera frame goes through a tiny motion check; the heavy models only run while the scene is moving.
-2. YOLO finds people, ByteTrack gives each person a stable ID, YOLO Pose draws the skeleton.
-3. **Spontim 1.0** (MC3-18, fine-tuned on surveillance fight data) looks at 16 frames at a time and outputs a fight confidence from 0 to 100%.
-4. The confidence is compared with your threshold (default 65%), graded into a severity, and an incident, clip and alert are created.
+## How it fits together
 
-Spontim 1.0 is the only detection model. Its weights are `models/model_16_m3_0.8888.pth`.
-
-## Windows requirements
-
-- Windows 10 or 11, 64-bit
-- Python 3.14, 64-bit (install from python.org and enable the Python Launcher)
-- An external USB, RTSP, HTTP/MJPEG, or IP camera source that OpenCV can open
-- Model weights: `models/model_16_m3_0.8888.pth` (Spontim 1.0) is in the repo; add `yolo11n.pt` and `yolo11n-pose.pt` yourself
-
-## Install (customers)
-
-Download `CampusGuard-Setup.exe` from the latest release, accept the terms and
-install. It installs for your Windows user only (no administrator prompt).
-Sign in with the email and password from your CampusGuard website account;
-only approved accounts can use the app, and no camera starts before sign-in.
-Updates are downloaded in the background and installed with your permission.
-
-## Install and run (developers)
-
-Open PowerShell in this folder (`campusguard-desktop`) and run:
-
-```powershell
-py -3.14 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python main.py
-```
-
-If PowerShell blocks environment activation, run these commands without
-activating the environment:
-
-```powershell
-py -3.14 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe main.py
-```
-
-You can also double-click `setup_windows.bat`. It creates `.venv`, installs
-`requirements.txt`, and starts the app. The first install downloads the Python
-packages and can take several minutes, especially for PyTorch.
-
-The default PyPI PyTorch install is suitable for CPU inference. For NVIDIA
-CUDA, install the matching `torch` and `torchvision` wheels using the command
-generated by the official PyTorch install selector for the computer's CUDA
-version, then install the remaining packages from `requirements.txt`.
-
-## Configure cameras
-
-1. Open **Cameras → Add camera**.
-2. Enter a name, source type, and source address. CampusGuard does not select
-   or invent a camera source.
-3. If the camera requires authentication, use the separate username and
-   password fields. Passwords are masked and saved through the Windows
-   operating-system credential vault, not SQLite or the camera list.
-4. Choose **Test Connection** to open the actual source and read a frame.
-5. Choose **Save Camera** to persist the configuration and start background
-   capture and analysis workers.
-
-Examples of source addresses:
-
-- USB: device index such as `0` or `1`
-- RTSP: `rtsp://camera-host:554/stream`
-- HTTP/MJPEG: the camera's actual stream URL
-- IP: an address and port such as `192.168.1.50:8080/video`
-
-The camera must be reachable from the Windows machine. Stream paths and
-protocol support vary by camera and OpenCV's installed video backend.
-
-## Model files
-
-Select local files under **Settings → Model Files**:
-
-- **Person detector:** an Ultralytics YOLO detection checkpoint with COCO person class `0` (normally `models/yolo11n.pt`)
-- **Pose estimator:** an Ultralytics YOLO Pose checkpoint, 17-keypoint COCO layout (normally `models/yolo11n-pose.pt`)
-- **Fight classifier:** **Spontim 1.0**, `models/model_16_m3_0.8888.pth`. MC3-18, classes `fight` / `noFight` (fight = class 0), 16 RGB frames resized to 171x128, center-cropped to 112x112 with Kinetics-style normalization.
-
-The app starts without the YOLO weights. Missing or incompatible files are reported in the AI Engine and Settings pages, and a missing model never produces simulated output. Incidents are created only after Spontim returns a stable above-threshold result.
-
-## Data and privacy
-
-- Camera definitions, incidents, alerts, notifications, and settings are
-  stored in a local SQLite database under Qt's Windows application-data
-  directory.
-- Camera credentials are kept in the OS credential vault.
-- Video capture and inference run locally in separate worker threads.
-- A one-frame mailbox drops stale frames rather than building an inference
-  queue.
-- No facial recognition or identity matching is performed.
-
-## Troubleshooting
-
-- **Camera offline:** verify the source URL, network access, camera account,
-  and OpenCV backend. Use **Test Connection** before saving.
-- **Credential vault error:** check that Windows Credential Manager is
-  available to the Windows user running CampusGuard.
-- **CUDA unavailable:** choose **Auto** or **CPU**, or install a compatible
-  CUDA-enabled PyTorch/torchvision pair.
-- **Model not loaded:** verify the selected file exists and matches the
-  checkpoint requirements above. The app reports model errors without
-  substituting simulated output.
-- **No incidents:** confirm that Spontim 1.0 is loaded,
-  camera AI is enabled, and the model returns a stable above-threshold event.
-
-
-
-## School server installer (Phase 4)
-
-The school-server installer is separate from the everyday desktop installer. Download the **CampusGuard-Server-Installer** artifact from a successful Phase 3–4 validation run, or use the compiled CampusGuard-Server-Setup.exe provided by your CampusGuard administrator. The server installer is built for Windows 10/11 x64 and does not install Python separately. The package contains the application runtime, but intentionally excludes model checkpoints; schools must supply model files they are licensed to use.
-
-### Install on the school server PC
-
-1. Run the server installer. It installs into the current Windows user's local Programs folder and creates the CampusGuard app-data folders.
-2. Choose a dedicated footage folder with enough free space. Set the maximum footage size (default 200 GB); when the cap is exceeded, the oldest clips are removed first. Incident records are retained for 365 days by default and clips for 30 days.
-3. Leave **Allow connections from other PCs** unchecked for local-only use. If office PCs must connect, enable it only on a trusted school LAN or VPN. The installer then configures the server to listen on 0.0.0.0 and requests a Windows Firewall rule for the selected TCP port. If the firewall elevation is cancelled or fails, it switches back to local-only mode. Do not expose the API directly to the public internet. Plain HTTP does not encrypt the token; use HTTPS or a VPN when traffic crosses an untrusted network.
-4. Sign in using the approved CampusGuard website account. The account and approval are rechecked every six hours. Run the **CampusGuard Server Sign In** shortcut later if the sign-in must be renewed.
-5. If selected, the installer registers a Windows Task Scheduler job for the same Windows user. Windows asks for that user's password so the task can start at boot while the user is signed out. Confirm the task is registered before relying on unattended operation.
-6. If the installer starts the server, the access-token window shows the token masked. Reveal it only when needed and share it only with trusted CampusGuard client PCs. The token is stored in Windows Credential Manager, not in server.json or the logs. You can open **CampusGuard Server Status** later to check reachability, camera health counts, and the most recent logged warning/error.
-
-### Add licensed model files
-
-Copy the model checkpoints you are licensed to use into:
-
-    %APPDATA%\CampusGuard\CampusGuard\models\
-
-Use the filenames expected by the current model configuration, normally yolo11n.pt (person detector), yolo11n-pose.pt (pose estimator), and the Spontim 1.0 fight classifier model_16_m3_0.8888.pth. The server resolves relative models paths from this folder when a checkpoint is not bundled beside the application. Restart the server after adding or replacing weights. Missing weights are reported as model errors; CampusGuard must not pretend that a missing model is detecting fights.
-
-### Connect a desktop client from another PC
-
-1. On the server PC, open **CampusGuard Server Status** and confirm it reports the server is reachable.
-2. Find the server PC's private LAN IP address in Windows Settings or with ipconfig. Do not use 0.0.0.0 as the address clients connect to.
-3. On the client PC, install and open CampusGuard, sign in with an approved account, then open **Settings → Connection mode** and choose **Server**.
-4. Enter http://SERVER-LAN-IP:8765 only on a trusted LAN, or the configured https:// address when TLS is set up. Paste the token from the server's token window and choose **Test connection**. The token is saved in Windows Credential Manager on the client PC.
-5. Open the server viewer to manage cameras, review incidents/alerts, and play saved clips. If the server is unavailable, the viewer shows a reconnecting state; it does not switch to fake detections.
-
-### Server commands and recovery
-
-From the Start Menu shortcuts, you can sign in, show the token, open status, start the server, install the boot task, or remove it. The corresponding executable flags are --server-login, --show-token, --server-status, --server, --install-task, and --remove-task. Logs are in %APPDATA%\CampusGuard\CampusGuard\logs\server.log. The uninstall asks whether to delete server data; choose **No** to keep the database and footage. Choosing **Yes** deletes the app-data folder and the selected footage folder and cannot be undone.
-
-**Real-world checks still required before school deployment:** test the boot task under the actual school Windows account, verify any firewall prompt with IT, confirm the server PC's IP/port from a second PC, and measure throughput with the school's real RTSP/NVR streams. The CI installer build does not prove camera-scale performance or the Windows boot-task credentials.
-
-## Source layout
-
-```text
-campusguard/
-├── campusguard/
-│   ├── ai_pipeline.py       # YOLO, ByteTrack, YOLO Pose, Spontim inference
-│   ├── model_registry.py    # Spontim 1.0 loader (MC3-18)
-│   ├── camera_runtime.py    # OpenCV capture, analysis workers, latest-frame mailbox
-│   ├── engine/              # hardware profiles, motion gate, GPU batching
-│   ├── server/              # headless server, API, recorder, retention, sync
-│   ├── storage.py           # SQLite repository
-│   ├── credentials.py       # OS credential-vault access
-│   ├── alarm_sound.py       # alert audio
-│   └── ui/                  # PySide6 pages, glass sidebar, theme, command search
-├── docs/screenshots/        # UI screenshots used in this README
-├── models/                  # Spontim 1.0 weights
-├── tests/
-├── main.py
-└── requirements.txt
-```
-
-## Analysis engine profiles (Lite / Standard / Server)
-
-The app picks a profile automatically from the machine and the number of running cameras:
-
-| Profile | Chosen when | Behaviour |
+| Piece | Who uses it | What it is for |
 |---|---|---|
-| Lite | no GPU and ≤4 CPU cores or <8 GB RAM | motion gate, light analysis |
-| Standard | normal PC, or a GPU PC with ≤16 cameras | motion gate |
-| Server | NVIDIA GPU and more than 16 cameras | motion gate, analysis at ≤960 px wide, GPU-batched person detection, capped evidence pre-buffer, preview ≤10 fps |
+| **Desktop app** (this repo) | School office / IT | Connects cameras, detects fights, saves clips, sends alerts |
+| **Phone app** (Android) | Head of school, staff | Live status of cameras and alerts, and a push when something happens |
+| **Website** ([campusguardweb](https://github.com/hisir-sys/campusguardweb)) | Everyone | Early-access sign-up, account details, and a summary of cameras and incidents (never video) |
 
-**Smart analysis (all profiles):** every camera runs a tiny motion check; the detector, pose and fight models only run while the scene is moving (plus a 5–6 s hangover, and whenever an event or recording is in progress). Unclear cases count as motion, so the gate can only add analysis, never skip it. When a camera cannot keep up, its analysis stride rises (2 → up to 4) and returns to 2 when load drops.
+One account works across all three, including your name, school and the phone numbers that receive alerts.
 
-Override (optional): set `CAMPUSGUARD_PROFILE=lite|standard|server` and/or `CAMPUSGUARD_SMART_ANALYSIS=0`, or put `{"profile": "server", "smart_analysis": true}` in `engine.json` inside the CampusGuard app-data folder.
+## Why it is built this way
 
-For many cameras, enter each camera's low-resolution *sub-stream* RTSP address (typically 640×360) instead of the main stream, and use the CUDA build of PyTorch on the server.
+- **Two checks, not one.** A quick motion check keeps the heavy AI idle while a scene is calm, and the fight model only judges what people are doing when something is moving. That is what lets a modest PC cover many cameras.
+- **Graded alerts instead of one alarm.** A possible fight and a certain fight deserve different responses, so staff aren't trained to ignore the alert.
+- **Existing cameras only.** USB, RTSP, HTTP/MJPEG and IP cameras that OpenCV can open. No replacement of the school's CCTV.
+- **Honest about missing parts.** If a model file is missing, CampusGuard says so. It never pretends to detect.
 
-## Server mode (headless, for a school server)
+## Status
 
-One program, two ways to run it. The desktop app is unchanged. Server mode runs every camera with no window, records incidents and clips, and serves a token-protected API for viewers.
+Built and tested with simulated cameras. It has not yet run on a real school's camera network, and real WhatsApp delivery and large-scale camera load still need to be checked on the school's own hardware. The first target is a school in Kolkata.
 
-```
-CampusGuard.exe --server-login      # sign in as the Windows user that will run the server
-CampusGuard.exe --server            # run in this console (Ctrl+C stops it)
-CampusGuard.exe --install-task      # start automatically at boot, restart on failure (asks for the Windows password)
-CampusGuard.exe --show-token        # opens a masked token window in the windowed app; prints only from a console
-CampusGuard.exe --server-status     # open the local server status window
-CampusGuard.exe --remove-task
-```
+## Get it
 
-Non-secret settings live in `server.json` in the CampusGuard app-data folder. The API token is stored in Windows Credential Manager, not in JSON, SQLite or logs. Existing installations migrate their legacy JSON token into the vault on the next server start:
+Early access is by approval. Request an account on the website, then download the installer from your account.
 
-| key | default | meaning |
-|---|---|---|
-| `host` | `127.0.0.1` | set `0.0.0.0` to accept connections from other PCs on the school network (then also allow the port in Windows Firewall) |
-| `port` | `8765` | API port |
-| `retention_days_footage` / `retention_days_incidents` | 30 / 365 | older clips / incidents are deleted hourly |
-| `max_footage_gb` | 200 | oldest clips are deleted first when the footage folder grows past this |
-| `footage_dir` | app-data `footage` folder | optional custom folder for saved incident clips |
-| `recheck_hours` | 6 | how often the website account approval is re-verified |
-| `tls_cert_file`, `tls_key_file` | empty | serve HTTPS; use this (or a VPN) if the API crosses anything other than a trusted LAN |
+Questions or a pilot: WhatsApp +91 70032 76998.
 
-API (`Authorization: Bearer <token>`, base path `/api/v1`, plus an open `GET /health`):
-`GET /status`, `GET|POST /cameras`, `POST /cameras/import` (CSV body: `name,type,address,username,password,ai_enabled`), `DELETE /cameras/{id}`, `POST /cameras/{id}/ai`, `POST /cameras/{id}/reconnect`, `GET /incidents?after_id=&limit=`, `GET /alerts`, `POST /incidents/{INC-id}/status`, `GET /incidents/{INC-id}/clip` (MP4, supports Range). Logs: `logs/server.log` in the app-data folder.
+## More
 
-Cameras are opened a few at a time at start-up, reconnect automatically with back-off, and `/cameras` shows per-camera health (`ok`, `stalled` if no frames for 15 s, `offline`, `connecting`).
-
-## Phone alerts, groups, reports and safety (launch features)
-
-- **Phone alerts** (Settings, Phone alerts): add one or many numbers. Each alert carries the camera (place), time, confidence percentage and, where the channel allows, the video clip.
-  - *Free WhatsApp*: opens WhatsApp with the message ready; you tap Send. No video can be attached this way.
-  - *Automatic WhatsApp*: WhatsApp Business Cloud API (needs a Meta business account; conversations may be charged). Sends text and video. Token is stored in the OS credential vault.
-  - *ntfy push*: free push notifications; keep clip attachment off on the public server.
-  - Backup numbers are alerted if nobody acknowledges within the chosen minutes.
-- **Alert confirmation**: choose 2 to 6 consecutive detections before an incident is raised.
-- **Camera groups** and a "needs attention" filter on the Cameras page.
-- **Trend report** (HTML) from Settings or Ctrl+K: incidents per day, hour and camera, false-alarm rate.
-- **Supervisor PIN**: required before deleting footage or history. This is an approval step, not encryption; use BitLocker for disk encryption.
-- **GPU decode** option and `scripts/export_models.py` (ONNX / TensorRT).
-- **Update rollback**: the last installers are kept; Ctrl+K, "Roll back to previous version".
-- Server API: `POST /api/v1/cameras/{id}/sensitivity`.
+- [School server guide](docs/SERVER.md): running one server for a whole school, alerts, API
+- [School deployment](docs/SCHOOL_DEPLOYMENT.md) and [load test guide](docs/LOAD_TEST_GUIDE.md)
+- [Developer guide](docs/DEVELOPMENT.md): running from source, cameras, models, troubleshooting
+- [Change log](CHANGELOG.md) and [more screenshots](docs/screenshots)
