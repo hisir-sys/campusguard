@@ -311,6 +311,71 @@ def check(model_path: Path, videos: list[Path], step: int = 5) -> None:
             print(f"  threshold {th:.2f}: {alerts} alerts  = {alerts / hours:.0f} per hour per camera")
 
 
+# ----------------------------------------------------------------------------- compare
+def load_any(path: Path) -> dict:
+    """Load a checkpoint of any common shape and return just the weights (fight = class 0 assumed)."""
+    try:
+        ck = torch.load(path, map_location="cpu", weights_only=True)
+    except Exception:
+        ck = torch.load(path, map_location="cpu", weights_only=False)   # your own files only
+    for key in ("model_state_dict", "state_dict", "model", "net"):
+        if isinstance(ck, dict) and isinstance(ck.get(key), dict):
+            ck = ck[key]
+            break
+    if not isinstance(ck, dict):
+        ck = ck.state_dict()
+    return {k.removeprefix("module."): v.float() for k, v in ck.items() if torch.is_tensor(v)}
+
+
+def score_windows(model, video: Path, step: int = 5) -> list[float]:
+    frames = decode(video)
+    out = []
+    with torch.inference_mode():
+        for s in range(0, len(frames) - CLIP + 1, step):
+            out.append(float(torch.softmax(model(to_tensor(center_crop(frames[s:s + CLIP]))), 1)[0, FIGHT]))
+    return out
+
+
+def alerts_in(scores: list[float], th: float, confirm: int = 2) -> int:
+    n = run = 0
+    latched = False
+    for v in scores:
+        run = run + 1 if v >= th else 0
+        if run >= confirm and not latched:
+            n, latched = n + 1, True
+        if v < th:
+            latched = False
+    return n
+
+
+def compare(models: list[Path], calm: list[Path], fights: list[Path], out_dir: Path) -> None:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    print(f"{'model':32s} {'MB':>6s} {'false alarms/hour @.85':>24s} {'@.95':>6s} {'fights caught @.85':>20s}")
+    for path in models:
+        try:
+            weights = load_any(path)
+            model = build_model(False)
+            model.load_state_dict(weights)
+        except Exception as error:
+            print(f"{path.name:32s} cannot load as MC3-18 with 2 classes: {str(error)[:90]}")
+            continue
+        model.eval()
+        hours = false85 = false95 = 0.0
+        for v in calm:
+            sc = score_windows(model, v)
+            hours += (len(sc) * 5 + CLIP) / FPS / 3600
+            false85 += alerts_in(sc, 0.85)
+            false95 += alerts_in(sc, 0.95)
+        caught = sum(alerts_in(score_windows(model, v), 0.85) > 0 for v in fights)
+        stripped = out_dir / (path.stem + "_stripped.pth")
+        torch.save({k: v.half() if v.is_floating_point() else v for k, v in weights.items()}, stripped)
+        mb = stripped.stat().st_size / 1e6
+        rate85 = false85 / hours if hours else float("nan")
+        rate95 = false95 / hours if hours else float("nan")
+        print(f"{path.name:32s} {mb:6.0f} {rate85:24.1f} {rate95:6.1f} {caught:>14d} of {len(fights)}")
+    print("\nStripped files (weights only, half precision) are in", out_dir)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -332,8 +397,15 @@ def main() -> None:
     c = sub.add_parser("check")
     c.add_argument("--model", type=Path, required=True)
     c.add_argument("--videos", type=Path, nargs="+", required=True)
+    d = sub.add_parser("compare", help="rank several checkpoints and shrink them for upload")
+    d.add_argument("--models", type=Path, nargs="+", required=True)
+    d.add_argument("--calm", type=Path, nargs="+", required=True, help="videos with NO fight")
+    d.add_argument("--fights", type=Path, nargs="*", default=[], help="videos that contain a fight")
+    d.add_argument("--out-dir", type=Path, default=Path("stripped"))
     args = parser.parse_args()
-    if args.cmd == "prepare":
+    if args.cmd == "compare":
+        compare(args.models, args.calm, args.fights, args.out_dir)
+    elif args.cmd == "prepare":
         prepare(args.data, args.cache)
     elif args.cmd == "train":
         train(args.cache, args.out, args.epochs, args.batch, args.lr, args.val_fraction,
