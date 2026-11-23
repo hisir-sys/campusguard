@@ -317,7 +317,10 @@ def load_any(path: Path) -> dict:
     try:
         ck = torch.load(path, map_location="cpu", weights_only=True)
     except Exception:
-        ck = torch.load(path, map_location="cpu", weights_only=False)   # your own files only
+        try:
+            ck = torch.load(path, map_location="cpu", weights_only=False)   # your own files only
+        except Exception:
+            ck = torch.jit.load(str(path), map_location="cpu")              # TorchScript .pt
     for key in ("model_state_dict", "state_dict", "model", "net"):
         if isinstance(ck, dict) and isinstance(ck.get(key), dict):
             ck = ck[key]
