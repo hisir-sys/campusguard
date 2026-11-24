@@ -13,7 +13,7 @@ from PyInstaller.utils.hooks import collect_all
 datas = [("models", "models"), ("assets", "assets")]
 binaries = []
 hiddenimports = ["campusguard._build_version"]
-for package in ("cv2", "torch", "torchvision", "ultralytics", "keyring"):
+for package in ("cv2", "torch", "torchvision", "pytorchvideo", "ultralytics", "keyring"):
     package_datas, package_binaries, package_hidden = collect_all(package)
     datas += package_datas
     binaries += package_binaries

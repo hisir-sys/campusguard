@@ -2,7 +2,7 @@
 
 ## Choose the detection model (Spontim 1.0, SlowFast, R(2+1)D)
 
-- **Settings > Detection model** now lists three models you can swap between (the change restarts detection): Spontim 1.0 (default), **Spontim 2 (SlowFast)** and **Spontim 3 (R(2+1)D)**. Put the new files at `models/spontim_slowfast.pth` and `models/spontim_r2plus1d.pth` (paths are in the settings file).
+- **Settings > Detection model** now lists three models you can swap between (the change restarts detection): Spontim 1.0 (default), **Spontim 2 (SlowFast)** and **Spontim 3 (R(2+1)D)**. The model files are included in the app (`models/spontim_slowfast.pth`, `models/spontim_r2plus1d.pth`).
 - The new models use their own input rules (224 px, 32+8 or 16 frames) and treat output 1 as "fight". The old model stays as it was. The clip buffer keeps small copies of frames so long clips do not use much memory.
 - SlowFast needs the `pytorchvideo` package. If it is missing, the camera shows "MODEL NOT LOADED" with the reason.
 - First measurements are in the model comparison spreadsheet: SlowFast separated a calm clip from a fight best; R(2+1)D is about 5x heavier than the old model on a CPU. Two short clips are not proof: re-test on your own footage.
