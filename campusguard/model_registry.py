@@ -101,6 +101,12 @@ class VideoClassifier:
     ) -> None:
         self.profile, self.path, self.device = profile, path, device
         self.adapter = get_model_input_adapter(profile.key)
+        # Clip geometry comes from the model's own adapter. The old model keeps its legacy values
+        # (16 frames, a check every 8 frames, 1.6 s); the newer ones look at longer stretches of video.
+        self.span = self.adapter.span_frames
+        self.INFERENCE_STRIDE = self.adapter.inference_stride
+        self.CLIP_LENGTH = self.adapter.clip_length
+        self.MAX_CLIP_SECONDS = self.span / 15.0 * 1.5 if self.adapter.frame_step > 1 or self.adapter.clip_length != 16 else type(self).MAX_CLIP_SECONDS
         self.threshold, self.status = threshold, status
         self.fight_class: int | None = (
             fight_class_override
@@ -197,11 +203,7 @@ class VideoClassifier:
             self.status(self.profile.key, f"MODEL NOT LOADED — file not found: {path}")
             return
         try:
-            if self.profile.architecture == "mc3":
-                from torchvision.models.video import mc3_18
-                model = mc3_18(weights=None)
-            else:
-                raise ValueError(f"Unsupported architecture: {self.profile.architecture}")
+            model = self._build_architecture(self.profile.architecture)
 
             checkpoint = self._load_checkpoint(path)
             state = self._extract_state_dict(checkpoint)
@@ -227,7 +229,8 @@ class VideoClassifier:
                     f"Manifest fight class {self.fight_class} is outside the checkpoint's {self.class_count} classes."
                 )
 
-            self._resize_classifier(model, self.class_count, classifier_key)
+            if self.profile.architecture == "mc3":
+                self._resize_classifier(model, self.class_count, classifier_key)
             missing, unexpected = model.load_state_dict(cleaned, strict=False)
             if missing or unexpected:
                 missing_text = ", ".join(missing[:8])
@@ -251,6 +254,29 @@ class VideoClassifier:
             self.last_state = "MODEL NOT LOADED"
             self.status(self.profile.key, f"MODEL NOT LOADED — {error}")
 
+
+    @staticmethod
+    def _build_architecture(architecture: str) -> nn.Module:
+        """An empty network with a 2-class head, ready to receive a checkpoint."""
+        if architecture == "mc3":
+            from torchvision.models.video import mc3_18
+            return mc3_18(weights=None)
+        if architecture == "r2plus1d":
+            from torchvision.models.video import r2plus1d_18
+            model = r2plus1d_18(weights=None)
+            model.fc = nn.Sequential(nn.Dropout(0.0), nn.Linear(model.fc.in_features, 2))
+            return model
+        if architecture == "slowfast":
+            try:
+                from pytorchvideo.models import hub
+            except ImportError as error:
+                raise ValueError(
+                    "this model needs the 'pytorchvideo' package (pip install pytorchvideo)"
+                ) from error
+            model = hub.slowfast_r50(pretrained=False)
+            model.blocks[-1].proj = nn.Sequential(nn.Dropout(0.0), nn.Linear(model.blocks[-1].proj.in_features, 2))
+            return model
+        raise ValueError(f"Unsupported architecture: {architecture}")
 
     @staticmethod
     def _load_checkpoint(path: Path):
@@ -378,13 +404,13 @@ class VideoClassifier:
         # Keep frames in their original BGR form. The model adapter owns
         # color conversion, resizing, and normalization so every model uses
         # one consistent preprocessing path.
-        self.frames.append(frame.copy())
+        self.frames.append(self.adapter.shrink(frame))
         self.frame_times.append(float("nan") if timestamp is None else float(timestamp))
-        if len(self.frames) > self.CLIP_LENGTH:
+        if len(self.frames) > self.span:
             self.frames.pop(0)
             self.frame_times.pop(0)
         self.frame_count += 1
-        if len(self.frames) < self.CLIP_LENGTH or self.frame_count % self.INFERENCE_STRIDE:
+        if len(self.frames) < self.span or self.frame_count % self.INFERENCE_STRIDE:
             return None
         first, last = self.frame_times[0], self.frame_times[-1]
         if first == first and last == last and last - first > self.MAX_CLIP_SECONDS:

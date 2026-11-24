@@ -41,6 +41,8 @@ def _seconds(value: Any, default: float, low: float, high: float) -> float:
 
 
 START_PAGES = ("dashboard", "cameras", "incidents", "alerts")
+# Keep in step with MODEL_PROFILES (a test checks this); not imported here so settings stay light.
+VIOLENCE_MODEL_KEYS = ("fdsc_mc3", "slowfast", "r2plus1d")
 
 
 @dataclass(frozen=True)
@@ -55,6 +57,8 @@ class AppSettings:
     detector_model_path: str = "models/yolo11n.pt"
     pose_model_path: str = "models/yolo11n-pose.pt"
     fdsc_mc3_model_path: str = "models/model_16_m3_0.8888.pth"
+    slowfast_model_path: str = "models/spontim_slowfast.pth"
+    r2plus1d_model_path: str = "models/spontim_r2plus1d.pth"
     violence_model: str = "fdsc_mc3"
     device: str = "auto"
     fight_positive_class: int = 0
@@ -119,8 +123,10 @@ class AppSettings:
             detector_model_path=str(candidate.detector_model_path),
             pose_model_path=str(candidate.pose_model_path),
             fdsc_mc3_model_path=str(candidate.fdsc_mc3_model_path),
-            # Spontim 1.0 is the only detection model.
-            violence_model="fdsc_mc3",
+            slowfast_model_path=str(candidate.slowfast_model_path),
+            r2plus1d_model_path=str(candidate.r2plus1d_model_path),
+            # Any of the registered detection models; anything else falls back to the default.
+            violence_model=candidate.violence_model if candidate.violence_model in VIOLENCE_MODEL_KEYS else "fdsc_mc3",
             device=candidate.device if candidate.device in {"auto", "cpu", "cuda"} else "auto",
             fight_positive_class=0 if int(candidate.fight_positive_class) == 0 else 1,
             connection_mode=candidate.connection_mode if candidate.connection_mode in {"local", "server"} else "local",

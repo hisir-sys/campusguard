@@ -18,10 +18,12 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(severity_for(0.949), "HIGH")
         self.assertEqual(severity_for(0.95), "CRITICAL")
 
-    def test_spontim_is_the_only_model(self):
-        self.assertEqual(set(MODEL_PROFILES), {"fdsc_mc3"})
-        self.assertEqual(set(MODEL_INPUT_ADAPTERS), {"fdsc_mc3"})
+    def test_three_models_are_registered(self):
+        self.assertEqual(set(MODEL_PROFILES), {"fdsc_mc3", "slowfast", "r2plus1d"})
+        self.assertEqual(set(MODEL_INPUT_ADAPTERS), {"fdsc_mc3", "slowfast", "r2plus1d"})
         self.assertEqual(MODEL_PROFILES["fdsc_mc3"].name, "Spontim 1.0")
+        from campusguard.settings import VIOLENCE_MODEL_KEYS
+        self.assertEqual(set(VIOLENCE_MODEL_KEYS), set(MODEL_PROFILES))
 
     def test_any_saved_model_name_resolves_to_spontim(self):
         for key in ("mc3", "fdsc_mc3", "r3d", "x3d", "enhanced", ""):

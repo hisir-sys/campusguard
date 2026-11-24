@@ -356,6 +356,8 @@ class VisionPipeline:
             normalized.detector_model_path != self.settings.detector_model_path
             or normalized.pose_model_path != self.settings.pose_model_path
             or normalized.fdsc_mc3_model_path != self.settings.fdsc_mc3_model_path
+            or normalized.slowfast_model_path != self.settings.slowfast_model_path
+            or normalized.r2plus1d_model_path != self.settings.r2plus1d_model_path
             or normalized.device != self.settings.device
         )
         selection_changed = normalized.violence_model != self.settings.violence_model
@@ -370,6 +372,11 @@ class VisionPipeline:
 
         for classifier in self.classifiers.values():
             classifier.update(normalized.confidence_threshold)
+
+    @property
+    def selected_model_key(self) -> str:
+        key = self.settings.violence_model
+        return key if key in MODEL_PROFILES else "fdsc_mc3"
 
     @staticmethod
     def model_display_name(key: str) -> str:
@@ -394,11 +401,11 @@ class VisionPipeline:
 
         self.classifiers.clear()
 
-        selected_key = "fdsc_mc3"
+        selected_key = settings.violence_model if settings.violence_model in MODEL_PROFILES else "fdsc_mc3"
         profile = MODEL_PROFILES[selected_key]
         self.classifiers[selected_key] = VideoClassifier(
             profile,
-            settings.fdsc_mc3_model_path,
+            getattr(settings, profile.path_setting),
             self.device,
             settings.confidence_threshold,
             self.status,
@@ -525,12 +532,12 @@ class VisionPipeline:
 
         self._note_people(len(people))
         pair_ids = self.interactions.update(people)
-        model_key = "fdsc_mc3"
+        model_key = self.selected_model_key
         model = self._selected_model(model_key)
         if model is not None and model.ready:
             try:
                 inference_started = perf_counter()
-                if model_key in {"fdsc_mc3"}:
+                if model_key in MODEL_PROFILES:      # every registered model judges the whole scene
                     # MC3 was trained and validated on full-scene temporal clips.
                     # Do not crop the scene to individual people: that removes the
                     # interaction context that the verified checkpoint relies on.
@@ -624,7 +631,7 @@ class VisionPipeline:
 
     @property
     def fight_model_ready(self) -> bool:
-        model = self._selected_model("fdsc_mc3")
+        model = self._selected_model(self.selected_model_key)
         return model is not None and model.ready
 
     def enter_idle(self) -> None:
@@ -1042,7 +1049,7 @@ class VisionPipeline:
         # YOLO person-detection confidence (which caused misleading values such
         # as 89% to appear repeatedly).
         if state in {"FIGHT DETECTED", "POSSIBLE ALTERCATION"}:
-            if self.settings.violence_model in {"fdsc_mc3"}:
+            if self.settings.violence_model in MODEL_PROFILES:
                 involved_ids.update(person.track_id for person in people)
             elif not involved_ids and pair_ids:
                 involved_ids.update(track_id for pair in pair_ids for track_id in pair)
@@ -1055,7 +1062,7 @@ class VisionPipeline:
         for person in people:
             person.involved = person.track_id in involved_ids
             if person.involved:
-                if self.settings.violence_model in {"fdsc_mc3"}:
+                if self.settings.violence_model in MODEL_PROFILES:
                     # Scene-level Spontim confidence: exactly the same value
                     # reported by the fight classifier/UI.
                     person.violence_confidence = confidence

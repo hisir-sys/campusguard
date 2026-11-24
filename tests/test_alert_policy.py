@@ -82,6 +82,10 @@ def _bare_classifier(monkeypatch):
     clf.model, clf.fight_class = object(), 0
     clf.frames, clf.frame_times = [], []
     clf.frame_count, clf.skipped_slow, clf.behind = 0, 0, False
+    from campusguard.model_adapters import get_model_input_adapter
+    clf.adapter = get_model_input_adapter("fdsc_mc3")
+    clf.span, clf.CLIP_LENGTH, clf.INFERENCE_STRIDE = 16, 16, 8
+    clf.MAX_CLIP_SECONDS = VideoClassifier.MAX_CLIP_SECONDS
     monkeypatch.setattr(VideoClassifier, "_classify_clip", lambda self, clip: ("NORMAL", 0.1))
     return clf, np.zeros((8, 8, 3), dtype="uint8")
 

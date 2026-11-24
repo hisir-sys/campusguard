@@ -1,5 +1,12 @@
 # CampusGuard Desktop — Update Notes
 
+## Choose the detection model (Spontim 1.0, SlowFast, R(2+1)D)
+
+- **Settings > Detection model** now lists three models you can swap between (the change restarts detection): Spontim 1.0 (default), **Spontim 2 (SlowFast)** and **Spontim 3 (R(2+1)D)**. Put the new files at `models/spontim_slowfast.pth` and `models/spontim_r2plus1d.pth` (paths are in the settings file).
+- The new models use their own input rules (224 px, 32+8 or 16 frames) and treat output 1 as "fight". The old model stays as it was. The clip buffer keeps small copies of frames so long clips do not use much memory.
+- SlowFast needs the `pytorchvideo` package. If it is missing, the camera shows "MODEL NOT LOADED" with the reason.
+- First measurements are in the model comparison spreadsheet: SlowFast separated a calm clip from a fight best; R(2+1)D is about 5x heavier than the old model on a CPU. Two short clips are not proof: re-test on your own footage.
+
 ## False alarms when the PC is busy, and a tool to measure them
 
 - **Found by a 10-camera test on a 12-thread laptop with calm classroom footage:** the PC sat at 100% CPU and the app reported "fight" at 90-100% on ordinary teaching. Cause 1: when the PC cannot keep up, the 16 frames the fight model looks at are spread over many seconds, so normal movement looks like fast fighting. Measured offline on that clip: 4 of 35 checks above 65% at the true 15 fps, 13 of 17 at 7.5 fps, 3 of 3 at 1.9 fps.

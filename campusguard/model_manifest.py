@@ -45,6 +45,30 @@ MODEL_MANIFESTS: dict[str, ModelManifest] = {
             "and the project reports a 92.5% top-1 MC3-18 run with 0.90 fight recall."
         ),
     ),
+    "slowfast": ModelManifest(
+        key="slowfast",
+        name="Spontim 2 (SlowFast)",
+        description="CampusGuard-trained SlowFast R50 fight classifier. Most accurate on the first tests, heaviest on the CPU.",
+        architecture="slowfast",
+        path_setting="slowfast_model_path",
+        class_labels=("noFight", "fight"),
+        fight_class=1,
+        preprocessing="RGB, 32 fast frames at gap 2 (+8 slow), 224x224; ImageNet-style normalisation",
+        semantic_status="verified",
+        source_note="Trained by the owner (class 1 = fight). Measured on two short clips only; see the model comparison sheet.",
+    ),
+    "r2plus1d": ModelManifest(
+        key="r2plus1d",
+        name="Spontim 3 (R(2+1)D)",
+        description="CampusGuard-trained R(2+1)D-18 fight classifier. Lighter than SlowFast; fewer false alarms than misses on the first tests.",
+        architecture="r2plus1d",
+        path_setting="r2plus1d_model_path",
+        class_labels=("noFight", "fight"),
+        fight_class=1,
+        preprocessing="RGB, 16 consecutive frames, 224x224; ImageNet-style normalisation",
+        semantic_status="verified",
+        source_note="Trained by the owner (class 1 = fight). Measured on two short clips only; see the model comparison sheet.",
+    ),
 }
 
 

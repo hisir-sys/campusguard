@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 )
 
 from campusguard import auth_config
+from campusguard.model_manifest import MODEL_MANIFESTS
 from campusguard.settings import START_PAGES, AppSettings
 from campusguard.ui.common import make_page_title
 from campusguard.ui.v3widgets import Segmented
@@ -174,9 +175,17 @@ class SettingsPage(QWidget):
         self.device_status.setWordWrap(True)
         self.device_status.setProperty("muted", True)
 
-        self.model_label = QLabel("Spontim 1.0 (MC3-18 fight classifier)")
+        self.model_input = QComboBox()
+        for manifest in MODEL_MANIFESTS.values():
+            self.model_input.addItem(manifest.name, manifest.key)
+        self.model_input.setCurrentIndex(max(0, self.model_input.findData(settings.violence_model)))
+        self.model_label = QLabel("")
+        self.model_label.setWordWrap(True)
         self.model_label.setProperty("muted", True)
-        form.addRow("Detection model", self.model_label)
+        self.model_input.currentIndexChanged.connect(self._show_model_note)
+        self._show_model_note()
+        form.addRow("Detection model", self.model_input)
+        form.addRow("", self.model_label)
         form.addRow("Minimum confidence", self.threshold_input)
         form.addRow("Person detection", self.detection_toggle)
         form.addRow("Tracking", self.tracking_toggle)
@@ -623,6 +632,7 @@ class SettingsPage(QWidget):
         self.cooldown_input.valueChanged.connect(self._emit_settings)
         self.reconnect_toggle.toggled.connect(self._emit_settings)
         self.device_input.currentIndexChanged.connect(self._emit_settings)
+        self.model_input.currentIndexChanged.connect(self._emit_settings)
         self.theme_input.currentIndexChanged.connect(self._emit_settings)
 
         self._refresh_status_cards()
@@ -794,6 +804,13 @@ class SettingsPage(QWidget):
         self.cloud_sync_toggle.blockSignals(False)
         self._emit_settings()
 
+    def _show_model_note(self, *_args) -> None:
+        manifest = MODEL_MANIFESTS.get(str(self.model_input.currentData()))
+        if manifest is None:
+            return
+        path = getattr(self._initial_settings, manifest.path_setting, "")
+        self.model_label.setText(f"{manifest.description}\nFile: {path}. Changing the model restarts detection.")
+
     def _reset_defaults(self) -> None:
         defaults = AppSettings(theme=self.theme_input.currentData())
         self._updating = True
@@ -805,6 +822,7 @@ class SettingsPage(QWidget):
             self.cooldown_input.setValue(defaults.alert_cooldown_seconds)
             self.reconnect_toggle.setChecked(defaults.auto_reconnect)
             self.device_input.setCurrentIndex(max(0, self.device_input.findData(defaults.device)))
+            self.model_input.setCurrentIndex(max(0, self.model_input.findData(defaults.violence_model)))
             self.alert_sound_toggle.setChecked(defaults.alert_sound_enabled)
             self.start_page_input.setCurrentIndex(max(0, self.start_page_input.findData(defaults.start_page)))
             self.sidebar_hover_toggle.setChecked(defaults.sidebar_hover_open)
@@ -834,7 +852,9 @@ class SettingsPage(QWidget):
             detector_model_path=self._initial_settings.detector_model_path,
             pose_model_path=self._initial_settings.pose_model_path,
             fdsc_mc3_model_path=self._initial_settings.fdsc_mc3_model_path,
-            violence_model="fdsc_mc3",
+            slowfast_model_path=self._initial_settings.slowfast_model_path,
+            r2plus1d_model_path=self._initial_settings.r2plus1d_model_path,
+            violence_model=str(self.model_input.currentData() or "fdsc_mc3"),
             device=str(self.device_input.currentData()),
             fight_positive_class=self._initial_settings.fight_positive_class,
             connection_mode=str(self.connection_mode_input.currentData()),
