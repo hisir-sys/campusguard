@@ -619,6 +619,8 @@ class FrameAnalysisThread(QThread):
                     state = last_state
                     confidence = last_confidence
                     event = None
+                    if camera_ai_enabled and hasattr(pipeline, "observe_frame"):
+                        pipeline.observe_frame(analysis_frame_for())
                     if want_preview:
                         processed = pipeline.render_cached(
                             analysis_frame_for(),

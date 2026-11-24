@@ -86,6 +86,7 @@ def _bare_classifier(monkeypatch):
     clf.adapter = get_model_input_adapter("fdsc_mc3")
     clf.span, clf.CLIP_LENGTH, clf.INFERENCE_STRIDE = 16, 16, 8
     clf.MAX_CLIP_SECONDS = VideoClassifier.MAX_CLIP_SECONDS
+    clf.grid_interval, clf._last_grid_time, clf.since_check = None, None, 0
     monkeypatch.setattr(VideoClassifier, "_classify_clip", lambda self, clip: ("NORMAL", 0.1))
     return clf, np.zeros((8, 8, 3), dtype="uint8")
 

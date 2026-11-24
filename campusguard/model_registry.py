@@ -104,6 +104,9 @@ class VideoClassifier:
         # Clip geometry comes from the model's own adapter. The old model keeps its legacy values
         # (16 frames, a check every 8 frames, 1.6 s); the newer ones look at longer stretches of video.
         self.span = self.adapter.span_frames
+        self.grid_interval = (1.0 / self.adapter.time_grid_fps) if self.adapter.time_grid_fps else None
+        self._last_grid_time: float | None = None
+        self.since_check = 0
         self.INFERENCE_STRIDE = self.adapter.inference_stride
         self.CLIP_LENGTH = self.adapter.clip_length
         self.MAX_CLIP_SECONDS = self.span / 15.0 * 1.5 if self.adapter.frame_step > 1 or self.adapter.clip_length != 16 else type(self).MAX_CLIP_SECONDS
@@ -339,6 +342,8 @@ class VideoClassifier:
         self.frame_times.clear()
         self.behind = False
         self.frame_count = 0
+        self._last_grid_time = None
+        self.since_check = 0
         self.last_probability = 0.0
         self.last_state = "NORMAL" if self.ready else "MODEL NOT LOADED"
 
@@ -401,6 +406,18 @@ class VideoClassifier:
         """
         if self.model is None or self.fight_class is None:
             return None
+        if self.grid_interval is not None:
+            self._append_on_grid(frame, timestamp)
+            if len(self.frames) < self.span or self.since_check < self.INFERENCE_STRIDE:
+                return None
+            self.since_check = 0
+            first, last = self.frame_times[0], self.frame_times[-1]
+            if first == first and last == last and last - first > self.MAX_CLIP_SECONDS:
+                self.skipped_slow += 1
+                self.behind = True
+                return None
+            self.behind = False
+            return self._classify_clip(self.frames)
         # Keep frames in their original BGR form. The model adapter owns
         # color conversion, resizing, and normalization so every model uses
         # one consistent preprocessing path.
@@ -419,6 +436,35 @@ class VideoClassifier:
             return None
         self.behind = False
         return self._classify_clip(self.frames)
+
+    GAP_RESET_SECONDS = 1.0
+
+    def _append_on_grid(self, frame: np.ndarray, timestamp: float | None) -> None:
+        """Keep one frame per grid step (15 fps), whatever rate the camera or the analyser runs at.
+
+        A long hole in the stream (the PC was busy running a check) starts the clip afresh so the model
+        never sees frames glued together across a gap."""
+        if timestamp is None:
+            timestamp = (self._last_grid_time or 0.0) + (self.grid_interval or 0.0)
+        last = self._last_grid_time
+        if last is not None:
+            if timestamp - last < (self.grid_interval or 0.0) * 0.9:
+                return
+            if timestamp - last > self.GAP_RESET_SECONDS:
+                self.frames.clear()
+                self.frame_times.clear()
+        self._last_grid_time = timestamp
+        self.frames.append(self.adapter.shrink(frame))
+        self.frame_times.append(float(timestamp))
+        if len(self.frames) > self.span:
+            self.frames.pop(0)
+            self.frame_times.pop(0)
+        self.since_check += 1
+
+    def buffer_frame(self, frame: np.ndarray, timestamp: float | None = None) -> None:
+        """Feed a frame the heavy analysis skipped. Cheap: no detector, no model."""
+        if self.model is not None and self.grid_interval is not None:
+            self._append_on_grid(frame, timestamp)
 
     def classify_clip(self, frames: list[np.ndarray]) -> tuple[str, float]:
         """Classify one temporal ROI clip for person-specific attribution."""

@@ -1,5 +1,12 @@
 # CampusGuard Desktop — Update Notes
 
+## New models see fights on a busy PC; the tile says when checks are paused
+
+- **Found in a 10-camera fight test:** with the newer models nothing was flagged. Not a hard-coded answer: scored through the app's own classifier on a fight clip, SlowFast flagged 22 of 29 checks and R(2+1)D 39 of 61, and calm footage flagged almost nothing. On a PC with all cores busy the app analyses only some frames of each camera, and the "clip stretched too far apart" guard (added for the false-alarm fix) then pauses every check.
+- **Fix (SlowFast and R(2+1)D):** every camera frame, including the ones the analysis skips, now goes into the clip buffer on a steady 15 fps grid, so a busy PC still gives the model evenly spaced clips. A long stall (a check running) restarts the clip instead of gluing frames across the gap.
+- The camera tile now shows **"PC TOO BUSY, CHECKS PAUSED"** whenever checks are being skipped, so a silent camera is no longer mistaken for a calm one.
+- Spontim 1.0 is unchanged.
+
 ## Choose the detection model (Spontim 1.0, SlowFast, R(2+1)D)
 
 - **Settings > Detection model** now lists three models you can swap between (the change restarts detection): Spontim 1.0 (default), **Spontim 2 (SlowFast)** and **Spontim 3 (R(2+1)D)**. The model files are included in the app (`models/spontim_slowfast.pth`, `models/spontim_r2plus1d.pth`).

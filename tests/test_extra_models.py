@@ -87,6 +87,38 @@ class ExtraModelTests(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertTrue(0.0 <= result[1] <= 1.0)
 
+    def test_busy_pc_still_gets_evenly_spaced_clips(self):
+        """A 30 fps camera analysed only every 4th frame: skipped frames still reach the clip buffer."""
+        from campusguard.model_registry import VideoClassifier as V
+        model = V._build_architecture("r2plus1d")
+        state = {"backbone." + k: v for k, v in model.state_dict().items()}
+        classifier = self._classifier("r2plus1d", state)
+        seen: list[float] = []
+        classifier._classify_clip = lambda clip: seen.append(classifier.frame_times[-1] - classifier.frame_times[0]) or ("NORMAL", 0.1)
+        frame = frames(1)[0]
+        for i in range(150):                    # 5 seconds at 30 fps
+            t = i / 30.0
+            if i % 4 == 0:
+                classifier.add_frame(frame, timestamp=t)
+            else:
+                classifier.buffer_frame(frame, timestamp=t)
+        self.assertTrue(seen, "no check ran")
+        self.assertFalse(classifier.behind)
+        for span in seen:                       # 16 frames at 15 fps = 1.0 s, never stretched
+            self.assertLess(span, 1.3)
+
+    def test_gap_in_the_stream_restarts_the_clip(self):
+        from campusguard.model_registry import VideoClassifier as V
+        model = V._build_architecture("r2plus1d")
+        state = {"backbone." + k: v for k, v in model.state_dict().items()}
+        classifier = self._classifier("r2plus1d", state)
+        classifier._classify_clip = lambda clip: ("NORMAL", 0.1)
+        frame = frames(1)[0]
+        for i in range(10):
+            classifier.buffer_frame(frame, timestamp=i / 15.0)
+        classifier.buffer_frame(frame, timestamp=5.0)       # a long stall (a check was running)
+        self.assertEqual(len(classifier.frames), 1)
+
     def test_missing_file_reports_not_loaded(self):
         messages: list[str] = []
         classifier = VideoClassifier(MODEL_PROFILES["r2plus1d"], "does/not/exist.pth", torch.device("cpu"), 0.65, lambda _k, m: messages.append(m))

@@ -373,6 +373,13 @@ class VisionPipeline:
         for classifier in self.classifiers.values():
             classifier.update(normalized.confidence_threshold)
 
+    def observe_frame(self, frame: np.ndarray) -> None:
+        """Hand over a frame the analysis stride skipped, so the fight model's clip stays evenly spaced
+        even when this PC analyses only some of the camera's frames."""
+        model = self._selected_model(self.selected_model_key)
+        if model is not None and model.ready:
+            model.buffer_frame(frame, timestamp=perf_counter())
+
     @property
     def selected_model_key(self) -> str:
         key = self.settings.violence_model
@@ -1138,7 +1145,9 @@ class VisionPipeline:
 
     def _draw_status(self, annotated: np.ndarray, state: str, confidence: float | None, model_key: str) -> None:
         text = self.model_display_name(model_key)
-        if state not in {"NORMAL", "MODEL NOT LOADED"}:
+        if self.analyser_behind:
+            text += "  •  PC TOO BUSY, CHECKS PAUSED"
+        elif state not in {"NORMAL", "MODEL NOT LOADED"}:
             text += f"  •  {state}"
         if confidence is not None:
             text += f"  {confidence:.0%}"

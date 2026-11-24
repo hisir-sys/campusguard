@@ -27,6 +27,9 @@ class ModelInputAdapter:
     pathway: str = "single"
     # Analysed frames between two checks; None = half a window (never rarer than the legacy 8).
     check_every: int | None = None
+    # Newer models: the clip is built on a steady time grid (this many frames per second) from EVERY
+    # camera frame, so a busy PC that analyses only some frames still gives the model evenly spaced clips.
+    time_grid_fps: float | None = None
     # Normalisation constants above are on a 0..1 scale (0..255 values divided by 255).
 
     @property
@@ -152,6 +155,7 @@ MODEL_INPUT_ADAPTERS["slowfast"] = ModelInputAdapter(
     resize_short_side=256,
     frame_step=2,
     pathway="slowfast",
+    time_grid_fps=15.0,
 )
 MODEL_INPUT_ADAPTERS["r2plus1d"] = ModelInputAdapter(
     key="r2plus1d",
@@ -161,6 +165,7 @@ MODEL_INPUT_ADAPTERS["r2plus1d"] = ModelInputAdapter(
     std=IMAGENET_255_STD,
     notes="R(2+1)D-18: 16 consecutive frames. RGB, short side 256, centre crop 224.",
     resize_short_side=256,
+    time_grid_fps=15.0,
     check_every=16,   # at 224 px one check costs ~5x the old model on a CPU, so windows do not overlap
 )
 
