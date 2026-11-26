@@ -1,5 +1,12 @@
 # CampusGuard Desktop — Update Notes
 
+## No blind spots: every moment of every camera is checked, and the tile shows how much
+
+- **The worry:** a fight that happens "between checks" could be missed. Each check looks at a 4.3 s window (SlowFast) and a new one starts every 2.1 s, so the windows overlap by half and nothing falls in a gap, as long as a camera gets its turn within 4.3 s.
+- **Fair turns:** one worker now serves the camera that has gone longest without a check, always on that camera's newest frames, so no camera starves and no clip is stale.
+- **Measured, not assumed:** each camera tracks the share of the last minute that a finished check has covered. Below 90% the tile says "PC BUSY: WATCHING x%" and the diagnostics CSV records `coverage_pct`.
+- **More CPU for checks:** new setting "Draw people boxes only during an alert" (on by default). While a camera is NORMAL the detector and pose models are skipped, because the fight models judge the whole scene; boxes appear once an alert starts.
+
 ## Cameras no longer wait for the fight model (SlowFast and R(2+1)D)
 
 - **Cause of "everything stays green" in the 10-camera fight test:** all cameras shared one model and queued for it, so each camera's thread could stall for seconds at every check, lose the frames it had collected and never finish a clip. The checks for the two newer models now run on one background worker; the camera keeps collecting frames while its clip is being checked, and each camera has at most one clip waiting.

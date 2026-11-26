@@ -51,6 +51,7 @@ class AppSettings:
     detection_enabled: bool = True
     tracking_enabled: bool = True
     pose_enabled: bool = True
+    boxes_only_on_alert: bool = True
     alert_cooldown_seconds: int = 45
     auto_reconnect: bool = True
     theme: str = "dark"
@@ -117,6 +118,7 @@ class AppSettings:
             detection_enabled=bool(candidate.detection_enabled),
             tracking_enabled=bool(candidate.tracking_enabled),
             pose_enabled=bool(candidate.pose_enabled),
+            boxes_only_on_alert=bool(candidate.boxes_only_on_alert),
             alert_cooldown_seconds=max(0, int(candidate.alert_cooldown_seconds)),
             auto_reconnect=bool(candidate.auto_reconnect),
             theme=candidate.theme if candidate.theme in {"dark", "light"} else "dark",

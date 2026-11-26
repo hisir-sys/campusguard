@@ -84,14 +84,17 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
 class _InferenceWorker:
     """One background thread runs the newer models' checks for every camera.
 
-    The camera's own thread only hands over a clip and carries on collecting frames, so a slow or
-    shared model never makes a camera miss frames. Each camera has at most one clip waiting."""
+    A camera only raises its hand ("I have enough new frames"); the worker then takes the camera that has
+    gone longest without a check, copies that camera's NEWEST clip and runs it. So the camera thread never
+    waits for the model, a clip is never stale, and under load the cameras that were checked least recently
+    go first."""
 
     _instance: "_InferenceWorker | None" = None
     _guard = threading.Lock()
 
     def __init__(self) -> None:
-        self.tasks: queue.Queue = queue.Queue()
+        self.cond = threading.Condition()
+        self.wanting: set = set()
         threading.Thread(target=self._run, name="fight-model-worker", daemon=True).start()
 
     @classmethod
@@ -101,26 +104,27 @@ class _InferenceWorker:
                 cls._instance = cls()
             return cls._instance
 
-    def submit(self, classifier: "VideoClassifier", clip: list, token: int) -> None:
-        self.tasks.put((classifier, clip, token))
+    def request(self, classifier: "VideoClassifier") -> None:
+        with self.cond:
+            self.wanting.add(classifier)
+            self.cond.notify()
 
     def _run(self) -> None:
         while True:
-            classifier, clip, token = self.tasks.get()
-            if token != classifier._token:          # camera was reset meanwhile
-                classifier._inflight = False
-                continue
-            started = time.perf_counter()
+            with self.cond:
+                while not self.wanting:
+                    self.cond.wait()
+                chosen = min(
+                    self.wanting,
+                    key=lambda c: (c._covered_end if c._covered_end is not None else float("-inf"), c._want_since),
+                )
+                self.wanting.discard(chosen)
             try:
-                result = classifier._classify_clip(clip)
-                classifier._result = result
-                classifier.checks_done += 1
-                classifier.max_probability = max(classifier.max_probability, result[1])
-                classifier.last_check_seconds = time.perf_counter() - started
+                chosen._run_check()
             except Exception as error:               # never kill the worker
-                classifier.last_error = str(error)
+                chosen.last_error = str(error)
             finally:
-                classifier._inflight = False
+                chosen._pending = False
 
 
 class VideoClassifier:
@@ -152,8 +156,15 @@ class VideoClassifier:
         self._last_grid_time: float | None = None
         self.since_check = 0
         self._token = 0
-        self._inflight = False
+        self._pending = False                 # a check is requested or running
+        self._want_since = 0.0
+        self._covered_end: float | None = None
+        self._first_grid_time: float | None = None
+        self._windows: list[tuple[float, float]] = []
+        self._buf_lock = threading.Lock()
+        self._next_coverage = 0.0
         self._result: tuple[str, float] | None = None
+        self.coverage_now = 1.0
         self.checks_done = 0
         self.max_probability = 0.0
         self.last_check_seconds = 0.0
@@ -395,8 +406,10 @@ class VideoClassifier:
         self.frame_count = 0
         self._last_grid_time = None
         self.since_check = 0
-        self._token += 1                       # drops any check still waiting in the worker
-        self._inflight = False
+        self._token += 1                       # drops any check still running in the worker
+        self._covered_end = None
+        self._first_grid_time = None
+        self._windows = []
         self._result = None
         self.last_probability = 0.0
         self.last_state = "NORMAL" if self.ready else "MODEL NOT LOADED"
@@ -462,19 +475,12 @@ class VideoClassifier:
             return None
         if self.grid_interval is not None:
             self._append_on_grid(frame, timestamp)
-            if len(self.frames) < self.span or self.since_check < self.INFERENCE_STRIDE:
-                return self._take_result()
-            if self._inflight:                  # last clip still being checked: keep collecting frames
-                return self._take_result()
-            self.since_check = 0
-            first, last = self.frame_times[0], self.frame_times[-1]
-            if first == first and last == last and last - first > self.MAX_CLIP_SECONDS:
-                self.skipped_slow += 1
-                self.behind = True
-                return self._take_result()
-            self.behind = False
-            self._inflight = True
-            _InferenceWorker.get().submit(self, list(self.frames), self._token)
+            if len(self.frames) >= self.span and self.since_check >= self.INFERENCE_STRIDE and not self._pending:
+                self._pending = True
+                self._want_since = time.monotonic()
+                self.since_check = 0
+                _InferenceWorker.get().request(self)
+            self._update_coverage()
             return self._take_result()
         # Keep frames in their original BGR form. The model adapter owns
         # color conversion, resizing, and normalization so every model uses
@@ -497,6 +503,12 @@ class VideoClassifier:
 
     GAP_RESET_SECONDS = 1.0
 
+    @property
+    def paused(self) -> bool:
+        """Checks are being skipped (old model's stretched-clip guard). The newer models never pause;
+        they report how much of the time they are watching instead (``behind``)."""
+        return self.behind and self.grid_interval is None
+
     def _take_result(self) -> tuple[str, float] | None:
         """The newest finished check, handed over once."""
         result, self._result = self._result, None
@@ -509,7 +521,8 @@ class VideoClassifier:
             "needed": self.span,
             "checks_done": self.checks_done,
             "skipped_stretched": self.skipped_slow,
-            "inflight": self._inflight,
+            "checking_now": self._pending,
+            "coverage_pct": round(100 * getattr(self, "coverage_now", 1.0)),
             "last_probability": round(self.last_probability, 3),
             "max_probability": round(self.max_probability, 3),
             "last_check_s": round(self.last_check_seconds, 2),
@@ -519,29 +532,85 @@ class VideoClassifier:
     def _append_on_grid(self, frame: np.ndarray, timestamp: float | None) -> None:
         """Keep one frame per grid step (15 fps), whatever rate the camera or the analyser runs at.
 
-        A long hole in the stream (the PC was busy running a check) starts the clip afresh so the model
-        never sees frames glued together across a gap."""
+        A long hole in the stream (the camera stalled) starts the clip afresh so the model never sees
+        frames glued together across a gap."""
         if timestamp is None:
             timestamp = (self._last_grid_time or 0.0) + (self.grid_interval or 0.0)
         last = self._last_grid_time
-        if last is not None:
-            if timestamp - last < (self.grid_interval or 0.0) * 0.9:
-                return
-            if timestamp - last > self.GAP_RESET_SECONDS:
+        if last is not None and timestamp - last < (self.grid_interval or 0.0) * 0.9:
+            return
+        small = self.adapter.shrink(frame)
+        with self._buf_lock:
+            if last is not None and timestamp - last > self.GAP_RESET_SECONDS:
                 self.frames.clear()
                 self.frame_times.clear()
-        self._last_grid_time = timestamp
-        self.frames.append(self.adapter.shrink(frame))
-        self.frame_times.append(float(timestamp))
-        if len(self.frames) > self.span:
-            self.frames.pop(0)
-            self.frame_times.pop(0)
-        self.since_check += 1
+            self._last_grid_time = timestamp
+            if self._first_grid_time is None:
+                self._first_grid_time = timestamp
+            self.frames.append(small)
+            self.frame_times.append(float(timestamp))
+            if len(self.frames) > self.span:
+                self.frames.pop(0)
+                self.frame_times.pop(0)
+            self.since_check += 1
+
+    def _run_check(self) -> None:
+        """Worker thread: judge this camera's newest clip."""
+        with self._buf_lock:
+            if len(self.frames) < self.span:
+                return
+            clip, times, token = list(self.frames), list(self.frame_times), self._token
+        if times[-1] - times[0] > self.MAX_CLIP_SECONDS:
+            self.skipped_slow += 1
+            return
+        started = time.perf_counter()
+        result = self._classify_clip(clip)
+        if token != self._token:                 # camera was reset while this ran
+            return
+        self._result = result
+        self.checks_done += 1
+        self.max_probability = max(self.max_probability, result[1])
+        self.last_check_seconds = time.perf_counter() - started
+        self._covered_end = times[-1]
+        self._windows.append((times[0], times[-1]))
+        if len(self._windows) > 80:
+            del self._windows[:-80]
+
+    COVERAGE_HORIZON_SECONDS = 60.0
+
+    def coverage(self) -> float:
+        """Share of the last minute of this camera that some completed check has looked at."""
+        last, first = self._last_grid_time, self._first_grid_time
+        if last is None or first is None:
+            return 1.0
+        observed = min(self.COVERAGE_HORIZON_SECONDS, last - first)
+        if observed < 10.0:
+            return 1.0                            # too early to judge
+        horizon = last - observed
+        covered, cursor = 0.0, horizon
+        for start, end in sorted(self._windows):
+            start, end = max(start, cursor), min(end, last)
+            if end > start:
+                covered += end - start
+                cursor = end
+        return min(1.0, covered / observed)
+
+    def _update_coverage(self) -> None:
+        now = time.monotonic()
+        if now >= self._next_coverage:
+            self._next_coverage = now + 1.0
+            self.coverage_now = self.coverage()
+            self.behind = self.coverage_now < 0.9
 
     def buffer_frame(self, frame: np.ndarray, timestamp: float | None = None) -> None:
         """Feed a frame the heavy analysis skipped. Cheap: no detector, no model."""
         if self.model is not None and self.grid_interval is not None:
             self._append_on_grid(frame, timestamp)
+            if len(self.frames) >= self.span and self.since_check >= self.INFERENCE_STRIDE and not self._pending:
+                self._pending = True
+                self._want_since = time.monotonic()
+                self.since_check = 0
+                _InferenceWorker.get().request(self)
 
     def classify_clip(self, frames: list[np.ndarray]) -> tuple[str, float]:
         """Classify one temporal ROI clip for person-specific attribution."""

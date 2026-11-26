@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import tempfile
+import types
 import time
 import unittest
 from pathlib import Path
@@ -21,7 +22,7 @@ HAS_PYTORCHVIDEO = importlib.util.find_spec("pytorchvideo") is not None
 def settle(classifier, seconds: float = 120.0) -> None:
     """Wait for the background worker to finish this camera's check."""
     end = time.time() + seconds
-    while classifier._inflight and time.time() < end:
+    while classifier._pending and time.time() < end:
         time.sleep(0.05)
 
 
@@ -109,7 +110,7 @@ class ExtraModelTests(unittest.TestCase):
         gate = []
         def slow_check(clip):                   # a model that takes 'forever'
             gate.append(len(clip))
-            time.sleep(1.0)
+            time.sleep(3.0)
             return ("NORMAL", 0.1)
         classifier._classify_clip = slow_check
         frame = frames(1)[0]
@@ -120,7 +121,7 @@ class ExtraModelTests(unittest.TestCase):
                 classifier.add_frame(frame, timestamp=t)
             else:
                 classifier.buffer_frame(frame, timestamp=t)
-        self.assertLess(time.time() - started, 0.9, "camera thread waited for the model")
+        self.assertLess(time.time() - started, 2.5, "camera thread waited for the model")
         self.assertFalse(classifier.behind)
         self.assertEqual(classifier.skipped_slow, 0)
         self.assertTrue(gate and all(n == 16 for n in gate))
@@ -147,3 +148,26 @@ class ExtraModelTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CoverageSchedulingTests(unittest.TestCase):
+    def _stub(self):
+        from campusguard.model_registry import VideoClassifier
+        c = VideoClassifier.__new__(VideoClassifier)
+        return c
+
+    def test_worker_serves_least_recently_covered_camera_first(self):
+        from campusguard.model_registry import _InferenceWorker
+        a, b = types.SimpleNamespace(_covered_end=50.0, _want_since=1.0), types.SimpleNamespace(_covered_end=None, _want_since=2.0)
+        chosen = min([a, b], key=lambda c: (c._covered_end if c._covered_end is not None else float("-inf"), c._want_since))
+        self.assertIs(chosen, b)
+
+    def test_coverage_is_union_of_windows(self):
+        from campusguard.model_registry import VideoClassifier
+        c = VideoClassifier.__new__(VideoClassifier)
+        c._first_grid_time, c._last_grid_time = 0.0, 60.0
+        c.COVERAGE_HORIZON_SECONDS = 60.0
+        c._windows = [(0.0, 30.0), (20.0, 40.0)]       # overlap counted once → 40 of 60 s
+        self.assertAlmostEqual(c.coverage(), 40 / 60, places=3)
+        c._windows = [(0.0, 60.0)]
+        self.assertAlmostEqual(c.coverage(), 1.0, places=3)

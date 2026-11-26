@@ -325,6 +325,7 @@ class VisionPipeline:
         self.classifiers: dict[str, VideoClassifier] = {}
         self.decision = FightDecision(settings.confidence_threshold, settings.alert_confirm_predictions)
         self.analyser_behind = False
+        self.coverage_pct = 100
         self.interactions = InteractionEngine()
         self.display_ids: dict[int, int] = {}
         self.display_track_memory: dict[int, tuple[tuple[int, int, int, int], int]] = {}
@@ -510,8 +511,16 @@ class VisionPipeline:
             return annotated, state, confidence, event
 
         people: list[TrackedPerson] = []
+        # Every registered model judges the whole scene, so boxes and skeletons are only decoration.
+        # While nothing is happening skip them and give that CPU to the fight checks.
+        skip_boxes = (
+            getattr(settings, "boxes_only_on_alert", False)
+            and self.selected_model_key in MODEL_PROFILES
+            and self.last_state in {"NORMAL", "MODEL NOT LOADED"}
+        )
         run_detector = (
-            settings.detection_enabled
+            not skip_boxes
+            and settings.detection_enabled
             and self.detector is not None
             and (self.frame_index % 4 == 0 or not self.cached_people)
         )
@@ -525,7 +534,8 @@ class VisionPipeline:
             people = copy.deepcopy(self.cached_people)
 
         run_pose = (
-            settings.pose_enabled
+            not skip_boxes
+            and settings.pose_enabled
             and pose_enabled
             and self.pose_model is not None
             and (self.frame_index == 1 or self.frame_index % 8 == 0)
@@ -556,15 +566,19 @@ class VisionPipeline:
                     # interaction context that the verified checkpoint relies on.
                     prediction = model.add_frame(frame, timestamp=perf_counter())
                     behind = bool(getattr(model, "behind", False))
+                    paused = bool(getattr(model, "paused", behind))
+                    self.coverage_pct = int(round(100 * getattr(model, "coverage_now", 1.0)))
                     if behind != self.analyser_behind:
                         self.analyser_behind = behind
                         self.status(
                             "fight",
-                            "ANALYSER BEHIND — this PC cannot keep up with its cameras, so fight checks "
-                            "are paused (checking too-sparse frames gives false alarms)"
+                            ("ANALYSER BEHIND — this PC cannot keep up with its cameras, so fight checks "
+                             "are paused (checking too-sparse frames gives false alarms)"
+                             if paused else
+                             f"PC BUSY — this camera is being checked about {self.coverage_pct}% of the time")
                             if behind else "READY — analyser has caught up",
                         )
-                    if prediction is None and behind:
+                    if prediction is None and paused:
                         # Do not keep showing an old fight while checks are paused.
                         state, confidence = "NORMAL", None
                         self.decision.update(state, confidence)
@@ -1152,7 +1166,12 @@ class VisionPipeline:
     def _draw_status(self, annotated: np.ndarray, state: str, confidence: float | None, model_key: str) -> None:
         text = self.model_display_name(model_key)
         if self.analyser_behind:
-            text += "  •  PC TOO BUSY, CHECKS PAUSED"
+            model = self._selected_model(model_key)
+            text += (
+                "  •  PC TOO BUSY, CHECKS PAUSED"
+                if model is not None and getattr(model, "paused", True)
+                else f"  •  PC BUSY: WATCHING {self.coverage_pct}%"
+            )
         elif state not in {"NORMAL", "MODEL NOT LOADED"}:
             text += f"  •  {state}"
         if confidence is not None:

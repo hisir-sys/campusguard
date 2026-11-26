@@ -155,6 +155,8 @@ class SettingsPage(QWidget):
 
         self.pose_toggle = QCheckBox("Run pose estimation and draw skeleton")
         self.pose_toggle.setChecked(settings.pose_enabled)
+        self.boxes_alert_toggle = QCheckBox("Draw people boxes only during an alert (frees CPU for fight checks)")
+        self.boxes_alert_toggle.setChecked(settings.boxes_only_on_alert)
 
         self.cooldown_input = QSpinBox()
         self.cooldown_input.setRange(0, 3600)
@@ -190,6 +192,7 @@ class SettingsPage(QWidget):
         form.addRow("Person detection", self.detection_toggle)
         form.addRow("Tracking", self.tracking_toggle)
         form.addRow("Pose overlay", self.pose_toggle)
+        form.addRow("Save CPU", self.boxes_alert_toggle)
         form.addRow("Alert cooldown", self.cooldown_input)
         form.addRow("Camera reconnect", self.reconnect_toggle)
         form.addRow("Compute device", self.device_input)
@@ -819,6 +822,7 @@ class SettingsPage(QWidget):
             self.detection_toggle.setChecked(defaults.detection_enabled)
             self.tracking_toggle.setChecked(defaults.tracking_enabled)
             self.pose_toggle.setChecked(defaults.pose_enabled)
+            self.boxes_alert_toggle.setChecked(defaults.boxes_only_on_alert)
             self.cooldown_input.setValue(defaults.alert_cooldown_seconds)
             self.reconnect_toggle.setChecked(defaults.auto_reconnect)
             self.device_input.setCurrentIndex(max(0, self.device_input.findData(defaults.device)))
@@ -846,6 +850,7 @@ class SettingsPage(QWidget):
             detection_enabled=self.detection_toggle.isChecked(),
             tracking_enabled=self.tracking_toggle.isChecked(),
             pose_enabled=self.pose_toggle.isChecked(),
+            boxes_only_on_alert=self.boxes_alert_toggle.isChecked(),
             alert_cooldown_seconds=self.cooldown_input.value(),
             auto_reconnect=self.reconnect_toggle.isChecked(),
             theme=str(self.theme_input.currentData()),
