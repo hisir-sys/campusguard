@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -15,6 +16,13 @@ from campusguard.model_registry import MODEL_PROFILES, VideoClassifier
 from campusguard.settings import AppSettings
 
 HAS_PYTORCHVIDEO = importlib.util.find_spec("pytorchvideo") is not None
+
+
+def settle(classifier, seconds: float = 120.0) -> None:
+    """Wait for the background worker to finish this camera's check."""
+    end = time.time() + seconds
+    while classifier._inflight and time.time() < end:
+        time.sleep(0.05)
 
 
 def frames(count: int, height: int = 90, width: int = 160) -> list[np.ndarray]:
@@ -71,6 +79,8 @@ class ExtraModelTests(unittest.TestCase):
         result = None
         for i, frame in enumerate(frames(16)):
             result = classifier.add_frame(frame, timestamp=i / 15) or result
+        settle(classifier)
+        result = classifier.add_frame(frames(1)[0], timestamp=17 / 15) or result
         self.assertIsNotNone(result)
         self.assertTrue(0.0 <= result[1] <= 1.0)
 
@@ -84,28 +94,37 @@ class ExtraModelTests(unittest.TestCase):
         result = None
         for i, frame in enumerate(frames(64)):
             result = classifier.add_frame(frame, timestamp=i / 15) or result
+        settle(classifier)
+        result = classifier.add_frame(frames(1)[0], timestamp=65 / 15) or result
         self.assertIsNotNone(result)
         self.assertTrue(0.0 <= result[1] <= 1.0)
 
     def test_busy_pc_still_gets_evenly_spaced_clips(self):
-        """A 30 fps camera analysed only every 4th frame: skipped frames still reach the clip buffer."""
+        """A 30 fps camera analysed only every 4th frame: skipped frames still reach the clip buffer,
+        and the camera thread never waits for the model."""
         from campusguard.model_registry import VideoClassifier as V
         model = V._build_architecture("r2plus1d")
         state = {"backbone." + k: v for k, v in model.state_dict().items()}
         classifier = self._classifier("r2plus1d", state)
-        seen: list[float] = []
-        classifier._classify_clip = lambda clip: seen.append(classifier.frame_times[-1] - classifier.frame_times[0]) or ("NORMAL", 0.1)
+        gate = []
+        def slow_check(clip):                   # a model that takes 'forever'
+            gate.append(len(clip))
+            time.sleep(1.0)
+            return ("NORMAL", 0.1)
+        classifier._classify_clip = slow_check
         frame = frames(1)[0]
-        for i in range(150):                    # 5 seconds at 30 fps
+        started = time.time()
+        for i in range(150):                    # 5 seconds of video at 30 fps
             t = i / 30.0
             if i % 4 == 0:
                 classifier.add_frame(frame, timestamp=t)
             else:
                 classifier.buffer_frame(frame, timestamp=t)
-        self.assertTrue(seen, "no check ran")
+        self.assertLess(time.time() - started, 0.9, "camera thread waited for the model")
         self.assertFalse(classifier.behind)
-        for span in seen:                       # 16 frames at 15 fps = 1.0 s, never stretched
-            self.assertLess(span, 1.3)
+        self.assertEqual(classifier.skipped_slow, 0)
+        self.assertTrue(gate and all(n == 16 for n in gate))
+        settle(classifier)
 
     def test_gap_in_the_stream_restarts_the_clip(self):
         from campusguard.model_registry import VideoClassifier as V

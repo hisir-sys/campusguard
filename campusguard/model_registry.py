@@ -5,11 +5,13 @@ from dataclasses import dataclass
 from pathlib import Path
 import sys
 from typing import Callable
-import threading
 import weakref
 
 import cv2
 import numpy as np
+import queue
+import time
+import threading
 import torch
 from torch import nn
 
@@ -79,6 +81,48 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
     for key, manifest in MODEL_MANIFESTS.items()
 }
 
+class _InferenceWorker:
+    """One background thread runs the newer models' checks for every camera.
+
+    The camera's own thread only hands over a clip and carries on collecting frames, so a slow or
+    shared model never makes a camera miss frames. Each camera has at most one clip waiting."""
+
+    _instance: "_InferenceWorker | None" = None
+    _guard = threading.Lock()
+
+    def __init__(self) -> None:
+        self.tasks: queue.Queue = queue.Queue()
+        threading.Thread(target=self._run, name="fight-model-worker", daemon=True).start()
+
+    @classmethod
+    def get(cls) -> "_InferenceWorker":
+        with cls._guard:
+            if cls._instance is None:
+                cls._instance = cls()
+            return cls._instance
+
+    def submit(self, classifier: "VideoClassifier", clip: list, token: int) -> None:
+        self.tasks.put((classifier, clip, token))
+
+    def _run(self) -> None:
+        while True:
+            classifier, clip, token = self.tasks.get()
+            if token != classifier._token:          # camera was reset meanwhile
+                classifier._inflight = False
+                continue
+            started = time.perf_counter()
+            try:
+                result = classifier._classify_clip(clip)
+                classifier._result = result
+                classifier.checks_done += 1
+                classifier.max_probability = max(classifier.max_probability, result[1])
+                classifier.last_check_seconds = time.perf_counter() - started
+            except Exception as error:               # never kill the worker
+                classifier.last_error = str(error)
+            finally:
+                classifier._inflight = False
+
+
 class VideoClassifier:
     CLIP_LENGTH = 16
     INFERENCE_STRIDE = 8
@@ -107,6 +151,13 @@ class VideoClassifier:
         self.grid_interval = (1.0 / self.adapter.time_grid_fps) if self.adapter.time_grid_fps else None
         self._last_grid_time: float | None = None
         self.since_check = 0
+        self._token = 0
+        self._inflight = False
+        self._result: tuple[str, float] | None = None
+        self.checks_done = 0
+        self.max_probability = 0.0
+        self.last_check_seconds = 0.0
+        self.last_error = ""
         self.INFERENCE_STRIDE = self.adapter.inference_stride
         self.CLIP_LENGTH = self.adapter.clip_length
         self.MAX_CLIP_SECONDS = self.span / 15.0 * 1.5 if self.adapter.frame_step > 1 or self.adapter.clip_length != 16 else type(self).MAX_CLIP_SECONDS
@@ -344,6 +395,9 @@ class VideoClassifier:
         self.frame_count = 0
         self._last_grid_time = None
         self.since_check = 0
+        self._token += 1                       # drops any check still waiting in the worker
+        self._inflight = False
+        self._result = None
         self.last_probability = 0.0
         self.last_state = "NORMAL" if self.ready else "MODEL NOT LOADED"
 
@@ -409,15 +463,19 @@ class VideoClassifier:
         if self.grid_interval is not None:
             self._append_on_grid(frame, timestamp)
             if len(self.frames) < self.span or self.since_check < self.INFERENCE_STRIDE:
-                return None
+                return self._take_result()
+            if self._inflight:                  # last clip still being checked: keep collecting frames
+                return self._take_result()
             self.since_check = 0
             first, last = self.frame_times[0], self.frame_times[-1]
             if first == first and last == last and last - first > self.MAX_CLIP_SECONDS:
                 self.skipped_slow += 1
                 self.behind = True
-                return None
+                return self._take_result()
             self.behind = False
-            return self._classify_clip(self.frames)
+            self._inflight = True
+            _InferenceWorker.get().submit(self, list(self.frames), self._token)
+            return self._take_result()
         # Keep frames in their original BGR form. The model adapter owns
         # color conversion, resizing, and normalization so every model uses
         # one consistent preprocessing path.
@@ -438,6 +496,25 @@ class VideoClassifier:
         return self._classify_clip(self.frames)
 
     GAP_RESET_SECONDS = 1.0
+
+    def _take_result(self) -> tuple[str, float] | None:
+        """The newest finished check, handed over once."""
+        result, self._result = self._result, None
+        return result
+
+    def diagnostics(self) -> dict:
+        return {
+            "model": self.profile.key,
+            "buffered": len(self.frames),
+            "needed": self.span,
+            "checks_done": self.checks_done,
+            "skipped_stretched": self.skipped_slow,
+            "inflight": self._inflight,
+            "last_probability": round(self.last_probability, 3),
+            "max_probability": round(self.max_probability, 3),
+            "last_check_s": round(self.last_check_seconds, 2),
+            "error": self.last_error,
+        }
 
     def _append_on_grid(self, frame: np.ndarray, timestamp: float | None) -> None:
         """Keep one frame per grid step (15 fps), whatever rate the camera or the analyser runs at.

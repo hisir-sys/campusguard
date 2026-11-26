@@ -1,5 +1,11 @@
 # CampusGuard Desktop — Update Notes
 
+## Cameras no longer wait for the fight model (SlowFast and R(2+1)D)
+
+- **Cause of "everything stays green" in the 10-camera fight test:** all cameras shared one model and queued for it, so each camera's thread could stall for seconds at every check, lose the frames it had collected and never finish a clip. The checks for the two newer models now run on one background worker; the camera keeps collecting frames while its clip is being checked, and each camera has at most one clip waiting.
+- **New log file:** `detection_diagnostics.csv` in the app's data folder gets one line per camera every 15 seconds: frames arriving, frames analysed, how many frames the clip has, checks done, highest fight probability seen, seconds per check, and any error. If a fight is missed again, send this file.
+- Checked end to end through the full pipeline on a fight clip: 9 checks, highest probability 0.99, "FIGHT DETECTED" raised.
+
 ## New models see fights on a busy PC; the tile says when checks are paused
 
 - **Found in a 10-camera fight test:** with the newer models nothing was flagged. Not a hard-coded answer: scored through the app's own classifier on a fight clip, SlowFast flagged 22 of 29 checks and R(2+1)D 39 of 61, and calm footage flagged almost nothing. On a PC with all cores busy the app analyses only some frames of each camera, and the "clip stretched too far apart" guard (added for the false-alarm fix) then pauses every check.

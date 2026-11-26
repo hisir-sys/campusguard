@@ -465,6 +465,33 @@ class CameraCaptureThread(QThread):
             remaining_ms -= interval
 
 
+def write_diagnostics(camera_tag: int, window: float, received: int, analysed: int, info: dict) -> None:
+    """One line every 15 s per camera in <app data>/detection_diagnostics.csv, so a silent camera can be
+    explained: frames arriving, frames analysed, checks done, highest fight probability seen."""
+    try:
+        import csv
+        path = application_data_dir() / "detection_diagnostics.csv"
+        new = not path.exists()
+        if not new and path.stat().st_size > 5_000_000:      # keep it small
+            path.write_text("", encoding="utf-8")
+            new = True
+        row = {
+            "time": time.strftime("%H:%M:%S"),
+            "camera_thread": camera_tag,
+            "seconds": round(window, 1),
+            "frames_in": received,
+            "frames_analysed": analysed,
+            **info,
+        }
+        with path.open("a", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=list(row))
+            if new:
+                writer.writeheader()
+            writer.writerow(row)
+    except Exception:
+        pass
+
+
 class FrameAnalysisThread(QThread):
     frame_ready = Signal(QImage, str, object)
     snapshot_ready = Signal(bytes)
@@ -506,6 +533,9 @@ class FrameAnalysisThread(QThread):
         max_width: int | None = None
         engine_dir = application_data_dir()
         scheduler = CameraScheduler()
+        next_diagnostics = time.monotonic() + 15.0
+        analysed_frames = 0
+        received_frames = 0
 
         def report_model_status(component: str, message: str) -> None:
             self.model_status.emit(component, message)
@@ -524,8 +554,16 @@ class FrameAnalysisThread(QThread):
                     break
                 continue
             latest_sequence = sequence
+            received_frames += 1
             settings, camera_ai_enabled = self.options.snapshot()
             now = time.monotonic()
+            if now >= next_diagnostics and pipeline is not None:
+                window = now - (next_diagnostics - 15.0)
+                next_diagnostics = now + 15.0
+                write_diagnostics(
+                    id(self) % 100000, window, received_frames, analysed_frames, pipeline.diagnostics()
+                )
+                received_frames = analysed_frames = 0
 
             try:
                 if now >= next_profile_check:
@@ -613,6 +651,7 @@ class FrameAnalysisThread(QThread):
                         settings.pose_enabled,
                     )
                     scheduler.record(time.monotonic() - started)
+                    analysed_frames += 1
                     last_state = state
                     last_confidence = confidence
                 else:

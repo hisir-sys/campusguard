@@ -373,6 +373,12 @@ class VisionPipeline:
         for classifier in self.classifiers.values():
             classifier.update(normalized.confidence_threshold)
 
+    def diagnostics(self) -> dict:
+        model = self._selected_model(self.selected_model_key)
+        info = model.diagnostics() if model is not None and hasattr(model, "diagnostics") else {}
+        info.update(state=self.last_state, behind=self.analyser_behind, process_fps=round(self.last_process_fps, 1))
+        return info
+
     def observe_frame(self, frame: np.ndarray) -> None:
         """Hand over a frame the analysis stride skipped, so the fight model's clip stays evenly spaced
         even when this PC analyses only some of the camera's frames."""
